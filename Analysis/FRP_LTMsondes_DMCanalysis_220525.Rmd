@@ -47,9 +47,14 @@ load("ExtLTM_CompleteMerge.RData") ###DMC220601: this is a huge file with all da
 
 df <- df[which(df$dts >= as.POSIXct(strptime("2021-01-01 00:00", format = "%Y-%m-%d")) & 
                  df$dts <= as.POSIXct(strptime("2021-12-31 23:45", format = "%Y-%m-%d"))),]
+df$Turb[which(df$Turb > 1000)] <- NA ###DMC220713: Turbidity sensor is only rated up to 1000 so any values above it must be discarded. The high calibration standard used is ~100 so any values above that are suspect
+
+df$ChlRFU[which(df$ChlRFU > 100)] <- NA ###DMC220713: Chl sensor is only rated up to 100 RFU so any values above it must be discarded.
+df$PCRFU[which(df$PCRFU > 100 | df$PCRFU < 0)] <- NA ###DMC220713: Phycocyanin sensor is only rated up to 100 RFU so any values above it must be discarded. Any values below 0 must be discarded too
+df$fDOMRFU[which(df$fDOMRFU < 0)] <- NA ###DMC220713: FDOM sensor is only rated up to 100 RFU so any values above it must be discarded. Any values below 0 must be discarded too
 
 unique(dfAll$site)
-dfAll <- dfAll[which(dfAll$site %in% c("SDI_USGS","TOE_USGS","LIB_USGS") & 
+dfAll <- dfAll[which(dfAll$site %in% c("SacSherman_CDEC") & # "SDI_USGS","Emmaton_CDEC" ###DMC220713: these stations did not have data
                        dfAll$dts >= as.POSIXct(strptime("2021-01-01 00:00", format = "%Y-%m-%d")) & 
                        dfAll$dts <= as.POSIXct(strptime("2021-12-31 23:45", format = "%Y-%m-%d"))),]
 
@@ -69,6 +74,9 @@ colnames(dfAll) <- colnames(dat)
 dfAll$ChlRFU <- as.numeric(dfAll$ChlRFU)
 dfAll$PCRFU <- as.numeric(dfAll$PCRFU)
 dfAll$fDOMRFU <- as.numeric(dfAll$fDOMRFU)
+
+dfAll$ChlRFU[which(dfAll$ChlRFU > 400)] <- NA ###DMC220713: Chl sensor is only rated up to 400 ug/L so any values above it must be discarded.
+
 dat3 <- rbind.data.frame(dat,dfAll)
 colnames(dat3)[1:2] <- c("Station.Code","datetimestamp")
 
@@ -114,7 +122,7 @@ agg_dat_sub <- summH
 
 to_plo_sub <- melt(agg_dat_sub, id.var = c('Station.Code','datetimestamp'))
 to_plo_sub$dts <- as.POSIXct(strptime(as.character(to_plo_sub$datetimestamp),format = "%Y-%m-%d"))
-to_plo_sub$Station.Code <- factor(to_plo_sub$Station.Code, levels = c("Decker Breach","Decker Pool","SDI_USGS","Yolo Flyway Farm","TOE_USGS","LIB_USGS"))#,
+to_plo_sub$Station.Code <- factor(to_plo_sub$Station.Code, levels = c("Decker Breach", "Decker Pool", "SDI_USGS", "Emmaton_CDEC", "SacSherman_CDEC"))#,
                                   #labels = c("P","B","S","Y","T"))
 to_plo_sub <- to_plo_sub[which(is.na(to_plo_sub$datetimestamp)==FALSE),]
 
@@ -123,12 +131,12 @@ to_plo_sub <- to_plo_sub[order(to_plo_sub$ord),]
 
 unique(to_plo_sub$Station.Code)
 yolo <- c("Yolo Flyway Farm","Toe Drain")
-decker <- c("Decker Breach","Decker Pool","SDI_USGS")
+decker <- c("Decker Breach","Decker Pool","SacSherman_CDEC") #,"SDI_USGS","Emmaton_CDEC" ###DMC220713: these stations did not have data
 
 xdtsDeck <- to_plo_sub$datetimestamp[which(to_plo_sub$Station.Code == "Decker Pool")]
 xdtsDeck2 <- range(xdtsDeck)
 #xdtsDeck2[1] <- as.POSIXct(strptime("2022-01-01 00:00", format = "%Y-%m-%d %H:%M"),tz = "UTC")
-xdtsYolo <- to_plo_sub$datetimestamp[which(to_plo_sub$Station.Code == "Yolo Flyway Farm")]
+#xdtsYolo <- to_plo_sub$datetimestamp[which(to_plo_sub$Station.Code == "Yolo Flyway Farm")]
 
 mycol <- (viridis_pal(option = "H")(56))[c(24,44,33)]
 mycol[3] <- c("black")
@@ -137,11 +145,11 @@ myps <- c(1.5,1.3,1)
 myalf <- c(0.5,0.5,0.7)
 
 
-plo_agg_subT <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "Tempbar"),], aes(x = datetimestamp, y = value, fill = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) +
+plo_agg_subT <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker & to_plo_sub$datetimestamp %in% xdtsDeck & to_plo_sub$variable == "Tempbar"),], aes(x = datetimestamp, y = value, fill = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) + #(to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2])
   geom_point(colour = "black") +#, shape = 21
-  #geom_hline(yintercept=25.4) + ###DMC: "Swanson C, Reid T, Young PS, Cech Jr JJ. 2000. Comparative environmental tolerances of threatened delta smelt (Hypomesus transpacificus) and introduced Wakasagi (H. nipponensis) in an altered California estuary. Oecologia 123(3):384-390
-  #geom_hline(yintercept=24, linetype="dashed") + ###DMC: reference is "Rich A.A. (1987). Report on studies conducted by Sacramento County to determine the temperatures which optimize growth and survival in juvenile chinook salmon (Onchorhynchus tshawwytscha). McDonough, Holland, & Allen, Sacramento, CA"
-  scale_fill_manual(values = mycol,labels = c("Breach","Interior","Sacramento\nRiver")) +
+  geom_hline(yintercept=25.4) + ###DMC: "Swanson C, Reid T, Young PS, Cech Jr JJ. 2000. Comparative environmental tolerances of threatened delta smelt (Hypomesus transpacificus) and introduced Wakasagi (H. nipponensis) in an altered California estuary. Oecologia 123(3):384-390
+  geom_hline(yintercept=24, linetype="dashed") + ###DMC: reference is "Rich A.A. (1987). Report on studies conducted by Sacramento County to determine the temperatures which optimize growth and survival in juvenile chinook salmon (Onchorhynchus tshawwytscha). McDonough, Holland, & Allen, Sacramento, CA"
+  scale_fill_manual(values = mycol,labels = c("Breach","Interior","Sacramento\nRiver")) + # ,"Sac@Decker","EMM","Sac@Sherman"
   scale_shape_manual(values = mysh,labels = c("Breach","Interior","Sacramento\nRiver")) +
   scale_size_manual(values = myps,labels = c("Breach","Interior","Sacramento\nRiver")) +
   scale_alpha_manual(values = myalf,labels = c("Breach","Interior","Sacramento\nRiver")) +
@@ -193,6 +201,7 @@ pl2 <- plo_agg_subSPC + annotation_custom(grob = ggplotGrob(plo_agg_subSPC +ylim
                                          ymin = 375, ymax = 675)
 
 
+###DMC220713: Turbidity sensor is only rated up to 1000 so any values above it must be discarded. The high calibration standard used is ~100 so any values above that are suspect
 plo_agg_subTu <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "Turbbar"),], aes(x = datetimestamp, y = value, fill = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) +
   geom_point(colour = "black") +
   geom_hline(yintercept=12, linetype = "dashed")+ #Grimaldo LF, Sommer T, Van Ark N, Jones G, Holland E, Moyle PB, Smith P, Herbold B. 2009a. Factors affecting fish entrainment into massive water diversions in a freshwater tidal estuary: Can fish losses be managed? N Am J Fish Manage 29:1253-1270.
@@ -226,26 +235,21 @@ plo_agg_subChl <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% deckerOnl
   scale_size_manual(values = myps[1:2],labels = c("Breach","Interior")) +
   scale_alpha_manual(values = myalf,labels = c("Breach","Interior")) +
   theme_classic() +
-  ylim(0,100) +
+  #ylim(0,175) +
   xlab("Date") +
   ylab("Chlorophyll a (RFU)") +
   theme(axis.text.x =element_text(),
         axis.title = element_text(face = "bold"),
         legend.title = element_blank())
-pl2 <- plo_agg_subChl + annotation_custom(grob = ggplotGrob(plo_agg_subChl +ylim(0,175) + 
+pl2 <- plo_agg_subChl + annotation_custom(grob = ggplotGrob(plo_agg_subChl +ylim(0,2) + 
                                                              theme(axis.title = element_blank(),
                                                                    legend.position = "none")),
-                                         xmin = as.POSIXct(strptime("2020-01-10",format = "%Y-%m-%d")),
+                                         xmin = as.POSIXct(strptime("2021-08-10",format = "%Y-%m-%d")),
                                          #xmax = as.POSIXct(strptime("2020-01-01",format = "%Y-%m-%d")), 
-                                         ymin = 1.5, ymax = 5.2)
-
-x <- seq(0,100)
-y <- seq(0,400,by=4)
-dfCHLRFU <- data.frame(x,y)
-plot(x,y)
+                                         ymin = 21, ymax = 43)
 
 sac <- decker[3]
-plo_agg_subChlsac <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% sac & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "Chlconcbar"),], aes(x = datetimestamp, y = value, fill = Station.Code, shape = Station.Code, size = Station.Code)) +
+plo_agg_subChlsac <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% sac & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "ChlRFUbar"),], aes(x = datetimestamp, y = value, fill = Station.Code, shape = Station.Code, size = Station.Code)) +
   geom_point(alpha = 0.5, colour = "black") +
   scale_fill_manual(values = mycol[3],labels = c("Sac.\nRiver   "))+ 
   scale_shape_manual(values = mysh[3],labels = c("Sac.\nRiver   ")) +
@@ -256,12 +260,22 @@ plo_agg_subChlsac <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% sac & 
   theme(axis.text.x =element_text(),
         axis.title = element_text(face = "bold"),
         legend.title = element_blank())
-
 gridExtra::grid.arrange(arrangeGrob(pl2, plo_agg_subChlsac,nrow = 2), ncol =1)
+pl2sac <- plo_agg_subChlsac + annotation_custom(grob = ggplotGrob(plo_agg_subChlsac +ylim(0,10) + 
+                                                             theme(axis.title = element_blank(),
+                                                                   legend.position = "none")),
+                                         xmin = as.POSIXct(strptime("2021-08-10",format = "%Y-%m-%d")),
+                                         #xmax = as.POSIXct(strptime("2020-01-01",format = "%Y-%m-%d")), 
+                                         ymin = 50, ymax = 130)
+gridExtra::grid.arrange(arrangeGrob(pl2, pl2sac,nrow = 2), ncol =1)
 
+#x <- seq(0,100)
+#y <- seq(0,400,by=4)
+#dfCHLRFU <- data.frame(x,y)
+#plot(x,y)
 
 plo_agg_subChlBoth <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% deckerOnly & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "ChlRFUbar"),], aes(x = datetimestamp, y = value, fill = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) +
-  geom_point(data = to_plo_sub[which(to_plo_sub$Station.Code %in% sac & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "Chlconcbar"),], aes(x = datetimestamp, y = value-1), fill = mycol[3], shape = mysh[3], size = myps[3]) +
+  geom_point(data = to_plo_sub[which(to_plo_sub$Station.Code %in% sac & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "ChlRFUbar"),], aes(x = datetimestamp, y = value-1), fill = mycol[3], shape = mysh[3], size = myps[3]) +
   geom_point(colour = "black") +
   scale_fill_manual(values = mycol[1:2],labels = c("Breach","Interior"))+ 
   scale_shape_manual(values = mysh[1:2],labels = c("Breach","Interior")) +
@@ -295,7 +309,7 @@ plo_agg_subPC <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% deckerOnly
   #scale_shape_manual(values = mysh,labels = c("Pool","Breach","Channel")) +
   #facet_wrap(~ variable, ncol = 1, scales = 'free_y') + 
   theme_classic() +
-  ylim(0,25) +
+  #ylim(0,25) +
   #theme(axis.text.x = element_text(size = 24)) +
   #theme(axis.text=element_text(size=24)) #+
   #theme(strip.background = element_blank(),strip.text.y = element_blank(),strip.text = element_blank())#+
