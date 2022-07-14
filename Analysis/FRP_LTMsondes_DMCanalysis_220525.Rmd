@@ -30,6 +30,7 @@ save(df, file = "FRP_LTMsonde_220526.RData")
 ```
 
 This chunk will replicate the work by Mandy (again). For Decker
+Saving figures to "C:\Users\DCox\OneDrive - California Department of Fish and Wildlife\Documents\FRP\Monitoring\Reports\2021SiteReports"
 ```{r}
 library(SWMPr)
 library(ggplot2)
@@ -54,7 +55,7 @@ df$PCRFU[which(df$PCRFU > 100 | df$PCRFU < 0)] <- NA ###DMC220713: Phycocyanin s
 df$fDOMRFU[which(df$fDOMRFU < 0)] <- NA ###DMC220713: FDOM sensor is only rated up to 100 RFU so any values above it must be discarded. Any values below 0 must be discarded too
 
 unique(dfAll$site)
-dfAll <- dfAll[which(dfAll$site %in% c("SacSherman_CDEC") & # "SDI_USGS","Emmaton_CDEC" ###DMC220713: these stations did not have data
+dfAll <- dfAll[which(dfAll$site %in% c("SacSherman_CDEC","M13_USGS") & # "SDI_USGS","Emmaton_CDEC" ###DMC220713: these stations did not have data
                        dfAll$dts >= as.POSIXct(strptime("2021-01-01 00:00", format = "%Y-%m-%d")) & 
                        dfAll$dts <= as.POSIXct(strptime("2021-12-31 23:45", format = "%Y-%m-%d"))),]
 
@@ -122,7 +123,7 @@ agg_dat_sub <- summH
 
 to_plo_sub <- melt(agg_dat_sub, id.var = c('Station.Code','datetimestamp'))
 to_plo_sub$dts <- as.POSIXct(strptime(as.character(to_plo_sub$datetimestamp),format = "%Y-%m-%d"))
-to_plo_sub$Station.Code <- factor(to_plo_sub$Station.Code, levels = c("Decker Breach", "Decker Pool", "SDI_USGS", "Emmaton_CDEC", "SacSherman_CDEC"))#,
+to_plo_sub$Station.Code <- factor(to_plo_sub$Station.Code, levels = c("Decker Breach", "Decker Pool", "SacSherman_CDEC", "M13_USGS"))#,, "SDI_USGS", "Emmaton_CDEC"
                                   #labels = c("P","B","S","Y","T"))
 to_plo_sub <- to_plo_sub[which(is.na(to_plo_sub$datetimestamp)==FALSE),]
 
@@ -131,7 +132,7 @@ to_plo_sub <- to_plo_sub[order(to_plo_sub$ord),]
 
 unique(to_plo_sub$Station.Code)
 yolo <- c("Yolo Flyway Farm","Toe Drain")
-decker <- c("Decker Breach","Decker Pool","SacSherman_CDEC") #,"SDI_USGS","Emmaton_CDEC" ###DMC220713: these stations did not have data
+decker <- c("Decker Breach","Decker Pool","M13_USGS") # ,"SacSherman_CDEC" has info #,"SDI_USGS","Emmaton_CDEC" ###DMC220713: these stations did not have data
 
 xdtsDeck <- to_plo_sub$datetimestamp[which(to_plo_sub$Station.Code == "Decker Pool")]
 xdtsDeck2 <- range(xdtsDeck)
@@ -177,11 +178,17 @@ plo_agg_subDO <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker & (
         axis.title = element_text(face = "bold"),
         legend.title = element_blank())
 
-plo_agg_subSPC <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "SPCbar"),], aes(x = datetimestamp, y = value, fill = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) +
-  geom_point(colour = "black") +
+#to_plo_sub$Station.Code2 <- factor(as.character(to_plo_sub$Station.Code), levels = c("SacSherman_CDEC","Decker Breach", "Decker Pool"))
+mycol
+to_plo_sub2 <- rbind.data.frame(to_plo_sub[which(to_plo_sub$Station.Code == "M13_USGS"),], #"SacSherman_CDEC"
+                                to_plo_sub[which(to_plo_sub$Station.Code == "Decker Breach"),],
+                                to_plo_sub[which(to_plo_sub$Station.Code == "Decker Pool"),])
+plo_agg_subSPC <- ggplot(to_plo_sub2[which(to_plo_sub2$Station.Code %in% decker & (to_plo_sub2$datetimestamp >= xdtsDeck2[1] & to_plo_sub2$datetimestamp <= xdtsDeck2[2]) & to_plo_sub2$variable == "SPCbar"),], aes(x = datetimestamp, y = value, fill = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) + #, color = Station.Code
+  geom_point(color = "#36454F") + #colour = "black"
   #geom_hline(yintercept=2.5) + 
   #geom_hline(yintercept=4.6, linetype="dashed") + 
   scale_fill_manual(values = mycol,labels = c("Breach","Interior","Sacramento\nRiver")) +
+  #scale_color_manual(values = mycol,labels = c("Breach","Interior","Sacramento\nRiver")) +
   scale_shape_manual(values = mysh,labels = c("Breach","Interior","Sacramento\nRiver")) +
   scale_size_manual(values = myps,labels = c("Breach","Interior","Sacramento\nRiver")) +
   scale_alpha_manual(values = myalf,labels = c("Breach","Interior","Sacramento\nRiver")) +
@@ -202,14 +209,14 @@ pl2 <- plo_agg_subSPC + annotation_custom(grob = ggplotGrob(plo_agg_subSPC +ylim
 
 
 ###DMC220713: Turbidity sensor is only rated up to 1000 so any values above it must be discarded. The high calibration standard used is ~100 so any values above that are suspect
-plo_agg_subTu <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "Turbbar"),], aes(x = datetimestamp, y = value, fill = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) +
+plo_agg_subTu <- ggplot(to_plo_sub2[which(to_plo_sub2$Station.Code %in% decker & (to_plo_sub2$datetimestamp >= xdtsDeck2[1] & to_plo_sub2$datetimestamp <= xdtsDeck2[2]) & to_plo_sub2$variable == "Turbbar"),], aes(x = datetimestamp, y = value, fill = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) +
   geom_point(colour = "black") +
   geom_hline(yintercept=12, linetype = "dashed")+ #Grimaldo LF, Sommer T, Van Ark N, Jones G, Holland E, Moyle PB, Smith P, Herbold B. 2009a. Factors affecting fish entrainment into massive water diversions in a freshwater tidal estuary: Can fish losses be managed? N Am J Fish Manage 29:1253-1270.
   geom_hline(yintercept=80) + # Can also use this for the above '12' turbidity value too: Hasenbein M, Fangue NA, Geist J, Komoroske LM, Truong J, McPherson R, Connon RE (2016) Assessments at multiple levels of biological organization allow for an integrative determination of physiological tolerances to turbidity in an endangered fish species. Conserv Physiol 4: doi:10.1093/conphys/cow004.
   scale_fill_manual(values = mycol,labels = c("Breach","Interior","Sacramento\nRiver")) +
   scale_shape_manual(values = mysh,labels = c("Breach","Interior","Sacramento\nRiver")) +
   scale_size_manual(values = myps,labels = c("Breach","Interior","Sacramento\nRiver")) +
-  scale_alpha_manual(values = myalf,labels = c("Breach","Interior","Sacramento\nRiver")) +
+  scale_alpha_manual(values = c(myalf[1:2],0.4),labels = c("Breach","Interior","Sacramento\nRiver")) +
   #ylim(0,400)+
   theme_classic() +
   xlab("Date") +
@@ -218,12 +225,12 @@ plo_agg_subTu <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker & (
         axis.title = element_text(face = "bold"),
         legend.title = element_blank())
 
-pl2 <- plo_agg_subTu + annotation_custom(grob = ggplotGrob(plo_agg_subTu +ylim(0,NA) + 
-                                                             theme(axis.title = element_blank(),
-                                                                   legend.position = "none")),
-                                         #xmin = as.POSIXct(strptime("2020-01-10",format = "%Y-%m-%d")),
-                                         xmax = as.POSIXct(strptime("2020-03-15",format = "%Y-%m-%d")), 
-                                         ymin = 200, ymax = 425)
+#pl2 <- plo_agg_subTu + annotation_custom(grob = ggplotGrob(plo_agg_subTu +ylim(0,NA) + 
+#                                                             theme(axis.title = element_blank(),
+#                                                                   legend.position = "none")),
+#                                         #xmin = as.POSIXct(strptime("2020-01-10",format = "%Y-%m-%d")),
+#                                         xmax = as.POSIXct(strptime("2020-03-15",format = "%Y-%m-%d")), 
+#                                         ymin = 200, ymax = 425)
 
 ###DMC210723: pick up here... wiper was down for Decker Breach prior to 200107 ###DMC210727: omitted the data for Decker Breach prior to 20
 deckerOnly <- decker[1:2]
@@ -235,18 +242,18 @@ plo_agg_subChl <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% deckerOnl
   scale_size_manual(values = myps[1:2],labels = c("Breach","Interior")) +
   scale_alpha_manual(values = myalf,labels = c("Breach","Interior")) +
   theme_classic() +
-  #ylim(0,175) +
+  ylim(0,2) +
   xlab("Date") +
   ylab("Chlorophyll a (RFU)") +
   theme(axis.text.x =element_text(),
         axis.title = element_text(face = "bold"),
         legend.title = element_blank())
-pl2 <- plo_agg_subChl + annotation_custom(grob = ggplotGrob(plo_agg_subChl +ylim(0,2) + 
+pl2 <- plo_agg_subChl + annotation_custom(grob = ggplotGrob(plo_agg_subChl + ylim(0,45) + 
                                                              theme(axis.title = element_blank(),
                                                                    legend.position = "none")),
                                          xmin = as.POSIXct(strptime("2021-08-10",format = "%Y-%m-%d")),
                                          #xmax = as.POSIXct(strptime("2020-01-01",format = "%Y-%m-%d")), 
-                                         ymin = 21, ymax = 43)
+                                         ymin = 1.2, ymax =2.1)
 
 sac <- decker[3]
 plo_agg_subChlsac <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% sac & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "ChlRFUbar"),], aes(x = datetimestamp, y = value, fill = Station.Code, shape = Station.Code, size = Station.Code)) +
@@ -261,6 +268,7 @@ plo_agg_subChlsac <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% sac & 
         axis.title = element_text(face = "bold"),
         legend.title = element_blank())
 gridExtra::grid.arrange(arrangeGrob(pl2, plo_agg_subChlsac,nrow = 2), ncol =1)
+
 pl2sac <- plo_agg_subChlsac + annotation_custom(grob = ggplotGrob(plo_agg_subChlsac +ylim(0,10) + 
                                                              theme(axis.title = element_blank(),
                                                                    legend.position = "none")),
@@ -319,12 +327,12 @@ plo_agg_subPC <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% deckerOnly
   theme(axis.text.x =element_text(),
         axis.title = element_text(face = "bold"),
         legend.title = element_blank())
-pl2 <- plo_agg_subPC + annotation_custom(grob = ggplotGrob(plo_agg_subPC +ylim(0,NA) + 
+pl2 <- plo_agg_subPC + annotation_custom(grob = ggplotGrob(plo_agg_subPC +ylim(0,5) + 
                                                              theme(axis.title = element_blank(),
                                                                    legend.position = "none")),
-                                         #xmin = as.POSIXct(strptime("2020-01-10",format = "%Y-%m-%d")),
-                                         xmax = as.POSIXct(strptime("2020-03-15",format = "%Y-%m-%d")), 
-                                         ymin = 1.7, ymax = 5.2)
+                                         xmin = as.POSIXct(strptime("2021-07-25",format = "%Y-%m-%d")),
+                                         #xmax = as.POSIXct(strptime("2021-07-15",format = "%Y-%m-%d")), 
+                                         ymin = 25, ymax = 50)
 
 deckerOnly <- decker[1:2]
 plo_agg_subfdom <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% deckerOnly & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "fDOMRFUbar"),], aes(x = datetimestamp, y = value, fill = Station.Code, shape = Station.Code, size = Station.Code)) +
@@ -344,6 +352,7 @@ plo_agg_subfdom <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% deckerOn
 sac <- decker[3]
 plo_agg_subfdomsac <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% sac & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "fDOMconcbar"),], aes(x = datetimestamp, y = value, fill = Station.Code, shape = Station.Code, size = Station.Code)) +
   geom_point(alpha = 0.5, colour = "black") +
+  xlim(xdtsDeck2) +
   scale_fill_manual(values = mycol[3],labels = c("Sac.\nRiver   "))+ 
   scale_shape_manual(values = mysh[3],labels = c("Sac.\nRiver   ")) +
   scale_size_manual(values = myps[3],labels = c("Sac.\nRiver   ")) +
