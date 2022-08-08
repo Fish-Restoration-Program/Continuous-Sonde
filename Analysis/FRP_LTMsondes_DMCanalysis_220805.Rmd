@@ -205,8 +205,8 @@ plo_agg_subChl <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% deckerOnl
   scale_shape_manual(values = mysh[1:2],labels = c("Breach","Interior")) +
   scale_size_manual(values = myps[1:2],labels = c("Breach","Interior")) +
   scale_alpha_manual(values = myalf,labels = c("Breach","Interior")) +
+  scale_y_continuous(breaks = seq(0,2,1), limits = c(0,2))+
   theme_classic() +
-  ylim(0,2) +
   xlab("Date") +
   ylab("Chlorophyll a (RFU)") +
   theme(axis.text.x =element_text(),
@@ -219,11 +219,12 @@ pl2 <- plo_agg_subChl + annotation_custom(grob = ggplotGrob(plo_agg_subChl + yli
                                          ymin = 1.2, ymax =2.1)
 
 sac <- decker[3]
-plo_agg_subChlsac <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% sac & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "ChlRFUbar"),], aes(x = datetimestamp, y = value, fill = Station.Code, shape = Station.Code, size = Station.Code)) +
+plo_agg_subChlsac <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% sac & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "ChlRFUbar"),], aes(x = as.Date(datetimestamp), y = value, fill = Station.Code, shape = Station.Code, size = Station.Code)) +
   geom_point(alpha = 0.5, colour = "black") +
   scale_fill_manual(values = mycol[3],labels = c("Sac.\nRiver   "))+ 
   scale_shape_manual(values = mysh[3],labels = c("Sac.\nRiver   ")) +
   scale_size_manual(values = myps[3],labels = c("Sac.\nRiver   ")) +
+  scale_x_date(limits = as.Date(c(xdtsDeck2[1], xdtsDeck2[2]))) +
   theme_classic() +
   xlab("Date") +
   ylab("Chlorophyll a (\u00B5g/L)") +
@@ -232,34 +233,7 @@ plo_agg_subChlsac <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% sac & 
         legend.title = element_blank())
 gridExtra::grid.arrange(arrangeGrob(pl2, plo_agg_subChlsac,nrow = 2), ncol =1)
 
-pl2sac <- plo_agg_subChlsac + annotation_custom(grob = ggplotGrob(plo_agg_subChlsac +ylim(0,10) + 
-                                                             theme(axis.title = element_blank(),
-                                                                   legend.position = "none")),
-                                         xmin = as.POSIXct(strptime("2021-08-10",format = "%Y-%m-%d")),
-                                         ymin = 50, ymax = 130)
-gridExtra::grid.arrange(arrangeGrob(pl2, pl2sac,nrow = 2), ncol =1)
 
-
-plo_agg_subChlBoth <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% deckerOnly & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "ChlRFUbar"),], aes(x = datetimestamp, y = value, fill = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) +
-  geom_point(data = to_plo_sub[which(to_plo_sub$Station.Code %in% sac & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "ChlRFUbar"),], aes(x = datetimestamp, y = value-1), fill = mycol[3], shape = mysh[3], size = myps[3]) +
-  geom_point(colour = "black") +
-  scale_fill_manual(values = mycol[1:2],labels = c("Breach","Interior"))+ 
-  scale_shape_manual(values = mysh[1:2],labels = c("Breach","Interior")) +
-  scale_size_manual(values = myps[1:2],labels = c("Breach","Interior")) +
-  scale_alpha_manual(values = myalf,labels = c("Breach","Interior")) +
-  scale_y_continuous(sec.axis = sec_axis(~.-1, name = "Chlorophyll a (\u00B5g/L)"))+
-  theme_classic() +
-  ylim(0,5) +
-  xlab("Date") +
-  ylab("Chlorophyll a (RFU)") +
-  theme(axis.text.x =element_text(),
-        axis.title = element_text(face = "bold"),
-        legend.title = element_blank())
-pl2 <- plo_agg_subChl + annotation_custom(grob = ggplotGrob(plo_agg_subChl +ylim(0,175) + 
-                                                             theme(axis.title = element_blank(),
-                                                                   legend.position = "none")),
-                                         xmin = as.POSIXct(strptime("2020-01-10",format = "%Y-%m-%d")),
-                                         ymin = 1.5, ymax = 5.2)
 
 
 
