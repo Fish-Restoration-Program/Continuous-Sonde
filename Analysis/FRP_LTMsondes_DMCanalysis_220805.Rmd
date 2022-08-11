@@ -59,13 +59,13 @@ dfAll <- dfAll[which(dfAll$site %in% c("SacSherman_CDEC","M13_USGS") & # "SDI_US
                        dfAll$dts >= as.POSIXct(strptime("2021-01-01 00:00", format = "%Y-%m-%d")) & 
                        dfAll$dts <= as.POSIXct(strptime("2021-12-31 23:45", format = "%Y-%m-%d"))),]
 
-dat <- df[,c("Site","dts","TempC","SPC","Turb","DOmgL","ChlRFU","PCRFU","fDOMRFU")]
-dat[,10:11] <- as.numeric(NA)
-colnames(dat)[10:11] <- c("fdomConc","velocity")
+dat <- df[,c("Site","dts","TempC","SPC","Turb","DOmgL","ChlRFU","PCRFU","fDOMRFU","Depthm")]
+dat[,11:12] <- as.numeric(NA)
+colnames(dat)[11:12] <- c("fdomConc","velocity")
 
 dfAll <- dfAll[,-5]
-dfAll[,10:11] <- as.numeric(NA)
-dfAll <- dfAll[,c(1:7,10,11,8,9)]
+dfAll[,10:12] <- as.numeric(NA)
+dfAll <- dfAll[,c(1:7,10,11,8,9,12)]
 colnames(dfAll) <- colnames(dat)
 
 dfAll$ChlRFU <- as.numeric(dfAll$ChlRFU)
@@ -82,7 +82,7 @@ dat3 <- swmpr(dat3, meta_in = FALSE)
 attr(dat3,'timezone')<-"UTC"
 
 agg_dat_sub <- aggreswmp(dat3, by = 'hours', 
-                         params = c('Station.Code','TempC','SPC','Turb','DOmgL','ChlRFU','fDOMRFU','fdomConc','PCRFU'), aggs_out = T)
+                         params = c('Station.Code','TempC','SPC','Turb','DOmgL','ChlRFU','fDOMRFU','fdomConc','PCRFU','Depthm'), aggs_out = T)
   #params = c('Station.Code','TempC','SPC','Turb','DOmgL','ChlRFU','Chlconc','fDOMRFU','fDOMconc','PCRFU'), aggs_out = T)
 
 summH <- ddply(agg_dat_sub, c("Station.Code","datetimestamp"), summarise,
@@ -94,7 +94,8 @@ summH <- ddply(agg_dat_sub, c("Station.Code","datetimestamp"), summarise,
                #Chlconcbar = mean(Chlconc),
                fDOMRFUbar = mean(fDOMRFU),
                fDOMconcbar = mean(fdomConc),
-               PCbar = mean(PCRFU)
+               PCbar = mean(PCRFU),
+               Depthbar = mean(Depthm)
                )
 agg_dat_sub <- summH
 
@@ -286,6 +287,24 @@ plo_agg_subfdomsac <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% sac &
 
 
 gridExtra::grid.arrange(arrangeGrob(plo_agg_subfdom, plo_agg_subfdomsac,nrow = 2), ncol =1)
+
+
+deckerOnly <- decker[1:2]
+to_plo_sub$value[which(to_plo_sub$variable == "Depthbar" & to_plo_sub$value >500)] <- NA
+plo_agg_subdepth <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% deckerOnly & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "Depthbar"),], aes(x = datetimestamp, y = value, colour = Station.Code, shape = Station.Code, size = Station.Code)) +
+  #geom_point(alpha = 0.5, colour = "black") +
+  geom_line(size =0.5)+
+  scale_color_manual(values = mycol[1:2],labels = c("Breach","Interior"))+ 
+  scale_shape_manual(values = mysh[1:2],labels = c("Breach","Interior")) +
+  scale_size_manual(values = myps[1:2],labels = c("Breach","Interior")) +
+  theme_classic() +
+  #ylim(0,5) +
+  xlab("Date") +
+  ylab("Depth (m)") +
+  theme(axis.text.x =element_text(),
+        axis.title = element_text(face = "bold"),
+        legend.title = element_blank())
+
 
 sites <- c(yolo, decker)
 p <- list()
