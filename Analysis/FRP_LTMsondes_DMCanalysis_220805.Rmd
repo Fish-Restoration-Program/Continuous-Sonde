@@ -306,6 +306,28 @@ plo_agg_subdepth <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% deckerO
         legend.title = element_blank())
 
 
+deckerOnly <- decker[1:2]
+to_plo_sub$value[which(to_plo_sub$variable == "Depthbar" & to_plo_sub$value >500)] <- NA
+ylim.prim <- c(0,30)
+ylim.sec <- c(-0.5,2)
+b <- diff(ylim.prim)/diff(ylim.sec)
+a <- ylim.prim[1] - b*ylim.sec[1]
+plo_agg_subfdom <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% deckerOnly & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "fDOMRFUbar"),], aes(x = datetimestamp, y = value, fill = Station.Code, shape = Station.Code, size = Station.Code)) +
+  geom_line(data = to_plo_sub[which(to_plo_sub$Station.Code %in% deckerOnly & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "Depthbar"),], aes(x = datetimestamp, y = 6 +value*12, colour = Station.Code), alpha = 0.3)+
+  geom_point(alpha = 0.5) +
+  scale_fill_manual(values = mycol[1:2],labels = c("Breach","Interior"))+ 
+  scale_color_manual(values = mycol[1:2],labels = c("Breach","Interior"))+ 
+  scale_shape_manual(values = mysh[1:2],labels = c("Breach","Interior")) +
+  scale_size_manual(values = myps[1:2],labels = c("Breach","Interior")) +
+  scale_y_continuous(sec.axis = sec_axis(~(. - 6)/12, name = "Depth (m)")) +
+  theme_classic() +
+  #ylim(0,5) +
+  xlab("Date") +
+  ylab("Fluorescent Dissolved\nOrganic Matter (RFU)") +
+  theme(axis.text.x =element_text(),
+        axis.title = element_text(face = "bold"),
+        legend.title = element_blank())
+
 sites <- c(yolo, decker)
 p <- list()
 for(i in seq_along(sites)){
