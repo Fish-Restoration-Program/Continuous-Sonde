@@ -49,6 +49,7 @@ load("ExtLTM_CompleteMerge.RData") ###DMC220601: this is a huge file with all da
 df <- df[which(df$dts >= as.POSIXct(strptime("2021-01-01 00:00", format = "%Y-%m-%d")) & 
                  df$dts <= as.POSIXct(strptime("2021-12-31 23:45", format = "%Y-%m-%d"))),]
 df$Turb[which(df$Turb > 1000)] <- NA ###DMC220713: Turbidity sensor is only rated up to 1000 so any values above it must be discarded. The high calibration standard used is ~100 so any values above that are suspect
+df[which(df$TempC == 0), 6:15] <- NA
 
 df$ChlRFU[which(df$ChlRFU > 100)] <- NA ###DMC220713: Chl sensor is only rated up to 100 RFU so any values above it must be discarded.
 df$PCRFU[which(df$PCRFU > 100 | df$PCRFU < 0)] <- NA ###DMC220713: Phycocyanin sensor is only rated up to 100 RFU so any values above it must be discarded. Any values below 0 must be discarded too
@@ -121,12 +122,33 @@ mysh <- c(25,21,21)
 myps <- c(1.5,1.3,1)
 myalf <- c(0.5,0.5,0.7)
 
+xdtsSpring1 <- c(as.POSIXct(strptime("2021-04-19 00:00", format = "%Y-%m-%d")),
+                 as.POSIXct(strptime("2021-05-10 00:00", format = "%Y-%m-%d")))
+xdtsSpring2 <- c(as.POSIXct(strptime("2021-05-15 00:00", format = "%Y-%m-%d")),
+                 as.POSIXct(strptime("2021-06-15 00:00", format = "%Y-%m-%d")))
 
-plo_agg_subT <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker & to_plo_sub$datetimestamp %in% xdtsDeck & to_plo_sub$variable == "Tempbar"),], aes(x = datetimestamp, y = value, fill = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) + 
-  geom_point(colour = "black") +#, shape = 21
+dates4sun <- unique(as.Date(to_plo_sub$datetimestamp[which(to_plo_sub$datetimestamp >= xdtsSpring2[1] &  to_plo_sub$datetimestamp <= xdtsSpring2[2])]))
+
+suntimes <- getSunlightTimes(date = as.Date(dates4sun), lat = 38.086880, lon = -121.719738,
+                             keep = c("sunrise","sunset","goldenHour","goldenHourEnd"),
+                             tz = "America/Los_Angeles")
+suntimes2 <- data.frame(suntimes$date[1:length(suntimes$date)-1],suntimes$sunset[1:length(suntimes$date)-1],suntimes$sunrise[2:length(suntimes$date)])
+colnames(suntimes2) <- c("date","sunset","sunrise")
+
+moonphase <- getMoonIllumination(date = as.Date(dates4sun),
+                                 keep = c("fraction","phase"))
+moonphase$date2 <- as.POSIXct(strptime(moonphase$date, format = "%Y-%m-%d"))
+moonphase2 <- data.frame(moonphase$date[which.max(moonphase$fraction)], moonphase$fraction[which.max(moonphase$fraction)], "Full")
+moonphase2[2,] <- data.frame(moonphase$date[which.min(moonphase$fraction)], moonphase$fraction[which.min(moonphase$fraction)], "New")
+colnames(moonphase2) <- c("date","fraction","phase")
+moonphase2$date2 <- as.POSIXct.Date(moonphase2$date)
+moonphase2$phase2 <- factor(moonphase2$phase, levels = c("Full","New"))
+
+plo_agg_subT <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker & to_plo_sub$datetimestamp %in% xdtsDeck & to_plo_sub$variable == "Tempbar"),], aes(x = datetimestamp, y = value, color = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) + 
+  geom_line() +#, shape = 21
   geom_hline(yintercept=25.4) + ###DMC: "Swanson C, Reid T, Young PS, Cech Jr JJ. 2000. Comparative environmental tolerances of threatened delta smelt (Hypomesus transpacificus) and introduced Wakasagi (H. nipponensis) in an altered California estuary. Oecologia 123(3):384-390
   geom_hline(yintercept=24, linetype="dashed") + ###DMC: reference is "Rich A.A. (1987). Report on studies conducted by Sacramento County to determine the temperatures which optimize growth and survival in juvenile chinook salmon (Onchorhynchus tshawwytscha). McDonough, Holland, & Allen, Sacramento, CA"
-  scale_fill_manual(values = mycol,labels = c("Breach","Interior","Sacramento\nRiver")) + 
+  scale_color_manual(values = mycol,labels = c("Breach","Interior","Sacramento\nRiver")) + 
   scale_shape_manual(values = mysh,labels = c("Breach","Interior","Sacramento\nRiver")) +
   scale_size_manual(values = myps,labels = c("Breach","Interior","Sacramento\nRiver")) +
   scale_alpha_manual(values = myalf,labels = c("Breach","Interior","Sacramento\nRiver")) +
@@ -136,6 +158,47 @@ plo_agg_subT <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker & to
   theme(axis.text.x =element_text(),
         axis.title = element_text(face = "bold"),
         legend.title = element_blank())
+
+plo_agg_subTsub <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker[2:3] & to_plo_sub$datetimestamp >= xdtsSpring2[1] &  to_plo_sub$datetimestamp <= xdtsSpring2[2] & to_plo_sub$variable == "Tempbar"),], aes(x = datetimestamp, y = value, color = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) + 
+  geom_line() +#, shape = 21
+  geom_hline(yintercept=25.4) + ###DMC: "Swanson C, Reid T, Young PS, Cech Jr JJ. 2000. Comparative environmental tolerances of threatened delta smelt (Hypomesus transpacificus) and introduced Wakasagi (H. nipponensis) in an altered California estuary. Oecologia 123(3):384-390
+  geom_hline(yintercept=24, linetype="dashed") + ###DMC: reference is "Rich A.A. (1987). Report on studies conducted by Sacramento County to determine the temperatures which optimize growth and survival in juvenile chinook salmon (Onchorhynchus tshawwytscha). McDonough, Holland, & Allen, Sacramento, CA"
+  geom_rect(data = suntimes2, inherit.aes = FALSE, aes(xmin = sunset, xmax = sunrise, ymin = -Inf, ymax = Inf),
+            fill = "gray", alpha = 0.1) +
+  scale_color_manual(values = mycol[2:3],labels = c("Interior","Sacramento\nRiver")) + 
+  scale_shape_manual(values = mysh[2:3],labels = c("Interior","Sacramento\nRiver")) +
+  scale_size_manual(values = myps[2:3],labels = c("Interior","Sacramento\nRiver")) +
+  scale_alpha_manual(values = myalf[2:3],labels = c("Interior","Sacramento\nRiver")) +
+  theme_classic() +
+  xlab("Date") +
+  ylab("Temperature (\u00b0C)") +
+  theme(axis.text.x =element_text(),
+        axis.title = element_text(face = "bold"),
+        legend.title = element_blank())
+
+plo_agg_subDep <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker[2:3] & to_plo_sub$datetimestamp >= xdtsSpring2[1] &  to_plo_sub$datetimestamp <= xdtsSpring2[2] & to_plo_sub$variable == "Depthbar"),], aes(x = datetimestamp, y = value, color = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) + 
+  geom_line() +#, shape = 21
+  #geom_hline(yintercept=25.4) + ###DMC: "Swanson C, Reid T, Young PS, Cech Jr JJ. 2000. Comparative environmental tolerances of threatened delta smelt (Hypomesus transpacificus) and introduced Wakasagi (H. nipponensis) in an altered California estuary. Oecologia 123(3):384-390
+  #geom_hline(yintercept=24, linetype="dashed") + ###DMC: reference is "Rich A.A. (1987). Report on studies conducted by Sacramento County to determine the temperatures which optimize growth and survival in juvenile chinook salmon (Onchorhynchus tshawwytscha). McDonough, Holland, & Allen, Sacramento, CA"
+  geom_rect(data = suntimes2, inherit.aes = FALSE, aes(xmin = sunset, xmax = sunrise, ymin = -Inf, ymax = Inf),
+            fill = "gray", alpha = 0.1) +
+  geom_point(data = moonphase2, aes(x = date2, y = 0, fill = phase2),
+              inherit.aes = FALSE,
+             size = 4, shape = 21, color = "black") +
+  ylim(-0.1,1.5) +
+  scale_color_manual(values = mycol[2:3],labels = c("Interior","Sacramento\nRiver")) + 
+  scale_shape_manual(values = mysh[2:3],labels = c("Interior","Sacramento\nRiver")) +
+  scale_size_manual(values = myps[2:3],labels = c("Interior","Sacramento\nRiver")) +
+  scale_alpha_manual(values = myalf[2:3],labels = c("Interior","Sacramento\nRiver")) +
+  scale_fill_manual(values = c("white","black"),labels = c("Full","New")) + 
+  theme_classic() +
+  xlab("Date") +
+  ylab("Depth (m)") +
+  theme(axis.text.x =element_text(),
+        axis.title = element_text(face = "bold"),
+        legend.title = element_blank())
+
+gridExtra::grid.arrange(arrangeGrob(plo_agg_subTsub, plo_agg_subDep,nrow = 2), ncol =1)
 
 
 plo_agg_subDO <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker & (to_plo_sub$datetimestamp >= xdtsDeck2[1] & to_plo_sub$datetimestamp <= xdtsDeck2[2]) & to_plo_sub$variable == "DObar"),], aes(x = datetimestamp, y = value, fill = Station.Code, alpha = Station.Code,shape = Station.Code, size = Station.Code)) +
