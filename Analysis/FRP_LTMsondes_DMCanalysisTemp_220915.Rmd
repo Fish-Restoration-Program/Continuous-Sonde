@@ -39,6 +39,7 @@ library(viridis)
 library(plyr)
 library(scales)
 library(gridExtra)
+library(suncalc)
 
 rm(list = ls())
 
@@ -124,8 +125,8 @@ myalf <- c(0.5,0.5,0.7)
 
 xdtsSpring1 <- c(as.POSIXct(strptime("2021-04-19 00:00", format = "%Y-%m-%d")),
                  as.POSIXct(strptime("2021-05-10 00:00", format = "%Y-%m-%d")))
-xdtsSpring2 <- c(as.POSIXct(strptime("2021-05-15 00:00", format = "%Y-%m-%d")),
-                 as.POSIXct(strptime("2021-06-15 00:00", format = "%Y-%m-%d")))
+xdtsSpring2 <- c(as.POSIXct(strptime("2021-01-01 00:00", format = "%Y-%m-%d")),
+                 as.POSIXct(strptime("2021-05-30 00:00", format = "%Y-%m-%d")))
 
 dates4sun <- unique(as.Date(to_plo_sub$datetimestamp[which(to_plo_sub$datetimestamp >= xdtsSpring2[1] &  to_plo_sub$datetimestamp <= xdtsSpring2[2])]))
 
@@ -159,16 +160,16 @@ plo_agg_subT <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker & to
         axis.title = element_text(face = "bold"),
         legend.title = element_blank())
 
-plo_agg_subTsub <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker[2:3] & to_plo_sub$datetimestamp >= xdtsSpring2[1] &  to_plo_sub$datetimestamp <= xdtsSpring2[2] & to_plo_sub$variable == "Tempbar"),], aes(x = datetimestamp, y = value, color = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) + 
+plo_agg_subTsub <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker & to_plo_sub$datetimestamp >= xdtsSpring2[1] &  to_plo_sub$datetimestamp <= xdtsSpring2[2] & to_plo_sub$variable == "Tempbar"),], aes(x = datetimestamp, y = value, color = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) + 
   geom_line() +#, shape = 21
   geom_hline(yintercept=25.4) + ###DMC: "Swanson C, Reid T, Young PS, Cech Jr JJ. 2000. Comparative environmental tolerances of threatened delta smelt (Hypomesus transpacificus) and introduced Wakasagi (H. nipponensis) in an altered California estuary. Oecologia 123(3):384-390
   geom_hline(yintercept=24, linetype="dashed") + ###DMC: reference is "Rich A.A. (1987). Report on studies conducted by Sacramento County to determine the temperatures which optimize growth and survival in juvenile chinook salmon (Onchorhynchus tshawwytscha). McDonough, Holland, & Allen, Sacramento, CA"
   geom_rect(data = suntimes2, inherit.aes = FALSE, aes(xmin = sunset, xmax = sunrise, ymin = -Inf, ymax = Inf),
             fill = "gray", alpha = 0.1) +
-  scale_color_manual(values = mycol[2:3],labels = c("Interior","Sacramento\nRiver")) + 
-  scale_shape_manual(values = mysh[2:3],labels = c("Interior","Sacramento\nRiver")) +
-  scale_size_manual(values = myps[2:3],labels = c("Interior","Sacramento\nRiver")) +
-  scale_alpha_manual(values = myalf[2:3],labels = c("Interior","Sacramento\nRiver")) +
+  scale_color_manual(values = mycol,labels = c("Breach","Interior","Sacramento\nRiver")) + 
+  scale_shape_manual(values = mysh,labels = c("Breach","Interior","Sacramento\nRiver")) +
+  scale_size_manual(values = myps,labels = c("Breach","Interior","Sacramento\nRiver")) +
+  scale_alpha_manual(values = myalf,labels = c("Breach","Interior","Sacramento\nRiver")) +
   theme_classic() +
   xlab("Date") +
   ylab("Temperature (\u00b0C)") +
@@ -176,7 +177,7 @@ plo_agg_subTsub <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker[2
         axis.title = element_text(face = "bold"),
         legend.title = element_blank())
 
-plo_agg_subDep <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker[2:3] & to_plo_sub$datetimestamp >= xdtsSpring2[1] &  to_plo_sub$datetimestamp <= xdtsSpring2[2] & to_plo_sub$variable == "Depthbar"),], aes(x = datetimestamp, y = value, color = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) + 
+plo_agg_subDep <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker & to_plo_sub$datetimestamp >= xdtsSpring2[1] &  to_plo_sub$datetimestamp <= xdtsSpring2[2] & to_plo_sub$variable == "Depthbar"),], aes(x = datetimestamp, y = value, color = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) + 
   geom_line() +#, shape = 21
   #geom_hline(yintercept=25.4) + ###DMC: "Swanson C, Reid T, Young PS, Cech Jr JJ. 2000. Comparative environmental tolerances of threatened delta smelt (Hypomesus transpacificus) and introduced Wakasagi (H. nipponensis) in an altered California estuary. Oecologia 123(3):384-390
   #geom_hline(yintercept=24, linetype="dashed") + ###DMC: reference is "Rich A.A. (1987). Report on studies conducted by Sacramento County to determine the temperatures which optimize growth and survival in juvenile chinook salmon (Onchorhynchus tshawwytscha). McDonough, Holland, & Allen, Sacramento, CA"
@@ -186,10 +187,10 @@ plo_agg_subDep <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker[2:
               inherit.aes = FALSE,
              size = 4, shape = 21, color = "black") +
   ylim(-0.1,1.5) +
-  scale_color_manual(values = mycol[2:3],labels = c("Interior","Sacramento\nRiver")) + 
-  scale_shape_manual(values = mysh[2:3],labels = c("Interior","Sacramento\nRiver")) +
-  scale_size_manual(values = myps[2:3],labels = c("Interior","Sacramento\nRiver")) +
-  scale_alpha_manual(values = myalf[2:3],labels = c("Interior","Sacramento\nRiver")) +
+  scale_color_manual(values = mycol,labels = c("Breach","Interior","Sacramento\nRiver")) + 
+  scale_shape_manual(values = mysh,labels = c("Breach","Interior","Sacramento\nRiver")) +
+  scale_size_manual(values = myps,labels = c("Breach","Interior","Sacramento\nRiver")) +
+  scale_alpha_manual(values = myalf,labels = c("Breach","Interior","Sacramento\nRiver")) +
   scale_fill_manual(values = c("white","black"),labels = c("Full","New")) + 
   theme_classic() +
   xlab("Date") +
