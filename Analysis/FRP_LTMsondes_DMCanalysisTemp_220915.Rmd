@@ -985,7 +985,7 @@ gridExtra::grid.arrange(arrangeGrob(plo_agg_subChl, plo_agg_subChlToe,nrow = 2),
 
 
 
-This chunk will replicate the work by Mandy (again). For Decker
+Time-series Decomposition For Decker
 Saving figures to "C:\Users\DCox\OneDrive - California Department of Fish and Wildlife\Documents\FRP\Monitoring\Reports\2021SiteReports"
 ```{r}
 library(SWMPr)
@@ -1049,13 +1049,15 @@ dat3$Time <- substr(as.character(dat3$datetimestamp),12,19)
 
 ?decompose
 summTime <- ddply(dat3, c("Station.Code","Date"), summarise,
-               nTime = length(Time)) # 96 measurements per day
+               nTime = length(unique(Time))) # 96 measurements per day... pTime = sum(frac/4656)*96
 
-dfDeck <- dat3[which(dat3$Station.Code == "Decker Pool"),]
+dfDeck <- dat3[which(dat3$Station.Code == "Decker Pool" & 
+                       dat3$datetimestamp >= as.POSIXct(strptime("2021-07-04 00:00", format = "%Y-%m-%d")) & 
+                       dat3$datetimestamp <= as.POSIXct(strptime("2021-07-29 23:45", format = "%Y-%m-%d"))),]
 dfM13 <- dat3[which(dat3$Station.Code == "M13_USGS" & dat3$Date != "2021-07-31"),]
 
-dfDeck$day <- as.integer(factor(df$Date, levels = unique(df$Date)))
-dfDeck$frac <- as.integer(rep(c(1:96),30))
+dfDeck$day <- as.integer(factor(dfDeck$Date, levels = unique(dfDeck$Date)))
+dfDeck$frac <- as.integer(rep(c(1:96),25))
 
 dfM13$day <- as.integer(factor(dfM13$Date, levels = unique(dfM13$Date)))
 dfM13$frac <- as.integer(c(rep(c(1:96),19),c(1:15,18:96),rep(c(1:96),10)))
@@ -1063,7 +1065,7 @@ dfM13$frac <- as.integer(c(rep(c(1:96),19),c(1:15,18:96),rep(c(1:96),10)))
 deck_ts <- ts(data = dfDeck$TempC,
               start = c(dfDeck$day[1], dfDeck$frac[1]),
               frequency = 96)
-deck_st1 <- stlplus(deck_ts, s.window = "periodic")
+deck_st1 <- stlplus::stlplus(deck_ts, s.window = "periodic")
 plot(deck_st1)
 deck_mst1 <- forecast::mstl(deck_ts, lambda = NULL)
 plot(deck_mst1)
@@ -1071,7 +1073,7 @@ plot(deck_mst1)
 sacr_ts <- ts(data = dfM13$TempC,
               start = c(dfM13$day[1], dfM13$frac[1]),
               frequency = 96)
-sacr_st1 <- stlplus(sacr_ts, s.window = "periodic")
+sacr_st1 <- stlplus::stlplus(sacr_ts, s.window = "periodic")
 plot(sacr_st1)
 sacr_mst1 <- forecast::mstl(sacr_ts, lambda = NULL)
 plot(sacr_mst1)
@@ -1084,6 +1086,53 @@ dfDeck$seas_adj <- dfDeck$trend + dfDeck$remainder
 dfM13$trend <- as.numeric(sacr_mst1[,2])
 dfM13$remainder <- as.numeric(sacr_mst1[,"Remainder"])
 dfM13$seas_adj <- dfM13$trend + dfM13$remainder
+
+#deck.mat <-c(matrix(data = dfDeck$TempC, ncol = length(dfDeck$TempC), nrow = 96, byrow = TRUE))
+#deck.ts <- ts(deck.mat, frequency = 96)
+#deck.decomp <- decompose(deck.ts)
+#autoplot(deck.decomp) + xlab("Year") + ggtitle("Classical Additive Decomposition of Decker Temperature")
+
+autoplot(deck_mst1) + xlab("Year") + ggtitle("STL Decomposition of Electrical Equipment Index")
+hist(deck_mst1[,"Remainder"])
+#hist(deck_st1$data[,"remainder"])
+
+#plot.frequency.spectrum <- function(X.k, xlimits=c(0,length(X.k))) {
+#  plot.data  <- cbind(0:(length(X.k)-1), Mod(X.k))
+
+  # TODO: why this scaling is necessary?
+#  plot.data[2:length(X.k),2] <- 2*plot.data[2:length(X.k),2] 
+#  
+#  plot(plot.data, t="h", lwd=2, main="", 
+#       xlab="Frequency (Hz)", ylab="Strength", 
+#       xlim=xlimits, ylim=c(0,max(Mod(plot.data[,2]))))
+#}
+#X.k <- fft(deck_mst1[,"Remainder"])
+#plot.frequency.spectrum(X.k,xlimits=c(0,acq.freq/2))
+
+plot(deck_mst1[,"Remainder"])
+f.data <- GeneCycle::periodogram(deck_mst1[,"Remainder"])
+harmonics <- 1:96
+plot(f.data$freq[harmonics]*length(deck_mst1[,"Remainder"]), 
+     f.data$spec[harmonics]/sum(f.data$spec), 
+     xlab="Harmonics (Hz)", ylab="Amplitute Density", type="h")
+
+f.data2 <- data.frame(freq = as.numeric(f.data$freq),
+                      spec = as.numeric(f.data$spec))
+f.data2$period.hr <- (1/f.data2$freq)*15/60
+f.data2$freq.hr <- 1/f.data2$period.hr
+plot(f.data2$period.hr[which(f.data2$period.hr < 100)], f.data2$spec[which(f.data2$period.hr < 100)], type = "h")
+
+library(psdr)
+Fs <- 1/(15*60) # 15 minutes times 60 seconds per 1 minute is 900 seconds, so frequency is 1 per 900 seconds or 0.001111 Hz
+results <- MakePowerSpectralDensity(Fs,deck_mst1[,"Remainder"])
+frequencies <- results[[1]]
+PSD <- results[[2]]
+p.data2 <- data.frame(frequencies, PSD)
+p.data2$period.hr <- (1/p.data2$frequencies) * (1/60) * (1/60)
+plot(frequencies[-1], PSD[-1], type = "l")
+plot(p.data2$period.hr[which(p.data2$period.hr < 100)], p.data2$PSD[which(p.data2$period.hr < 100)], type = "h")
+
+
 
 to_plo_sub <- rbind.data.frame(dfDeck, dfM13)
 #to_plo_sub$dts <- as.POSIXct(strptime(as.character(to_plo_sub$datetimestamp),format = "%Y-%m-%d"))
@@ -1252,3 +1301,154 @@ gridExtra::grid.arrange(arrangeGrob(plo_agg_subTsub, plo_agg_subDep,nrow = 2), n
 ```
 
 
+Time-series Decomposition For Flyway
+Saving figures to "C:\Users\DCox\OneDrive - California Department of Fish and Wildlife\Documents\FRP\Monitoring\Reports\2021SiteReports"
+```{r}
+library(SWMPr)
+library(ggplot2)
+library(reshape2)
+library(viridis)
+library(plyr)
+library(scales)
+library(gridExtra)
+library(suncalc)
+
+rm(list = ls())
+
+
+load("FRP_LTMsonde_220526.RData")
+load("ExtLTM_CompleteMerge.RData") ###DMC220601: this is a huge file with all data from every nearby sonde
+
+unique(df$Site)
+
+df <- df[which(df$dts >= as.POSIXct(strptime("2021-08-01 00:00", format = "%Y-%m-%d")) & 
+                 df$dts <= as.POSIXct(strptime("2021-08-31 23:45", format = "%Y-%m-%d")) &
+                 df$Site == "Yolo Flyway Farm" ),]
+
+df$Turb[which(df$Turb > 1000)] <- NA ###DMC220713: Turbidity sensor is only rated up to 1000 so any values above it must be discarded. The high calibration standard used is ~100 so any values above that are suspect
+df[which(df$TempC == 0), 6:15] <- NA
+
+#df[which(df$dts == "2021-07-30 10:18:04" | df$dts == "2021-07-30 10:33:04"),c(6:14)] <- NA
+#df$Depthm[which(df$dts == "2021-07-03 21:24:18")] <- NA
+
+df$ChlRFU[which(df$ChlRFU > 100)] <- NA ###DMC220713: Chl sensor is only rated up to 100 RFU so any values above it must be discarded.
+df$PCRFU[which(df$PCRFU > 100 | df$PCRFU < 0)] <- NA ###DMC220713: Phycocyanin sensor is only rated up to 100 RFU so any values above it must be discarded. Any values below 0 must be discarded too
+df$fDOMRFU[which(df$fDOMRFU < 0)] <- NA ###DMC220713: FDOM sensor is only rated up to 100 RFU so any values above it must be discarded. Any values below 0 must be discarded too
+
+
+unique(dfAll$site)
+dfAll <- dfAll[which(dfAll$site %in% c("TOE_USGS") & # "SacSherman_CDEC", "SDI_USGS","Emmaton_CDEC" ###DMC220713: these stations did not have data
+                       dfAll$dts >= as.POSIXct(strptime("2021-08-01 00:00", format = "%Y-%m-%d")) & 
+                       dfAll$dts <= as.POSIXct(strptime("2021-08-31 23:45", format = "%Y-%m-%d"))),]
+
+dat <- df[,c("Site","dts","TempC","SPC","Turb","DOmgL","ChlRFU","PCRFU","fDOMRFU","Depthm")]
+dat[,11:12] <- as.numeric(NA)
+colnames(dat)[11:12] <- c("fdomConc","velocity")
+
+dfAll <- dfAll[,-5]
+dfAll[,10:12] <- as.numeric(NA)
+dfAll <- dfAll[,c(1:7,10,8,11,12,9)]
+colnames(dfAll) <- colnames(dat)
+
+dfAll$ChlRFU <- as.numeric(dfAll$ChlRFU)
+dfAll$PCRFU <- as.numeric(dfAll$PCRFU)
+dfAll$fDOMRFU <- as.numeric(dfAll$fDOMRFU)
+
+dfAll$ChlRFU[which(dfAll$ChlRFU > 400)] <- NA ###DMC220713: Chl sensor is only rated up to 400 ug/L so any values above it must be discarded.
+
+dat3 <- rbind.data.frame(dat,dfAll)
+colnames(dat3)[1:2] <- c("Station.Code","datetimestamp")
+
+dat3$Date <- substr(as.character(dat3$datetimestamp),0,10)
+dat3$Time <- substr(as.character(dat3$datetimestamp),12,19)
+
+?decompose
+summTime <- ddply(dat3, c("Station.Code","Date"), summarise,
+               nTime = length(Time)) # 96 measurements per day
+
+dfDeck <- dat3[which(dat3$Station.Code == "Yolo Flyway Farm"),]
+dfM13 <- dat3[which(dat3$Station.Code == "TOE_USGS" & dat3$Date != "2021-08-31"),]
+
+dfDeck$day <- as.integer(factor(df$Date, levels = unique(df$Date)))
+dfDeck$frac <- as.integer(rep(c(1:96),30))
+
+dfM13$day <- as.integer(factor(dfM13$Date, levels = unique(dfM13$Date)))
+dfM13$frac <- as.integer(rep(c(1:96),30))
+
+deck_ts <- ts(data = dfDeck$TempC,
+              start = c(dfDeck$day[1], dfDeck$frac[1]),
+              frequency = 96)
+deck_st1 <- stlplus::stlplus(deck_ts, s.window = "periodic")
+plot(deck_st1)
+deck_mst1 <- forecast::mstl(deck_ts, lambda = NULL)
+plot(deck_mst1)
+
+sacr_ts <- ts(data = dfM13$TempC,
+              start = c(dfM13$day[1], dfM13$frac[1]),
+              frequency = 96)
+sacr_st1 <- stlplus::stlplus(sacr_ts, s.window = "periodic")
+plot(sacr_st1)
+sacr_mst1 <- forecast::mstl(sacr_ts, lambda = NULL)
+plot(sacr_mst1)
+sacr_mst1_auto <- forecast::mstl(sacr_ts, lambda = "auto")
+plot(sacr_mst1_auto)
+
+dfDeck$trend <- as.numeric(deck_mst1[,"Trend"])
+dfDeck$remainder <- as.numeric(deck_mst1[,"Remainder"])
+dfDeck$seas_adj <- dfDeck$trend + dfDeck$remainder
+dfM13$trend <- as.numeric(sacr_mst1[,2])
+dfM13$remainder <- as.numeric(sacr_mst1[,"Remainder"])
+dfM13$seas_adj <- dfM13$trend + dfM13$remainder
+
+to_plo_sub <- rbind.data.frame(dfDeck, dfM13)
+#to_plo_sub$dts <- as.POSIXct(strptime(as.character(to_plo_sub$datetimestamp),format = "%Y-%m-%d"))
+to_plo_sub$Station.Code <- factor(to_plo_sub$Station.Code, levels = c("Yolo Flyway Farm", "TOE_USGS"))
+
+mycol <- (viridis_pal(option = "H")(56))[c(24,44)]
+#mycol[3] <- c("black")
+mysh <- c(25,21)
+myps <- c(1.5,1.3)
+myalf <- c(0.5,1)
+
+xdtsJuly <- c(as.POSIXct(strptime("2021-08-01 00:00", format = "%Y-%m-%d")),
+              as.POSIXct(strptime("2021-08-31 00:00", format = "%Y-%m-%d")))
+
+dates4sun <- unique(as.Date(to_plo_sub$datetimestamp[which(to_plo_sub$datetimestamp >= xdtsJuly[1] &  to_plo_sub$datetimestamp <= xdtsJuly[2])]))
+
+suntimes <- getSunlightTimes(date = as.Date(dates4sun), lat = 38.086880, lon = -121.719738,
+                             keep = c("sunrise","sunset","goldenHour","goldenHourEnd"),
+                             tz = "America/Los_Angeles")
+suntimes2 <- data.frame(suntimes$date[1:length(suntimes$date)-1],suntimes$sunset[1:length(suntimes$date)-1],suntimes$sunrise[2:length(suntimes$date)])
+colnames(suntimes2) <- c("date","sunset","sunrise")
+
+moonphase <- getMoonIllumination(date = as.Date(dates4sun),
+                                 keep = c("fraction","phase"))
+moonphase$date2 <- as.POSIXct(strptime(moonphase$date, format = "%Y-%m-%d"))
+moonphase2 <- data.frame(moonphase$date[which.max(moonphase$fraction)], moonphase$fraction[which.max(moonphase$fraction)], "Full")
+moonphase2[2,] <- data.frame(moonphase$date[which.min(moonphase$fraction)], moonphase$fraction[which.min(moonphase$fraction)], "New")
+colnames(moonphase2) <- c("date","fraction","phase")
+moonphase2$date2 <- as.POSIXct.Date(moonphase2$date)
+moonphase2$phase2 <- factor(moonphase2$phase, levels = c("Full","New"))
+
+plo_agg_Trend <- ggplot(to_plo_sub, aes(x = datetimestamp, y = seas_adj, color = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) + 
+  geom_line() +#, shape = 21
+  geom_hline(yintercept=25.4) + ###DMC: "Swanson C, Reid T, Young PS, Cech Jr JJ. 2000. Comparative environmental tolerances of threatened delta smelt (Hypomesus transpacificus) and introduced Wakasagi (H. nipponensis) in an altered California estuary. Oecologia 123(3):384-390
+  geom_hline(yintercept=24, linetype="dashed") + ###DMC: reference is "Rich A.A. (1987). Report on studies conducted by Sacramento County to determine the temperatures which optimize growth and survival in juvenile chinook salmon (Onchorhynchus tshawwytscha). McDonough, Holland, & Allen, Sacramento, CA"
+  geom_line(data = to_plo_sub, inherit.aes = FALSE, aes(x = datetimestamp, y = TempC, color = Station.Code)) +
+  geom_line(data = to_plo_sub, inherit.aes = FALSE, aes(x = datetimestamp, y = trend, alpha = Station.Code), color = "black") +
+  geom_rect(data = suntimes2, inherit.aes = FALSE, aes(xmin = sunset, xmax = sunrise, ymin = -Inf, ymax = Inf),
+            fill = "gray", alpha = 0.1) +
+  geom_point(data = moonphase2, aes(x = date2, y = 20, fill = phase2),
+              inherit.aes = FALSE,
+             size = 4, shape = 21, color = "black") +
+  scale_color_manual(values = mycol,labels = c("Flyway","Toe\nDrain")) + 
+  scale_shape_manual(values = mysh,labels = c("Flyway","Toe\nDrain")) +
+  scale_size_manual(values = myps,labels = c("Flyway","Toe\nDrain")) +
+  scale_alpha_manual(values = myalf,labels = c("Flyway","Toe\nDrain")) +
+  theme_classic() +
+  xlab("Date") +
+  ylab("Temperature (\u00b0C)") +
+  theme(axis.text.x =element_text(),
+        axis.title = element_text(face = "bold"),
+        legend.title = element_blank())
+```
