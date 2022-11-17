@@ -1007,7 +1007,7 @@ unique(df$Site)
 unique(dfAll$site)
 
 df <- df[which(df$dts >= as.POSIXct(strptime("2021-07-01 00:00", format = "%Y-%m-%d")) & 
-                 df$dts <= as.POSIXct(strptime("2021-07-31 23:45", format = "%Y-%m-%d")) &
+                 df$dts <= as.POSIXct(strptime("2021-09-10 23:45", format = "%Y-%m-%d")) &
                  df$Site == "Decker Pool" ),]
 
 df$Turb[which(df$Turb > 1000)] <- NA ###DMC220713: Turbidity sensor is only rated up to 1000 so any values above it must be discarded. The high calibration standard used is ~100 so any values above that are suspect
@@ -1023,8 +1023,8 @@ df$fDOMRFU[which(df$fDOMRFU < 0)] <- NA ###DMC220713: FDOM sensor is only rated 
 
 unique(dfAll$site)
 dfAll <- dfAll[which(dfAll$site %in% c("M13_USGS") & # "SacSherman_CDEC", "SDI_USGS","Emmaton_CDEC" ###DMC220713: these stations did not have data
-                       dfAll$dts >= as.POSIXct(strptime("2021-07-01 00:00", format = "%Y-%m-%d")) & 
-                       dfAll$dts <= as.POSIXct(strptime("2021-07-31 23:45", format = "%Y-%m-%d"))),]
+                       dfAll$dts >= as.POSIXct(strptime("2021-07-31 00:00", format = "%Y-%m-%d")) & 
+                       dfAll$dts <= as.POSIXct(strptime("2021-09-10 23:45", format = "%Y-%m-%d"))),]
 
 dat <- df[,c("Site","dts","TempC","SPC","Turb","DOmgL","ChlRFU","PCRFU","fDOMRFU","Depthm")]
 dat[,11:12] <- as.numeric(NA)
@@ -1052,15 +1052,18 @@ summTime <- ddply(dat3, c("Station.Code","Date"), summarise,
                nTime = length(unique(Time))) # 96 measurements per day... pTime = sum(frac/4656)*96
 
 dfDeck <- dat3[which(dat3$Station.Code == "Decker Pool" & 
-                       dat3$datetimestamp >= as.POSIXct(strptime("2021-07-04 00:00", format = "%Y-%m-%d")) & 
-                       dat3$datetimestamp <= as.POSIXct(strptime("2021-07-29 23:45", format = "%Y-%m-%d"))),]
+                       dat3$datetimestamp >= as.POSIXct(strptime("2021-07-31 00:00", format = "%Y-%m-%d")) & 
+                       dat3$datetimestamp <= as.POSIXct(strptime("2021-09-09 23:45", format = "%Y-%m-%d"))),]
 dfM13 <- dat3[which(dat3$Station.Code == "M13_USGS" & dat3$Date != "2021-07-31"),]
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-23 22:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-23 23:30:00",format = "%Y-%m-%d %H:%M:%S"))),"TempC"] <- 20.0
 
 dfDeck$day <- as.integer(factor(dfDeck$Date, levels = unique(dfDeck$Date)))
-dfDeck$frac <- as.integer(rep(c(1:96),25))
+dfDeck$frac <- as.integer(rep(c(1:96),40))
 
 dfM13$day <- as.integer(factor(dfM13$Date, levels = unique(dfM13$Date)))
-dfM13$frac <- as.integer(c(rep(c(1:96),19),c(1:15,18:96),rep(c(1:96),10)))
+dfM13 <- dfM13[-3841,]
+dfM13$frac <- as.integer(rep(c(1:96),40))
 
 deck_ts <- ts(data = dfDeck$TempC,
               start = c(dfDeck$day[1], dfDeck$frac[1]),
@@ -1109,6 +1112,8 @@ hist(deck_mst1[,"Remainder"])
 #X.k <- fft(deck_mst1[,"Remainder"])
 #plot.frequency.spectrum(X.k,xlimits=c(0,acq.freq/2))
 
+################################################################################
+### for deck
 plot(deck_mst1[,"Remainder"])
 f.data <- GeneCycle::periodogram(deck_mst1[,"Remainder"])
 harmonics <- 1:96
@@ -1131,7 +1136,40 @@ p.data2 <- data.frame(frequencies, PSD)
 p.data2$period.hr <- (1/p.data2$frequencies) * (1/60) * (1/60)
 plot(frequencies[-1], PSD[-1], type = "l")
 plot(p.data2$period.hr[which(p.data2$period.hr < 100)], p.data2$PSD[which(p.data2$period.hr < 100)], type = "h")
+################################################################################
 
+
+################################################################################
+### for sacr
+plot(sacr_mst1[,"Remainder"])
+f.data <- GeneCycle::periodogram(sacr_mst1[,"Remainder"])
+harmonics <- 1:96
+plot(f.data$freq[harmonics]*length(deck_mst1[,"Remainder"]), 
+     f.data$spec[harmonics]/sum(f.data$spec), 
+     xlab="Harmonics (Hz)", ylab="Amplitute Density", type="h")
+
+f.data2sacr <- data.frame(freq = as.numeric(f.data$freq),
+                      spec = as.numeric(f.data$spec))
+f.data2sacr$period.hr <- (1/f.data2sacr$freq)*15/60
+f.data2sacr$freq.hr <- 1/f.data2sacr$period.hr
+plot(f.data2sacr$period.hr[which(f.data2sacr$period.hr < 100)], f.data2sacr$spec[which(f.data2sacr$period.hr < 100)], type = "h")
+
+library(psdr)
+Fs <- 1/(15*60) # 15 minutes times 60 seconds per 1 minute is 900 seconds, so frequency is 1 per 900 seconds or 0.001111 Hz
+results <- MakePowerSpectralDensity(Fs,sacr_mst1[,"Remainder"])
+frequencies <- results[[1]]
+PSD <- results[[2]]
+p.data2sacr <- data.frame(frequencies, PSD)
+p.data2sacr$period.hr <- (1/p.data2sacr$frequencies) * (1/60) * (1/60)
+plot(frequencies[-1], PSD[-1], type = "l")
+plot(p.data2sacr$period.hr[which(p.data2sacr$period.hr < 100)], p.data2sacr$PSD[which(p.data2sacr$period.hr < 100)], type = "h")
+################################################################################
+
+p.data2$psd2 <- p.data2$PSD/sum(p.data2$PSD)
+p.data2sacr$psd2 <- p.data2sacr$PSD/sum(p.data2sacr$PSD)
+psd.comp <- ggplot(data = p.data2[which(p.data2$period.hr < 50 & p.data2$psd2 > 0.001),], aes(x = period.hr, y = log10(psd2))) +
+  geom_point(color = "blue") +
+  geom_point(data = p.data2sacr[which(p.data2sacr$period.hr < 50& p.data2sacr$psd2 > 0.001),], color = "red")
 
 
 to_plo_sub <- rbind.data.frame(dfDeck, dfM13)
