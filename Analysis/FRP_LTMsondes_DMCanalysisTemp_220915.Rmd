@@ -1006,7 +1006,7 @@ load("ExtLTM_CompleteMerge.RData") ###DMC220601: this is a huge file with all da
 unique(df$Site)
 unique(dfAll$site)
 
-df <- df[which(df$dts >= as.POSIXct(strptime("2021-07-01 00:00", format = "%Y-%m-%d")) & 
+df <- df[which(df$dts >= as.POSIXct(strptime("2021-08-01 00:00", format = "%Y-%m-%d")) & 
                  df$dts <= as.POSIXct(strptime("2021-09-10 23:45", format = "%Y-%m-%d")) &
                  df$Site == "Decker Pool" ),]
 
@@ -1023,7 +1023,7 @@ df$fDOMRFU[which(df$fDOMRFU < 0)] <- NA ###DMC220713: FDOM sensor is only rated 
 
 unique(dfAll$site)
 dfAll <- dfAll[which(dfAll$site %in% c("M13_USGS") & # "SacSherman_CDEC", "SDI_USGS","Emmaton_CDEC" ###DMC220713: these stations did not have data
-                       dfAll$dts >= as.POSIXct(strptime("2021-07-31 00:00", format = "%Y-%m-%d")) & 
+                       dfAll$dts >= as.POSIXct(strptime("2021-08-01 00:00", format = "%Y-%m-%d")) & 
                        dfAll$dts <= as.POSIXct(strptime("2021-09-10 23:45", format = "%Y-%m-%d"))),]
 
 dat <- df[,c("Site","dts","TempC","SPC","Turb","DOmgL","ChlRFU","PCRFU","fDOMRFU","Depthm")]
@@ -1054,16 +1054,17 @@ summTime <- ddply(dat3, c("Station.Code","Date"), summarise,
 dfDeck <- dat3[which(dat3$Station.Code == "Decker Pool" & 
                        dat3$datetimestamp >= as.POSIXct(strptime("2021-07-31 00:00", format = "%Y-%m-%d")) & 
                        dat3$datetimestamp <= as.POSIXct(strptime("2021-09-09 23:45", format = "%Y-%m-%d"))),]
-dfM13 <- dat3[which(dat3$Station.Code == "M13_USGS" & dat3$Date != "2021-07-31"),]
-dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-23 22:45:00",format = "%Y-%m-%d %H:%M:%S")) &
-              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-23 23:30:00",format = "%Y-%m-%d %H:%M:%S"))),"TempC"] <- 20.0
+dfM13 <- dat3[which(dat3$Station.Code == "M13_USGS" & 
+                      dat3$datetimestamp <= as.POSIXct(strptime("2021-09-09 23:45", format = "%Y-%m-%d"))),]
+dfM13 <- dfM13[-nrow(dfM13),]
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 05:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 06:30:00",format = "%Y-%m-%d %H:%M:%S"))),"TempC"] <- 20.0
 
 dfDeck$day <- as.integer(factor(dfDeck$Date, levels = unique(dfDeck$Date)))
-dfDeck$frac <- as.integer(rep(c(1:96),40))
+dfDeck$frac <- as.integer(rep(c(1:96),39))
 
 dfM13$day <- as.integer(factor(dfM13$Date, levels = unique(dfM13$Date)))
-dfM13 <- dfM13[-3841,]
-dfM13$frac <- as.integer(rep(c(1:96),40))
+dfM13$frac <- as.integer(rep(c(1:96),39))
 
 deck_ts <- ts(data = dfDeck$TempC,
               start = c(dfDeck$day[1], dfDeck$frac[1]),
@@ -1133,6 +1134,7 @@ results <- MakePowerSpectralDensity(Fs,deck_mst1[,"Remainder"])
 frequencies <- results[[1]]
 PSD <- results[[2]]
 p.data2 <- data.frame(frequencies, PSD)
+p.data2$logFreq.hr <- log(p.data2$frequencies*3600)
 p.data2$period.hr <- (1/p.data2$frequencies) * (1/60) * (1/60)
 plot(frequencies[-1], PSD[-1], type = "l")
 plot(p.data2$period.hr[which(p.data2$period.hr < 100)], p.data2$PSD[which(p.data2$period.hr < 100)], type = "h")
@@ -1171,6 +1173,130 @@ psd.comp <- ggplot(data = p.data2[which(p.data2$period.hr < 50 & p.data2$psd2 > 
   geom_point(color = "blue") +
   geom_point(data = p.data2sacr[which(p.data2sacr$period.hr < 50& p.data2sacr$psd2 > 0.001),], color = "red")
 
+psd.comp2 <- ggplot(data = p.data2, aes(x = log(frequencies*3600), y = log10(psd2))) +
+  geom_line(color = "blue") +
+  geom_line(data = p.data2sacr, color = "red")
+hist(dfDeck$TempC)
+
+
+p.data2$id <- order(p.data2$frequencies)
+AUC <- sum(diff(p.data2$frequencies[p.data2$id])*rollmean(p.data2$PSD[p.data2$id],2))
+
+library(MESS)
+i.Total <- auc(p.data2$frequencies,p.data2$PSD, type = 'spline')
+i.Week <- auc(p.data2$frequencies[which(p.data2$period.hr > 27)],
+    p.data2$PSD[which(p.data2$period.hr > 27)],
+    type = 'spline')
+i.Day <- auc(p.data2$frequencies[which(p.data2$period.hr > 21 & p.data2$period.hr < 27)],
+    p.data2$PSD[which(p.data2$period.hr > 21 & p.data2$period.hr < 27)],
+    type = 'spline')
+i.h2fDay <- auc(p.data2$frequencies[which(p.data2$period.hr > 14 & p.data2$period.hr < 21)],
+    p.data2$PSD[which(p.data2$period.hr > 14 & p.data2$period.hr < 21)],
+    type = 'spline')
+i.hDay <- auc(p.data2$frequencies[which(p.data2$period.hr > 10 & p.data2$period.hr < 14)],
+    p.data2$PSD[which(p.data2$period.hr > 10 & p.data2$period.hr < 14)],
+    type = 'spline')
+i.Hourly <- auc(p.data2$frequencies[which(p.data2$period.hr > 0.333 & p.data2$period.hr < 10)],
+    p.data2$PSD[which(p.data2$period.hr > 0.333 & p.data2$period.hr < 10)],
+    type = 'spline')
+
+i.Week/i.Total
+i.Day/i.Total
+i.h2fDay/i.Total
+i.hDay /i.Total
+i.Hourly/i.Total
+
+sum.d.Total <- sum(p.data2$PSD)
+sum.d.Week <- sum(p.data2$PSD[which(p.data2$period.hr > 27)])
+sum.d.Day <- sum(p.data2$PSD[which(p.data2$period.hr > 21 & p.data2$period.hr < 27)])
+sum.d.h2fDay <- sum(p.data2$PSD[which(p.data2$period.hr > 14 & p.data2$period.hr < 21)])
+sum.d.hDay <- sum(p.data2$PSD[which(p.data2$period.hr > 10 & p.data2$period.hr < 14)])
+sum.d.qDay <- sum(p.data2$PSD[which(p.data2$period.hr > 6 & p.data2$period.hr < 10)])
+sum.d.Hourly <- sum(p.data2$PSD[which(p.data2$period.hr > 0.333 & p.data2$period.hr < 6)])
+
+sum.s.Total <- sum(p.data2sacr$PSD)
+sum.s.Week <- sum(p.data2sacr$PSD[which(p.data2sacr$period.hr > 27)])
+sum.s.Day <- sum(p.data2sacr$PSD[which(p.data2sacr$period.hr > 21 & p.data2sacr$period.hr < 27)])
+sum.s.h2fDay <- sum(p.data2sacr$PSD[which(p.data2sacr$period.hr > 14 & p.data2sacr$period.hr < 21)])
+sum.s.hDay <- sum(p.data2sacr$PSD[which(p.data2sacr$period.hr > 10 & p.data2sacr$period.hr < 14)])
+sum.s.qDay <- sum(p.data2sacr$PSD[which(p.data2sacr$period.hr > 6 & p.data2sacr$period.hr < 10)])
+sum.s.Hourly <- sum(p.data2sacr$PSD[which(p.data2sacr$period.hr > 0.333 & p.data2sacr$period.hr < 6)])
+
+p.d.Week <- sum.d.Week/sum.d.Total
+p.d.Day <- sum.d.Day/sum.d.Total
+p.d.h2fDay <- sum.d.h2fDay/sum.d.Total
+p.d.hDay <- sum.d.hDay/sum.d.Total
+p.d.qDay <- sum.d.qDay/sum.d.Total
+p.d.Hourly <- sum.d.Hourly/sum.d.Total
+
+p.s.Week <- sum.s.Week/sum.s.Total
+p.s.Day <- sum.s.Day/sum.s.Total
+p.s.h2fDay <- sum.s.h2fDay/sum.s.Total
+p.s.hDay <- sum.s.hDay/sum.s.Total
+p.s.qDay <- sum.s.qDay/sum.s.Total
+p.s.Hourly <- sum.s.Hourly/sum.s.Total
+
+sd.d.Week <- sqrt(sum(p.d.Day,p.d.h2fDay,p.d.hDay,p.d.qDay,p.d.Hourly))
+sd.d.Day <- sqrt(sum(p.d.h2fDay,p.d.hDay,p.d.qDay,p.d.Hourly))
+sd.d.h2fDay <- sqrt(sum(p.d.hDay,p.d.qDay,p.d.Hourly))
+sd.d.hDay <- sqrt(sum(p.d.qDay,p.d.Hourly))
+sd.d.qDay <- sqrt(sum(p.d.Hourly))
+
+p.data2 <- data.frame(apply(p.data2, 2, rev))
+
+p.data2$vari <- cumsum(p.data2$PSD)
+p.data2$sdm <- sqrt(p.data2$vari)
+plot(log(p.data2$period.hr),log(p.data2$sdm))
+exp(2)
+
+x1 <- log(p.data2$period.hr[which(p.data2$period.hr< 13)])
+y1 <- log(p.data2$sdm[which(p.data2$period.hr< 13)])
+mod <- lm(y1 ~ x1)
+cf <- coef(mod)
+
+x2 <- log(p.data2$period.hr[which(p.data2$period.hr> 13 & p.data2$period.hr != Inf)])
+y2 <- log(p.data2$sdm[which(p.data2$period.hr> 13 & p.data2$period.hr != Inf)])
+mod2 <- lm(y2 ~ x2)
+cf2 <- coef(mod2)
+
+
+sd.s.Week <- sqrt(sum(p.s.Day,p.s.h2fDay,p.s.hDay,p.s.qDay,p.s.Hourly))
+sd.s.Day <- sqrt(sum(p.s.h2fDay,p.s.hDay,p.s.qDay,p.s.Hourly))
+sd.s.h2fDay <- sqrt(sum(p.s.hDay,p.s.qDay,p.s.Hourly))
+sd.s.hDay <- sqrt(sum(p.s.qDay,p.s.Hourly))
+sd.s.qDay <- sqrt(sum(p.s.Hourly))
+
+p.data2sacr <- data.frame(apply(p.data2sacr, 2, rev))
+p.data2sacr$vari <- cumsum(p.data2sacr$PSD)
+p.data2sacr$sdm <- sqrt(p.data2sacr$vari)
+plot(log(p.data2sacr$period.hr),log(p.data2sacr$sdm))
+exp(2)
+
+s.x1 <- log(p.data2sacr$period.hr[which(p.data2sacr$period.hr< 13)])
+s.y1 <- log(p.data2sacr$sdm[which(p.data2sacr$period.hr< 13)])
+s.mod <- lm(s.y1 ~ s.x1)
+s.cf <- coef(s.mod)
+
+s.x2 <- log(p.data2sacr$period.hr[which(p.data2sacr$period.hr> 13 & p.data2sacr$period.hr != Inf)])
+s.y2 <- log(p.data2sacr$sdm[which(p.data2sacr$period.hr> 13 & p.data2sacr$period.hr != Inf)])
+s.mod2 <- lm(s.y2 ~ s.x2)
+s.cf2 <- coef(s.mod2)
+
+# Regional Kendall Test
+library(EnvStats)
+both <- rbind.data.frame(dfDeck, dfM13)
+kendallSeasonalTrendTest(TempC ~ Station.Code, data = both)
+
+library(rkt)
+?rkt
+both$frac <- c(rep(1:3744,2))
+both$block <- c(rep(1,3744),rep(2,3744))
+both$yrfrac <- as.numeric(paste(2021,both$frac, sep = "."))
+rkt(both$yrfrac, y = both$TempC, block = both$block)
+
+### Applying high-pass filter
+library(dplR)
+filt.deck <- pass.filt(dfDeck$TempC, 10,type = "high", method = "Butterworth")
 
 to_plo_sub <- rbind.data.frame(dfDeck, dfM13)
 #to_plo_sub$dts <- as.POSIXct(strptime(as.character(to_plo_sub$datetimestamp),format = "%Y-%m-%d"))
@@ -1182,8 +1308,8 @@ mysh <- c(25,21)
 myps <- c(1.5,1.3)
 myalf <- c(0.5,1)
 
-xdtsJuly <- c(as.POSIXct(strptime("2021-07-01 00:00", format = "%Y-%m-%d")),
-              as.POSIXct(strptime("2021-07-31 00:00", format = "%Y-%m-%d")))
+xdtsJuly <- c(as.POSIXct(strptime("2021-07-31 00:00", format = "%Y-%m-%d")),
+              as.POSIXct(strptime("2021-09-09 00:00", format = "%Y-%m-%d")))
 
 dates4sun <- unique(as.Date(to_plo_sub$datetimestamp[which(to_plo_sub$datetimestamp >= xdtsJuly[1] &  to_plo_sub$datetimestamp <= xdtsJuly[2])]))
 
