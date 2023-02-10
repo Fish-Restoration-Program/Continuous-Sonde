@@ -1201,6 +1201,1470 @@ ggarrange(heatFLYW, heatDECK, legendT,
 ################################################################################
 ```
 
+Get tide position from depth for all locations
+```{r}
+library(plyr)
+library(VulnToolkit)
+library(data.table)
+
+rm(list = ls())
+
+load("AllLTM4AnalysisQC_DepthQH_221230.RData")
+'%ni%' <- Negate('%in%')
+
+depth_final$depth <- depth_final$Temp
+depth_final$dts2 <- depth_final$Datetime
+list_All <- depth_final %>% 
+  dplyr::group_split(Station)
+list_All.2 <- list()
+for(i in 1:length(list_All)){
+  workingDF.1 <- data.frame(list_All[[i]])
+  workingDF.1$deltaTime <- as.numeric(workingDF.1$dts2 - data.table::shift(workingDF.1$dts2, fill = data.table::first(workingDF.1$dts2)))/60
+  workingDF.1$deltaTime[1] <- 15
+  workingDF.1$is15 <- ifelse(workingDF.1$deltaTime == 15, "Y","N")
+  List_Split <- split(workingDF.1, cumsum(c(TRUE, diff(workingDF.1$deltaTime > 15) != 0)))
+  List_Tides <- list()
+  for(j in 1:length(List_Split)){
+    workingDF.2 <- List_Split[j][[1]]
+    if(nrow(workingDF.2) > 20){
+      dd <- try(HL(workingDF.2$depth,workingDF.2$dts2))
+      if(is.data.frame(dd)==TRUE){
+        List_Tides[[j]] <- dd
+      }
+    } else{
+      List_Tides[[j]] <- data.frame()
+      }
+    workingDF.2 <- NULL
+    dd <- NULL
+  }
+  df_Tides <- do.call(rbind.data.frame, List_Tides)
+  colnames(df_Tides)[2] <- "dts2"
+  df_Tides$Station <- unique(workingDF.1$Station)
+  list_All.2[[i]] <- df_Tides
+  df_Tides <- NULL
+  workingDF.1 <- NULL
+}
+
+list_All.3 <- list()
+for(i in 1:length(list_All.2)){
+  workingDF.1 <- data.frame(list_All[[i]])
+  workingDF.1$dts3 <- lubridate::floor_date(workingDF.1$dts2, "15 minutes")
+  dts3 <- seq(lubridate::ymd_hms(workingDF.1$dts3[2],tz = "America/Los_Angeles"),lubridate::ymd_hms(workingDF.1$dts3[length(workingDF.1$dts3)],tz = "America/Los_Angeles"), by = '15 mins')
+  df_Tides <- list_All.2[[i]]
+  df_Tides$dts3 <- lubridate::floor_date(df_Tides$dts2, "15 minutes")
+  df_Tides.Long <- data.frame(dts3)
+  df_Tides.Long.2 <- merge(df_Tides.Long, df_Tides[,c("dts3","tide","tide2","Station")], by = c("dts3"), all.x = TRUE)
+  df_Tides.Long.3 <- merge(df_Tides.Long.2, workingDF.1[,c("dts2","dts3","depth")], by = c("dts3"), all.x = TRUE)
+  df_Tides.Long.3$tide_position <- ifelse(df_Tides.Long.3$tide == "H",0,NA)
+  df_Tides.Long.3$tide_position[which(df_Tides.Long.3$tide == "L")] <- 1
+  df_Tides.Long.3$isValue <- is.na(df_Tides.Long.3$tide_position)
+  df_Tides.Long.3$incrementsLength <- rowid(rleid(df_Tides.Long.3$isValue))*df_Tides.Long.3$isValue
+  df_Tides.Long.3$tide_position2 <- df_Tides.Long.3$tide_position
+  df_Tides.Long.3$tide[which(is.na(df_Tides.Long.3$tide)==TRUE)] <- "None"
+  for(j in 1:nrow(df_Tides.Long.3)){
+    if(df_Tides.Long.3$tide[j] == "H"){
+      df_Tides.Long.3$tide_position2[(j- df_Tides.Long.3$incrementsLength[j-1]):(j - 1)] <- 
+        seq(-1,0, length.out = df_Tides.Long.3$incrementsLength[j-1]+2)[2:((df_Tides.Long.3$incrementsLength[j-1])+1)]
+      }
+    if(df_Tides.Long.3$tide[j] == "L"){
+      df_Tides.Long.3$tide_position2[(j- df_Tides.Long.3$incrementsLength[j-1]):(j - 1)] <- 
+        seq(0,1, length.out = df_Tides.Long.3$incrementsLength[j-1]+2)[2:((df_Tides.Long.3$incrementsLength[j-1])+1)]
+      }
+    }
+  list_All.3[[i]] <- df_Tides.Long.3
+}
+
+list_All.4 <- list()
+for(i in 1:length(list_All)){
+  workingDF.1 <- list_All[[i]]
+  workingDF.2 <- list_All.3[[i]]
+  workingDF.3 <- merge(workingDF.1, workingDF.2[,c("dts2","tide","tide2","tide_position2")], by = c("dts2"), all.x = TRUE)
+  list_All.4[[i]] <- workingDF.3
+}
+
+depth_final.2 <- do.call(rbind.data.frame, list_All.4)
+rm(df_Tides,df_Tides.Long,df_Tides.Long.2,list_All,list_All.2,list_All.3,list_All.4, workingDF.1,workingDF.2,workingDF.3)
+
+save(depth_final.2, file = "AllLTM4Analysis_TidePosition_230210.RData")
+```
+
+For Temperature (quarter-hourly) - now with tide position from preceding chunk
+```{r}
+library(plyr)
+library(ggplot2)
+library(scales)
+library(gridExtra)
+library(metR)
+library(ggpubr)
+library(RColorBrewer)
+
+rm(list = ls())
+
+convertTime <- function(x){
+    Hour = (x * 24) %% 24 #For x>1, only the value after decimal will be considered
+    Minutes = (Hour %% 1) * 60
+    Seconds = (Minutes %% 1) * 60
+
+    hrs = ifelse (Hour < 10, paste("0",floor(Hour),sep = ""), as.character(floor(Hour)))
+    mins = ifelse (Minutes < 10, paste("0",floor(Minutes),sep = ""), as.character(floor(Minutes)))    
+    secs = ifelse (Seconds < 10, paste("0",round(Seconds,0),sep = ""), as.character(round(Seconds,0)))
+
+    return(paste(hrs, mins, secs, sep = ":"))
+}
+
+
+#load("LTM_CATCH_04.RData")
+load("AllLTM4AnalysisQC_TempQH_221230.RData")
+load("AllLTM4Analysis_TidePosition_230210.RData")
+'%ni%' <- Negate('%in%')
+
+
+dfcombined.2 <- merge(temp_final, depth_final.2[,c("Station","Datetime","depth","tide","tide_position2")], by = c("Station","Datetime"))
+rm(temp_final, depth_final)
+colnames(dfcombined.2) <- c("Site","dts","Date","TempC","Minute","depth","tide","tide_position2")
+dfcombined.2$dts2 <- lubridate::floor_date(dfcombined.2$dts, "15 minutes")
+dfcombined.2$date2 <- lubridate::date(dfcombined.2$dts2)
+dfcombined.2$yr <- lubridate::year(dfcombined.2$dts2)
+dfcombined.2$project <- NA
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Decker Breach","Decker Pool","M13_USGS","SDI_USGS"))] <- "Decker"
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Tule Breach","Tule Channel","Tule Pond","GRZB_USGS"))] <- "Tule"
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Yolo Flyway Farm", "TOED_USGS"))] <- "Flyway"
+dfcombined.2$sitetype <- NA
+dfcombined.2$sitetype[which(dfcombined.2$Site %in% c("M13_USGS","SDI_USGS", "TOED_USGS"))] <- "Adj. Waterbody"
+dfcombined.2$sitetype[which(dfcombined.2$Site %in% c("Decker Breach","Decker Pool", "Yolo Flyway Farm"))] <- "Restoration"
+#ggplot(dfcombined.2, aes(dts2, TempC)) + geom_point() + facet_grid(Site ~., scales = "free_y")
+
+
+###DMC230209: pick up here
+dfcombined.wideD <- reshape2::dcast(dfcombined.2[which(dfcombined.2$project == "Decker" & dfcombined.2$date2 < as.Date("2022-11-01")),], dts2 ~ Site, value.var = "TempC")
+dfcombined.wideD[is.na(dfcombined.wideD)] <- 0
+dfcombined.wideF <- reshape2::dcast(dfcombined.2[which(dfcombined.2$project == "Flyway" & dfcombined.2$date2 < as.Date("2022-11-01") & dfcombined.2$date2 > as.Date("2020-12-31")),], dts2 ~ Site, value.var = "TempC")
+dfcombined.wideF[is.na(dfcombined.wideF)] <- 0
+
+dfcombined.wideD$Restoration <- ifelse(dfcombined.wideD$`Decker Breach`==0, dfcombined.wideD$`Decker Pool`,dfcombined.wideD$`Decker Breach`)
+dfcombined.wideD$Adjacent <- dfcombined.wideD$M13_USGS#ifelse(dfcombined.wideD$M13_USGS==0, dfcombined.wideD$SDI_USGS,dfcombined.wideD$M13_USGS)
+dfcombined.wideD.2 <- dfcombined.wideD[-which(dfcombined.wideD$Adjacent == 0 | dfcombined.wideD$Restoration == 0 | is.na(dfcombined.wideD$Adjacent)==TRUE),c("dts2","Restoration","Adjacent")]
+dfcombined.wideD.2$Difference <- dfcombined.wideD.2$Restoration - dfcombined.wideD.2$Adjacent
+dfcombined.wideD.2$project <- "Decker"
+dfcombined.wideD.2$yr <- lubridate::year(dfcombined.wideD.2$dts2)
+
+dfcombined.wideF$Restoration <- dfcombined.wideF$`Yolo Flyway Farm`
+dfcombined.wideF$Adjacent <- dfcombined.wideF$TOED_USGS
+dfcombined.wideF.2 <- dfcombined.wideF[-which(dfcombined.wideF$Adjacent == 0 | dfcombined.wideF$Restoration == 0 | is.na(dfcombined.wideF$Adjacent)==TRUE),c("dts2","Restoration","Adjacent")]
+dfcombined.wideF.2$Difference <- dfcombined.wideF.2$Restoration - dfcombined.wideF.2$Adjacent
+dfcombined.wideF.2$project <- "Flyway"
+dfcombined.wideF.2$yr <- lubridate::year(dfcombined.wideF.2$dts2)
+
+dfwideAll <- rbind.data.frame(dfcombined.wideD.2[which(dfcombined.wideD.2$yr > 2020),],
+                              dfcombined.wideF.2[which(dfcombined.wideF.2$yr > 2020),])
+#ggplot(dfwideAll, aes(dts2, Difference)) + geom_point() + facet_grid(project ~., scales = "free_y")
+
+
+
+dfcombined.wideD <- reshape2::dcast(dfcombined.2[which(dfcombined.2$project == "Decker" & dfcombined.2$date2 < as.Date("2022-11-01")),], dts2 ~ Site, value.var = "tide_position2")
+dfcombined.wideD[is.na(dfcombined.wideD)] <- -99999
+#dfcombined.wideF <- reshape2::dcast(dfcombined.2[which(dfcombined.2$project == "Flyway" & dfcombined.2$date2 < as.Date("2022-11-01") & dfcombined.2$date2 > as.Date("2020-12-31")),], dts2 ~ Site, value.var = "depth")
+#dfcombined.wideF[is.na(dfcombined.wideF)] <- -99999
+
+dfcombined.wideD$Restoration <- ifelse(dfcombined.wideD$`Decker Breach`==-99999, dfcombined.wideD$`Decker Pool`,dfcombined.wideD$`Decker Breach`)
+#dfcombined.wideD$Adjacent <- dfcombined.wideD$M13_USGS#ifelse(dfcombined.wideD$M13_USGS==0, dfcombined.wideD$SDI_USGS,dfcombined.wideD$M13_USGS)
+dfcombined.wideD.2 <- dfcombined.wideD[-which(dfcombined.wideD$Restoration == -99999),c("dts2","Restoration")] #dfcombined.wideD$Adjacent == -99999 | is.na(dfcombined.wideD$Adjacent)==TRUE 
+#dfcombined.wideD.2$Difference <- dfcombined.wideD.2$Restoration - dfcombined.wideD.2$Adjacent
+dfcombined.wideD.2$project <- "Decker"
+dfcombined.wideD.2$yr <- lubridate::year(dfcombined.wideD.2$dts2)
+
+#dfcombined.wideF$Restoration <- dfcombined.wideF$`Yolo Flyway Farm`
+#dfcombined.wideF$Adjacent <- dfcombined.wideF$TOED_USGS
+#dfcombined.wideF.2 <- dfcombined.wideF[-which(dfcombined.wideF$Adjacent == -99999 | dfcombined.wideF$Restoration == -99999 | is.na(dfcombined.wideF$Adjacent)==TRUE),c("dts2","Restoration","Adjacent")]
+#dfcombined.wideF.2$Difference <- dfcombined.wideF.2$Restoration - dfcombined.wideF.2$Adjacent
+#dfcombined.wideF.2$project <- "Flyway"
+#dfcombined.wideF.2$yr <- lubridate::year(dfcombined.wideF.2$dts2)
+
+#dfwideAll.depth <- rbind.data.frame(dfcombined.wideD.2[which(dfcombined.wideD.2$yr > 2020),],
+#                                    dfcombined.wideF.2[which(dfcombined.wideF.2$yr > 2020),])
+dfwideAll.depth <- dfcombined.wideD.2[which(dfcombined.wideD.2$yr > 2020),]
+colnames(dfwideAll.depth) <- c("dts2","Depth_R","project","yr")
+
+dfwideAll.Final <- merge(dfwideAll,dfwideAll.depth[,c("dts2","Depth_R","project")], by = c("dts2","project"))
+
+dfwideAll$hr <- lubridate::hour(dfwideAll$dts2)
+dfwideAll$DoY <- lubridate::yday(dfwideAll$dts2)
+dfwideAll$ToD <- "Early"
+for(i in 1:nrow(dfwideAll)){
+  if(dfwideAll$hr[i] >= 8 & dfwideAll$hr[i] <= 15){
+    dfwideAll$ToD[i] = "Mid"
+  }
+  if(dfwideAll$hr[i] >= 16 & dfwideAll$hr[i] <= 24){
+    dfwideAll$ToD[i] = "Late"
+  }
+}
+
+
+dfwideAll.Final$date2 <- lubridate::date(dfwideAll.Final$dts2)
+dfwideAll.Final$year2 <- lubridate::year(dfwideAll.Final$dts2)
+dfwideAll.Final$DoY <- lubridate::yday(dfwideAll.Final$dts2)
+dfwideAll.Final$hr <- lubridate::hour(dfwideAll.Final$dts2)
+dfwideAll.Final$minute <- lubridate::minute(dfwideAll.Final$dts2)
+dfwideAll.Final$HM <- dfwideAll.Final$hr + dfwideAll.Final$minute/60
+
+
+library(mgcv)
+
+dfWide.DECK <- dfwideAll.Final[which(dfwideAll.Final$project == "Decker"),]
+colnames(dfWide.DECK)[7] <- "tide_position2"
+
+bD.3 <- bam(Difference ~ te(DoY, HM, tide_position2, k = c(14,7,6), bs = c("cc","cc","cc")), data = dfWide.DECK)
+vis.gam(bD.3,n.grid=50, theta=35, phi=32, zlab="", too.far=0.1) 
+plot(bD.3)
+gam.check(bD.3)
+acf(residuals.gam(bD.3), ylab="", xlab="", main="")
+dfpred.D <- expand.grid(DoY = seq(1,365,1),
+                        HM = seq(0,23.75,0.25),
+                        tide_position2 = seq(-0.9,0.9,0.3))#Depth_R = seq(0.2,1,0.4)
+dfpred.D$predvalues = predict(bD.3, newdata = dfpred.D)
+dfpred.D$Depth_R <- factor(dfpred.D$tide_position2, levels = c(seq(-0.9,0.9,0.3)), labels = c("Early Flood","Mid Flood","Late Flood","High Slack","Early Ebb","Mid Ebb","Late Ebb"))#factor(dfpred.D$Depth_R, levels = c(0.2,0.6,1))
+dfpred.D$date <- as.Date(NA)
+dfpred.D$date<- as.Date(dfpred.D$DoY, origin = '2020-12-31')
+myPaletteContour <- colorRampPalette(rev(brewer.pal(6, "RdBu")))
+plo_deck <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = predvalues, fill = predvalues)) + 
+  geom_tile() + 
+  geom_contour(binwidth = 1) + 
+  geom_text_contour(rotate = FALSE, binwidth = 1) +
+  scale_y_continuous(breaks = c(seq(0,24,8)))+
+  scale_fill_gradientn(colours = myPaletteContour(11),
+                       name = "Difference in temperature (Restoration - Adj. Waterbody)")  +
+  ylab("Hour")+
+  xlab("Day of Year")+
+  #guides(fill=guide_legend(title="Difference in temperature (Restoration - Adj. Waterbody)")) +
+  facet_grid(.~ Depth_R) +
+  theme_classic2()+
+  theme(legend.position = "top")
+
+
+
+library(plyr)
+dfwideAll.Final$date2 <- lubridate::date(dfwideAll.Final$dts2)
+dfwideAll.Final$year2 <- lubridate::year(dfwideAll.Final$dts2)
+dflong.D.r <- dfwideAll.Final[which(dfwideAll.Final$project== "Decker"),c("dts2","project","Restoration","Depth_R","date2","year2")]
+dflong.D.a <- dfwideAll.Final[which(dfwideAll.Final$project== "Decker"),c("dts2","project","Adjacent","Depth_A","date2","year2")]
+dflong.D.r$sitetype <- "Restoration"
+dflong.D.a$sitetype <- "Adj. Waterbody"
+colnames(dflong.D.r)[c(3,4)] <-c("TempC","Depth")
+colnames(dflong.D.a)[c(3,4)] <-c("TempC","Depth")
+dflong.D <- rbind(dflong.D.r,dflong.D.a)
+
+dflong.F.r <- dfwideAll.Final[which(dfwideAll.Final$project== "Flyway"),c("dts2","project","Restoration","Depth_R","date2","year2")]
+dflong.F.a <- dfwideAll.Final[which(dfwideAll.Final$project== "Flyway"),c("dts2","project","Adjacent","Depth_A","date2","year2")]
+dflong.F.r$sitetype <- "Restoration"
+dflong.F.a$sitetype <- "Adj. Waterbody"
+colnames(dflong.F.r)[c(3,4)] <-c("TempC","Depth")
+colnames(dflong.F.a)[c(3,4)] <-c("TempC","Depth")
+dflong.F <- rbind(dflong.F.r,dflong.F.a)
+
+dflong <- rbind(dflong.D, dflong.F)
+
+test <- dflongTD[which(duplicated(dflongTD)==TRUE),]
+
+summThresh.Diff <- ddply(dfwideAll[which(dfwideAll$year2 >2020),], c("project","date2"), summarise,
+                         nTemp_R = length(Restoration),
+                         nTemp_A = length(Adjacent),
+                         oTemp_R = length(which(Restoration < 20)),
+                         oTemp_A = length(which(Adjacent < 20)),
+                         p_oTemp_R = oTemp_R/nTemp_R,
+                         p_oTemp_A = oTemp_A/nTemp_A,
+                         p_TimeDiff = p_oTemp_R - p_oTemp_A
+                         )
+
+
+summThresh <- ddply(dflong[which(dflong$year2 > 2020),], c("project","sitetype","date2"), summarise,
+                    nTemp = length(TempC),
+                    oTemp = length(which(TempC <20)),
+                    #sTemp = length(threshTemp[which(threshTemp == "Suboptimal")]),
+                    #mean20 = mean(TempC.20, na.rm = TRUE),
+                    meanTemp = mean(TempC, na.rm = TRUE))
+#summThresh$sitetype <- NA
+#summThresh$sitetype[which(summThresh$Site %in% c("Decker Breach","Decker Pool","Yolo Flyway Farm"))] <- "Restoration"
+#summThresh$sitetype[which(summThresh$Site %in% c("M13_USGS","SDI_USGS","TOED_USGS"))] <- "Adj. Waterbody"
+
+#summThresh$nTempCheck <- ifelse(sum(summThresh$oTemp,summThresh$sTemp) == summThresh$nTemp, TRUE, FALSE)
+summThresh$p_oTemp <- summThresh$oTemp/summThresh$nTemp
+summThresh$project2 <- factor(summThresh$project, levels = c("Flyway","Decker"))
+summThresh$sitetype2 <- factor(summThresh$sitetype, levels = c("Adj. Waterbody","Restoration"))
+
+sum(summThresh$nTemp[which(summThresh$Site == "Yolo Flyway Farm")])
+sum(summThresh$nTemp[which(summThresh$Site == "TOED_USGS")])
+sum(summThresh$nTemp[which(summThresh$project == "Decker")])
+sum(summThresh$nTemp[which(summThresh$project == "Decker" & summThresh$sitetype == "Restoration")])
+sum(summThresh$nTemp[which(summThresh$project== "Decker" & summThresh$sitetype == "Adj. Waterbody")])
+
+myPalette <- colorRampPalette(rev(brewer.pal(8, "Dark2")))
+# use this bit to grab the legend from one plot, must turn off legend(theme) after using
+get_legend<-function(myggplot){
+  tmp <- ggplot_gtable(ggplot_build(myggplot))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend <- tmp$grobs[[leg]]
+  return(legend)
+}
+
+heatDECK <- ggplot(summThresh[which(summThresh$project == "Decker"),], aes(x = date2, y = sitetype2, fill = p_oTemp)) + 
+  geom_tile() +
+  scale_fill_gradientn(colours = myPalette(5)) +
+  xlab("Date") +
+  guides(fill=guide_legend(title="Proportion of time\ntemperature was\n<20\u00b0C", reverse = TRUE)) +
+  theme_classic2() + 
+  theme(axis.title = element_blank(),
+        axis.text.y = element_blank()) 
+
+legendT <- get_legend(heatDECK)
+heatDECK <- heatDECK + theme(legend.position = "none")
+heatFLYW <- ggplot(summThresh[which(summThresh$project == "Flyway"),], aes(x = date2, y = sitetype2, fill = p_oTemp)) + 
+  geom_tile() +
+  scale_fill_gradientn(colours = myPalette(5)) +
+  guides(fill=guide_legend(title="Proportion of time\ntemperature was\n<20\u00b0C", reverse = TRUE)) +
+  theme_classic2() + 
+  theme(axis.title = element_blank(),
+        axis.text.y = element_text(angle =90, hjust = 0.5),
+        legend.position = "none")
+
+ggarrange(heatFLYW, heatDECK,
+          ncol = 2, nrow = 1,
+          common.legend = TRUE, legend = "right",
+          align = "hv"
+          )
+
+myPaletteDiff <- colorRampPalette(rev(brewer.pal(11, "RdYlBu")))
+range(summThresh.Diff$p_TimeDiff[which(summThresh.Diff$project == "Decker")])
+range(summThresh.Diff$p_TimeDiff[which(summThresh.Diff$project == "Flyway")])
+
+summThresh.Diff$Difference <- "Difference"
+heatDECK.diff <- ggplot(summThresh.Diff[which(summThresh.Diff$project == "Decker"),], aes(x = date2, y = project, fill = p_TimeDiff)) + 
+  geom_tile() +
+  scale_fill_gradientn(colours = myPaletteDiff(11),limits=c(range(summThresh.Diff$p_TimeDiff[which(summThresh.Diff$project == "Decker")]))) +
+  xlab("Date") +
+  guides(fill=guide_legend(title="Proportion of time\nRestoration is\nmore suitable", reverse = TRUE)) +
+  theme_classic2() + 
+  theme(axis.title = element_blank(),
+        axis.text.y = element_blank()) 
+legendT.Diff <- get_legend(heatDECK.diff)
+heatDECK.diff <- heatDECK.diff + theme(legend.position = "none")
+heatFLYW.diff <- ggplot(summThresh.Diff[which(summThresh.Diff$project == "Flyway"),], aes(x = date2, y = Difference, fill = p_TimeDiff)) + 
+  geom_tile() +
+  scale_fill_gradientn(colours = myPaletteDiff(11),limits=c(range(summThresh.Diff$p_TimeDiff[which(summThresh.Diff$project == "Decker")]))) +
+  xlab("Date") +
+  guides(fill=guide_legend(title="Proportion of time\nRestoration is\nmore suitable", reverse = TRUE)) +
+  theme_classic2() + 
+  theme(axis.title = element_blank(),
+        axis.text.y = element_text(angle =90, hjust = 0.5), 
+        legend.position = "none") 
+
+ggarrange(heatFLYW.diff, heatDECK.diff,
+          ncol = 2, nrow = 1,
+          common.legend = TRUE, legend = "right",
+          align = "hv"
+          )
+
+ggarrange(heatFLYW, heatDECK, legendT,
+          heatFLYW.diff, heatDECK.diff, legendT.Diff,
+          ncol = 3, nrow = 2,
+          align = "h",
+          widths = c(2,2,0.8))
+################################################################################
+```
+
+
+For DO (quarter-hourly) - now using with tide position calculated in earlier chunk
+```{r}
+library(plyr)
+library(ggplot2)
+library(scales)
+library(gridExtra)
+library(metR)
+library(ggpubr)
+library(RColorBrewer)
+
+rm(list = ls())
+
+convertTime <- function(x){
+    Hour = (x * 24) %% 24 #For x>1, only the value after decimal will be considered
+    Minutes = (Hour %% 1) * 60
+    Seconds = (Minutes %% 1) * 60
+
+    hrs = ifelse (Hour < 10, paste("0",floor(Hour),sep = ""), as.character(floor(Hour)))
+    mins = ifelse (Minutes < 10, paste("0",floor(Minutes),sep = ""), as.character(floor(Minutes)))    
+    secs = ifelse (Seconds < 10, paste("0",round(Seconds,0),sep = ""), as.character(round(Seconds,0)))
+
+    return(paste(hrs, mins, secs, sep = ":"))
+}
+
+
+#load("LTM_CATCH_04.RData")
+load("AllLTM4AnalysisQC_DOQH_221230.RData")
+load("AllLTM4Analysis_TidePosition_230210.RData")
+'%ni%' <- Negate('%in%')
+
+colnames(DO_final)[4] <- "DO"
+dfcombined.2 <- merge(DO_final, depth_final.2[,c("Station","Datetime","depth","tide","tide_position2")], by = c("Station","Datetime"))
+rm(depth_final.2, DO_final)
+colnames(dfcombined.2) <- c("Site","dts","Date","DO","Minute","depth","tide","tide_position2")
+dfcombined.2$dts2 <- lubridate::floor_date(dfcombined.2$dts, "15 minutes")
+dfcombined.2$date2 <- lubridate::date(dfcombined.2$dts2)
+dfcombined.2$yr <- lubridate::year(dfcombined.2$dts2)
+dfcombined.2$project <- NA
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Decker Breach","Decker Pool","M13_USGS","SDI_USGS"))] <- "Decker"
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Tule Breach","Tule Channel","Tule Pond","GRZB_USGS"))] <- "Tule"
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Yolo Flyway Farm", "TOED_USGS"))] <- "Flyway"
+dfcombined.2$sitetype <- NA
+dfcombined.2$sitetype[which(dfcombined.2$Site %in% c("M13_USGS","SDI_USGS", "TOED_USGS"))] <- "Adj. Waterbody"
+dfcombined.2$sitetype[which(dfcombined.2$Site %in% c("Decker Breach","Decker Pool", "Yolo Flyway Farm"))] <- "Restoration"
+#ggplot(dfcombined.2, aes(dts2, TempC)) + geom_point() + facet_grid(Site ~., scales = "free_y")
+
+
+dfcombined.wideD <- reshape2::dcast(dfcombined.2[which(dfcombined.2$project == "Decker" & dfcombined.2$date2 < as.Date("2022-11-01")),], dts2 ~ Site, value.var = "DO")
+dfcombined.wideD[is.na(dfcombined.wideD)] <- -99999
+#dfcombined.wideF <- reshape2::dcast(dfcombined.2[which(dfcombined.2$project == "Flyway" & dfcombined.2$date2 < as.Date("2022-11-01") & dfcombined.2$date2 > as.Date("2020-12-31")),], dts2 ~ Site, value.var = "DO")
+#dfcombined.wideF[is.na(dfcombined.wideF)] <- -99999
+
+dfcombined.wideD$Restoration <- ifelse(dfcombined.wideD$`Decker Breach`==-99999, dfcombined.wideD$`Decker Pool`,dfcombined.wideD$`Decker Breach`)
+dfcombined.wideD$Adjacent <- dfcombined.wideD$M13_USGS#ifelse(dfcombined.wideD$M13_USGS==0, dfcombined.wideD$SDI_USGS,dfcombined.wideD$M13_USGS)
+dfcombined.wideD.2 <- dfcombined.wideD[-which(dfcombined.wideD$Adjacent == -99999 | dfcombined.wideD$Restoration == -99999 | is.na(dfcombined.wideD$Adjacent)==TRUE),c("dts2","Restoration","Adjacent")]
+dfcombined.wideD.2$Difference <- dfcombined.wideD.2$Restoration - dfcombined.wideD.2$Adjacent
+dfcombined.wideD.2$project <- "Decker"
+dfcombined.wideD.2$yr <- lubridate::year(dfcombined.wideD.2$dts2)
+
+#dfcombined.wideF$Restoration <- dfcombined.wideF$`Yolo Flyway Farm`
+#dfcombined.wideF$Adjacent <- dfcombined.wideF$TOED_USGS
+#dfcombined.wideF.2 <- dfcombined.wideF[-which(dfcombined.wideF$Adjacent == -99999 | dfcombined.wideF$Restoration == -99999 | is.na(dfcombined.wideF$Adjacent)==TRUE),c("dts2","Restoration","Adjacent")]
+#dfcombined.wideF.2$Difference <- dfcombined.wideF.2$Restoration - dfcombined.wideF.2$Adjacent
+#dfcombined.wideF.2$project <- "Flyway"
+#dfcombined.wideF.2$yr <- lubridate::year(dfcombined.wideF.2$dts2)
+
+dfwideAll.DO <- dfcombined.wideD.2[which(dfcombined.wideD.2$yr > 2020),]
+colnames(dfwideAll.DO) <- c("dts2","DO_R","DO_A","Difference_DO","project","yr")
+
+
+dfcombined.wideD <- reshape2::dcast(dfcombined.2[which(dfcombined.2$project == "Decker" & dfcombined.2$date2 < as.Date("2022-11-01")),], dts2 ~ Site, value.var = "tide_position2")
+dfcombined.wideD[is.na(dfcombined.wideD)] <- -99999
+#dfcombined.wideF <- reshape2::dcast(dfcombined.2[which(dfcombined.2$project == "Flyway" & dfcombined.2$date2 < as.Date("2022-11-01") & dfcombined.2$date2 > as.Date("2020-12-31")),], dts2 ~ Site, value.var = "depth")
+#dfcombined.wideF[is.na(dfcombined.wideF)] <- -99999
+
+dfcombined.wideD$Restoration <- ifelse(dfcombined.wideD$`Decker Breach`==-99999, dfcombined.wideD$`Decker Pool`,dfcombined.wideD$`Decker Breach`)
+#dfcombined.wideD$Adjacent <- dfcombined.wideD$M13_USGS#ifelse(dfcombined.wideD$M13_USGS==0, dfcombined.wideD$SDI_USGS,dfcombined.wideD$M13_USGS)
+dfcombined.wideD.2 <- dfcombined.wideD[-which(dfcombined.wideD$Restoration == -99999),c("dts2","Restoration")] #dfcombined.wideD$Adjacent == -99999 | is.na(dfcombined.wideD$Adjacent)==TRUE 
+#dfcombined.wideD.2$Difference <- dfcombined.wideD.2$Restoration - dfcombined.wideD.2$Adjacent
+dfcombined.wideD.2$project <- "Decker"
+dfcombined.wideD.2$yr <- lubridate::year(dfcombined.wideD.2$dts2)
+
+#dfcombined.wideF$Restoration <- dfcombined.wideF$`Yolo Flyway Farm`
+#dfcombined.wideF$Adjacent <- dfcombined.wideF$TOED_USGS
+#dfcombined.wideF.2 <- dfcombined.wideF[-which(dfcombined.wideF$Adjacent == -99999 | dfcombined.wideF$Restoration == -99999 | is.na(dfcombined.wideF$Adjacent)==TRUE),c("dts2","Restoration","Adjacent")]
+#dfcombined.wideF.2$Difference <- dfcombined.wideF.2$Restoration - dfcombined.wideF.2$Adjacent
+#dfcombined.wideF.2$project <- "Flyway"
+#dfcombined.wideF.2$yr <- lubridate::year(dfcombined.wideF.2$dts2)
+
+#dfwideAll.depth <- rbind.data.frame(dfcombined.wideD.2[which(dfcombined.wideD.2$yr > 2020),],
+#                                    dfcombined.wideF.2[which(dfcombined.wideF.2$yr > 2020),])
+dfwideAll.depth <- dfcombined.wideD.2[which(dfcombined.wideD.2$yr > 2020),]
+colnames(dfwideAll.depth) <- c("dts2","Depth_R","project","yr")
+
+dfwideAll.Final <- merge(dfwideAll.DO,dfwideAll.depth[,c("dts2","Depth_R","project")], by = c("dts2","project"))
+#dfcombined.2$TempC.20 <- dfcombined.2$TempC - 20
+
+#ggplot(dfcombined.2, aes(x = dts, y = TempC.20, color = sitetype))  + geom_point() + geom_hline(yintercept = 0)+ facet_grid(Site ~.)
+
+
+
+dfwideAll.Final$date2 <- lubridate::date(dfwideAll.Final$dts2)
+dfwideAll.Final$year2 <- lubridate::year(dfwideAll.Final$dts2)
+dfwideAll.Final$hr <- lubridate::hour(dfwideAll.Final$dts2)
+dfwideAll.Final$minute <- lubridate::minute(dfwideAll.Final$dts2)
+dfwideAll.Final$HM <- dfwideAll.Final$hr + dfwideAll.Final$minute/60
+dfwideAll.Final$DoY <- lubridate::yday(dfwideAll.Final$dts2)
+dfwideAll.Final$fYR <- factor(dfwideAll.Final$year2, levels = c("2021","2022"))
+dfwideAll.Final$project2 <- factor(dfwideAll.Final$project, levels = c("Decker","Flyway"))
+
+library(mgcv)
+
+
+dfWide.DECK <- dfwideAll.Final[which(dfwideAll.Final$project == "Decker"),]
+colnames(dfWide.DECK)[7] <- "tide_position2"
+
+bD.3 <- bam(Difference_DO ~ te(DoY, HM, tide_position2, k = c(14,7,6), bs = c("cc","cc","cc")), data = dfWide.DECK)
+vis.gam(bD.3,n.grid=50, theta=35, phi=32, zlab="", too.far=0.1) 
+plot(bD.3)
+gam.check(bD.3)
+acf(residuals.gam(bD.3), ylab="", xlab="", main="")
+dfpred.D <- expand.grid(DoY = seq(1,365,1),
+                        HM = seq(0,23.75,0.25),
+                        tide_position2 = seq(-0.9,0.9,0.3))#Depth_R = seq(0.2,1,0.4)
+dfpred.D$predvalues = predict(bD.3, newdata = dfpred.D)
+dfpred.D$Depth_R <- factor(dfpred.D$tide_position2, levels = c(seq(-0.9,0.9,0.3)), labels = c("Early Flood","Mid Flood","Late Flood","High Slack","Early Ebb","Mid Ebb","Late Ebb"))#factor(dfpred.D$Depth_R, levels = c(0.2,0.6,1))
+dfpred.D$date <- as.Date(NA)
+dfpred.D$date<- as.Date(dfpred.D$DoY, origin = '2020-12-31')
+myPaletteContour <- colorRampPalette(rev(brewer.pal(6, "RdBu")))
+plo_deck <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = predvalues, fill = predvalues)) + 
+  geom_tile() + 
+  geom_contour(binwidth = 1) + 
+  geom_text_contour(rotate = FALSE, binwidth = 1) +
+  scale_y_continuous(breaks = c(seq(0,24,8)))+
+  scale_fill_gradientn(colours = myPaletteContour(11),
+                       name = "Difference in Dissolved Oxygen (Restoration - Adj. Waterbody)")  +
+  ylab("Hour")+
+  xlab("Day of Year")+
+  #guides(fill=guide_legend(title="Difference in temperature (Restoration - Adj. Waterbody)")) +
+  facet_grid(.~ Depth_R) +
+  theme_classic2()+
+  theme(legend.position = "top")
+
+
+library(plyr)
+dfwideAll.Final$date2 <- lubridate::date(dfwideAll.Final$dts2)
+dfwideAll.Final$year2 <- lubridate::year(dfwideAll.Final$dts2)
+dflong.D.r <- dfwideAll.Final[which(dfwideAll.Final$project== "Decker"),c("dts2","project","Restoration","Depth_R","date2","year2")]
+dflong.D.a <- dfwideAll.Final[which(dfwideAll.Final$project== "Decker"),c("dts2","project","Adjacent","Depth_A","date2","year2")]
+dflong.D.r$sitetype <- "Restoration"
+dflong.D.a$sitetype <- "Adj. Waterbody"
+colnames(dflong.D.r)[c(3,4)] <-c("TempC","Depth")
+colnames(dflong.D.a)[c(3,4)] <-c("TempC","Depth")
+dflong.D <- rbind(dflong.D.r,dflong.D.a)
+
+dflong.F.r <- dfwideAll.Final[which(dfwideAll.Final$project== "Flyway"),c("dts2","project","Restoration","Depth_R","date2","year2")]
+dflong.F.a <- dfwideAll.Final[which(dfwideAll.Final$project== "Flyway"),c("dts2","project","Adjacent","Depth_A","date2","year2")]
+dflong.F.r$sitetype <- "Restoration"
+dflong.F.a$sitetype <- "Adj. Waterbody"
+colnames(dflong.F.r)[c(3,4)] <-c("TempC","Depth")
+colnames(dflong.F.a)[c(3,4)] <-c("TempC","Depth")
+dflong.F <- rbind(dflong.F.r,dflong.F.a)
+
+dflong <- rbind(dflong.D, dflong.F)
+
+test <- dflongTD[which(duplicated(dflongTD)==TRUE),]
+
+summThresh.Diff <- ddply(dfwideAll[which(dfwideAll$year2 >2020),], c("project","date2"), summarise,
+                         nTemp_R = length(Restoration),
+                         nTemp_A = length(Adjacent),
+                         oTemp_R = length(which(Restoration < 20)),
+                         oTemp_A = length(which(Adjacent < 20)),
+                         p_oTemp_R = oTemp_R/nTemp_R,
+                         p_oTemp_A = oTemp_A/nTemp_A,
+                         p_TimeDiff = p_oTemp_R - p_oTemp_A
+                         )
+
+
+summThresh <- ddply(dflong[which(dflong$year2 > 2020),], c("project","sitetype","date2"), summarise,
+                    nTemp = length(TempC),
+                    oTemp = length(which(TempC <20)),
+                    #sTemp = length(threshTemp[which(threshTemp == "Suboptimal")]),
+                    #mean20 = mean(TempC.20, na.rm = TRUE),
+                    meanTemp = mean(TempC, na.rm = TRUE))
+#summThresh$sitetype <- NA
+#summThresh$sitetype[which(summThresh$Site %in% c("Decker Breach","Decker Pool","Yolo Flyway Farm"))] <- "Restoration"
+#summThresh$sitetype[which(summThresh$Site %in% c("M13_USGS","SDI_USGS","TOED_USGS"))] <- "Adj. Waterbody"
+
+#summThresh$nTempCheck <- ifelse(sum(summThresh$oTemp,summThresh$sTemp) == summThresh$nTemp, TRUE, FALSE)
+summThresh$p_oTemp <- summThresh$oTemp/summThresh$nTemp
+summThresh$project2 <- factor(summThresh$project, levels = c("Flyway","Decker"))
+summThresh$sitetype2 <- factor(summThresh$sitetype, levels = c("Adj. Waterbody","Restoration"))
+
+sum(summThresh$nTemp[which(summThresh$Site == "Yolo Flyway Farm")])
+sum(summThresh$nTemp[which(summThresh$Site == "TOED_USGS")])
+sum(summThresh$nTemp[which(summThresh$project == "Decker")])
+sum(summThresh$nTemp[which(summThresh$project == "Decker" & summThresh$sitetype == "Restoration")])
+sum(summThresh$nTemp[which(summThresh$project== "Decker" & summThresh$sitetype == "Adj. Waterbody")])
+
+myPalette <- colorRampPalette(rev(brewer.pal(8, "Dark2")))
+# use this bit to grab the legend from one plot, must turn off legend(theme) after using
+get_legend<-function(myggplot){
+  tmp <- ggplot_gtable(ggplot_build(myggplot))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend <- tmp$grobs[[leg]]
+  return(legend)
+}
+
+heatDECK <- ggplot(summThresh[which(summThresh$project == "Decker"),], aes(x = date2, y = sitetype2, fill = p_oTemp)) + 
+  geom_tile() +
+  scale_fill_gradientn(colours = myPalette(5)) +
+  xlab("Date") +
+  guides(fill=guide_legend(title="Proportion of time\ntemperature was\n<20\u00b0C", reverse = TRUE)) +
+  theme_classic2() + 
+  theme(axis.title = element_blank(),
+        axis.text.y = element_blank()) 
+
+legendT <- get_legend(heatDECK)
+heatDECK <- heatDECK + theme(legend.position = "none")
+heatFLYW <- ggplot(summThresh[which(summThresh$project == "Flyway"),], aes(x = date2, y = sitetype2, fill = p_oTemp)) + 
+  geom_tile() +
+  scale_fill_gradientn(colours = myPalette(5)) +
+  guides(fill=guide_legend(title="Proportion of time\ntemperature was\n<20\u00b0C", reverse = TRUE)) +
+  theme_classic2() + 
+  theme(axis.title = element_blank(),
+        axis.text.y = element_text(angle =90, hjust = 0.5),
+        legend.position = "none")
+
+ggarrange(heatFLYW, heatDECK,
+          ncol = 2, nrow = 1,
+          common.legend = TRUE, legend = "right",
+          align = "hv"
+          )
+
+myPaletteDiff <- colorRampPalette(rev(brewer.pal(11, "RdYlBu")))
+range(summThresh.Diff$p_TimeDiff[which(summThresh.Diff$project == "Decker")])
+range(summThresh.Diff$p_TimeDiff[which(summThresh.Diff$project == "Flyway")])
+
+summThresh.Diff$Difference <- "Difference"
+heatDECK.diff <- ggplot(summThresh.Diff[which(summThresh.Diff$project == "Decker"),], aes(x = date2, y = project, fill = p_TimeDiff)) + 
+  geom_tile() +
+  scale_fill_gradientn(colours = myPaletteDiff(11),limits=c(range(summThresh.Diff$p_TimeDiff[which(summThresh.Diff$project == "Decker")]))) +
+  xlab("Date") +
+  guides(fill=guide_legend(title="Proportion of time\nRestoration is\nmore suitable", reverse = TRUE)) +
+  theme_classic2() + 
+  theme(axis.title = element_blank(),
+        axis.text.y = element_blank()) 
+legendT.Diff <- get_legend(heatDECK.diff)
+heatDECK.diff <- heatDECK.diff + theme(legend.position = "none")
+heatFLYW.diff <- ggplot(summThresh.Diff[which(summThresh.Diff$project == "Flyway"),], aes(x = date2, y = Difference, fill = p_TimeDiff)) + 
+  geom_tile() +
+  scale_fill_gradientn(colours = myPaletteDiff(11),limits=c(range(summThresh.Diff$p_TimeDiff[which(summThresh.Diff$project == "Decker")]))) +
+  xlab("Date") +
+  guides(fill=guide_legend(title="Proportion of time\nRestoration is\nmore suitable", reverse = TRUE)) +
+  theme_classic2() + 
+  theme(axis.title = element_blank(),
+        axis.text.y = element_text(angle =90, hjust = 0.5), 
+        legend.position = "none") 
+
+ggarrange(heatFLYW.diff, heatDECK.diff,
+          ncol = 2, nrow = 1,
+          common.legend = TRUE, legend = "right",
+          align = "hv"
+          )
+
+ggarrange(heatFLYW, heatDECK, legendT,
+          heatFLYW.diff, heatDECK.diff, legendT.Diff,
+          ncol = 3, nrow = 2,
+          align = "h",
+          widths = c(2,2,0.8))
+################################################################################
+```
+
+For Turbidity (quarter-hourly) - now using with tide position calculated in earlier chunk
+```{r}
+library(plyr)
+library(ggplot2)
+library(scales)
+library(gridExtra)
+library(metR)
+library(ggpubr)
+library(RColorBrewer)
+
+rm(list = ls())
+
+load("AllLTM4AnalysisQC_TurbQH_230102.RData")
+load("AllLTM4Analysis_TidePosition_230210.RData")
+'%ni%' <- Negate('%in%')
+
+colnames(turb_final)[4] <- "turb"
+dfcombined.2 <- merge(turb_final, depth_final.2[,c("Station","Datetime","depth","tide","tide_position2")], by = c("Station","Datetime"))
+colnames(dfcombined.2) <- c("Site","dts","Date","turb","Minute","depth","tide","tide_position2")
+rm(depth_final.2, turb_final)
+dfcombined.2$dts2 <- lubridate::floor_date(dfcombined.2$dts, "15 minutes")
+dfcombined.2$date2 <- lubridate::date(dfcombined.2$dts2)
+dfcombined.2$yr <- lubridate::year(dfcombined.2$dts2)
+dfcombined.2$project <- NA
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Decker Breach","Decker Pool","M13_USGS","SDI_USGS"))] <- "Decker"
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Tule Breach","Tule Channel","Tule Pond","GRZB_USGS"))] <- "Tule"
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Yolo Flyway Farm", "TOED_USGS"))] <- "Flyway"
+dfcombined.2$sitetype <- NA
+dfcombined.2$sitetype[which(dfcombined.2$Site %in% c("M13_USGS","SDI_USGS", "TOED_USGS"))] <- "Adj. Waterbody"
+dfcombined.2$sitetype[which(dfcombined.2$Site %in% c("Decker Breach","Decker Pool", "Yolo Flyway Farm"))] <- "Restoration"
+#ggplot(dfcombined.2, aes(dts2, TempC)) + geom_point() + facet_grid(Site ~., scales = "free_y")
+
+
+dfcombined.wideD <- reshape2::dcast(dfcombined.2[which(dfcombined.2$project == "Decker" & dfcombined.2$date2 < as.Date("2022-11-01")),], dts2 ~ Site, value.var = "turb")
+dfcombined.wideD[is.na(dfcombined.wideD)] <- -99999
+#dfcombined.wideF <- reshape2::dcast(dfcombined.2[which(dfcombined.2$project == "Flyway" & dfcombined.2$date2 < as.Date("2022-11-01") & dfcombined.2$date2 > as.Date("2020-12-31")),], dts2 ~ Site, value.var = "turb")
+#dfcombined.wideF[is.na(dfcombined.wideF)] <- -99999
+
+dfcombined.wideD$Restoration <- ifelse(dfcombined.wideD$`Decker Breach`==-99999, dfcombined.wideD$`Decker Pool`,dfcombined.wideD$`Decker Breach`)
+dfcombined.wideD$Adjacent <- dfcombined.wideD$M13_USGS#ifelse(dfcombined.wideD$M13_USGS==0, dfcombined.wideD$SDI_USGS,dfcombined.wideD$M13_USGS)
+dfcombined.wideD.2 <- dfcombined.wideD[-which(dfcombined.wideD$Adjacent == -99999 | dfcombined.wideD$Restoration == -99999 | is.na(dfcombined.wideD$Adjacent)==TRUE),c("dts2","Restoration","Adjacent")]
+dfcombined.wideD.2$Difference <- dfcombined.wideD.2$Restoration - dfcombined.wideD.2$Adjacent
+dfcombined.wideD.2$project <- "Decker"
+dfcombined.wideD.2$yr <- lubridate::year(dfcombined.wideD.2$dts2)
+
+#dfcombined.wideF$Restoration <- dfcombined.wideF$`Yolo Flyway Farm`
+#dfcombined.wideF$Adjacent <- dfcombined.wideF$TOED_USGS
+#dfcombined.wideF.2 <- dfcombined.wideF[-which(dfcombined.wideF$Adjacent == -99999 | dfcombined.wideF$Restoration == -99999 | #is.na(dfcombined.wideF$Adjacent)==TRUE),c("dts2","Restoration","Adjacent")]
+#dfcombined.wideF.2$Difference <- dfcombined.wideF.2$Restoration - dfcombined.wideF.2$Adjacent
+#dfcombined.wideF.2$project <- "Flyway"
+#dfcombined.wideF.2$yr <- lubridate::year(dfcombined.wideF.2$dts2)
+
+dfwideAll.turb <- dfcombined.wideD.2[which(dfcombined.wideD.2$yr > 2020),]
+colnames(dfwideAll.turb) <- c("dts2","Turb_R","Turb_A","Difference_Turb","project","yr")
+
+
+dfcombined.wideD <- reshape2::dcast(dfcombined.2[which(dfcombined.2$project == "Decker" & dfcombined.2$date2 < as.Date("2022-11-01")),], dts2 ~ Site, value.var = "tide_position2")
+dfcombined.wideD[is.na(dfcombined.wideD)] <- -99999
+#dfcombined.wideF <- reshape2::dcast(dfcombined.2[which(dfcombined.2$project == "Flyway" & dfcombined.2$date2 < as.Date("2022-11-01") & dfcombined.2$date2 > as.Date("2020-12-31")),], dts2 ~ Site, value.var = "depth")
+#dfcombined.wideF[is.na(dfcombined.wideF)] <- -99999
+
+dfcombined.wideD$Restoration <- ifelse(dfcombined.wideD$`Decker Breach`==-99999, dfcombined.wideD$`Decker Pool`,dfcombined.wideD$`Decker Breach`)
+#dfcombined.wideD$Adjacent <- dfcombined.wideD$M13_USGS#ifelse(dfcombined.wideD$M13_USGS==0, dfcombined.wideD$SDI_USGS,dfcombined.wideD$M13_USGS)
+dfcombined.wideD.2 <- dfcombined.wideD[-which(dfcombined.wideD$Restoration == -99999),c("dts2","Restoration")] #dfcombined.wideD$Adjacent == -99999 | is.na(dfcombined.wideD$Adjacent)==TRUE 
+#dfcombined.wideD.2$Difference <- dfcombined.wideD.2$Restoration - dfcombined.wideD.2$Adjacent
+dfcombined.wideD.2$project <- "Decker"
+dfcombined.wideD.2$yr <- lubridate::year(dfcombined.wideD.2$dts2)
+
+#dfcombined.wideF$Restoration <- dfcombined.wideF$`Yolo Flyway Farm`
+#dfcombined.wideF$Adjacent <- dfcombined.wideF$TOED_USGS
+#dfcombined.wideF.2 <- dfcombined.wideF[-which(dfcombined.wideF$Adjacent == -99999 | dfcombined.wideF$Restoration == -99999 | is.na(dfcombined.wideF$Adjacent)==TRUE),c("dts2","Restoration","Adjacent")]
+#dfcombined.wideF.2$Difference <- dfcombined.wideF.2$Restoration - dfcombined.wideF.2$Adjacent
+#dfcombined.wideF.2$project <- "Flyway"
+#dfcombined.wideF.2$yr <- lubridate::year(dfcombined.wideF.2$dts2)
+
+#dfwideAll.depth <- rbind.data.frame(dfcombined.wideD.2[which(dfcombined.wideD.2$yr > 2020),],
+#                                    dfcombined.wideF.2[which(dfcombined.wideF.2$yr > 2020),])
+dfwideAll.depth <- dfcombined.wideD.2[which(dfcombined.wideD.2$yr > 2020),]
+colnames(dfwideAll.depth) <- c("dts2","Depth_R","project","yr")
+
+
+
+dfwideAll.Final <- merge(dfwideAll.turb,dfwideAll.depth[,c("dts2","Depth_R","project")], by = c("dts2","project"))
+#dfcombined.2$TempC.20 <- dfcombined.2$TempC - 20
+
+#ggplot(dfcombined.2, aes(x = dts, y = TempC.20, color = sitetype))  + geom_point() + geom_hline(yintercept = 0)+ facet_grid(Site ~.)
+
+
+
+
+
+
+dfwideAll.Final$date2 <- lubridate::date(dfwideAll.Final$dts2)
+dfwideAll.Final$year2 <- lubridate::year(dfwideAll.Final$dts2)
+dfwideAll.Final$hr <- lubridate::hour(dfwideAll.Final$dts2)
+dfwideAll.Final$minute <- lubridate::minute(dfwideAll.Final$dts2)
+dfwideAll.Final$HM <- dfwideAll.Final$hr + dfwideAll.Final$minute/60
+dfwideAll.Final$DoY <- lubridate::yday(dfwideAll.Final$dts2)
+dfwideAll.Final$fYR <- factor(dfwideAll.Final$year2, levels = c("2021","2022"))
+dfwideAll.Final$project2 <- factor(dfwideAll.Final$project, levels = c("Decker","Flyway"))
+
+library(mgcv)
+dfWide.DECK <- dfwideAll.Final[which(dfwideAll.Final$project == "Decker"),]
+colnames(dfWide.DECK)[7] <- "tide_position2"
+
+bD.3 <- bam(Difference_Turb ~ te(DoY, HM, tide_position2, k = c(14,7,6), bs = c("cc","cc","cc")), data = dfWide.DECK)
+vis.gam(bD.3,n.grid=50, theta=35, phi=32, zlab="", too.far=0.1) 
+plot(bD.3)
+gam.check(bD.3)
+acf(residuals.gam(bD.3), ylab="", xlab="", main="")
+dfpred.D <- expand.grid(DoY = seq(1,365,1),
+                        HM = seq(0,23.75,0.25),
+                        tide_position2 = seq(-0.9,0.9,0.3))#Depth_R = seq(0.2,1,0.4)
+dfpred.D$predvalues = predict(bD.3, newdata = dfpred.D)
+dfpred.D$Depth_R <- factor(dfpred.D$tide_position2, levels = c(seq(-0.9,0.9,0.3)), labels = c("Early Flood","Mid Flood","Late Flood","High Slack","Early Ebb","Mid Ebb","Late Ebb"))#factor(dfpred.D$Depth_R, levels = c(0.2,0.6,1))
+dfpred.D$date <- as.Date(NA)
+dfpred.D$date<- as.Date(dfpred.D$DoY, origin = '2020-12-31')
+myPaletteContour <- colorRampPalette(rev(brewer.pal(6, "RdBu")))
+plo_deck <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = predvalues, fill = predvalues)) + 
+  geom_tile() + 
+  geom_contour(binwidth = 5) + 
+  geom_text_contour(rotate = FALSE, binwidth = 5) +
+  scale_y_continuous(breaks = c(seq(0,24,8)))+
+  scale_fill_gradientn(colours = myPaletteContour(11),
+                       name = "Difference in Turbidity (Restoration - Adj. Waterbody)")  +
+  ylab("Hour")+
+  xlab("Day of Year")+
+  #guides(fill=guide_legend(title="Difference in temperature (Restoration - Adj. Waterbody)")) +
+  facet_grid(.~ Depth_R) +
+  theme_classic2()+
+  theme(legend.position = "top")
+
+
+library(plyr)
+dfwideAll.Final$date2 <- lubridate::date(dfwideAll.Final$dts2)
+dfwideAll.Final$year2 <- lubridate::year(dfwideAll.Final$dts2)
+dflong.D.r <- dfwideAll.Final[which(dfwideAll.Final$project== "Decker"),c("dts2","project","Restoration","Depth_R","date2","year2")]
+dflong.D.a <- dfwideAll.Final[which(dfwideAll.Final$project== "Decker"),c("dts2","project","Adjacent","Depth_A","date2","year2")]
+dflong.D.r$sitetype <- "Restoration"
+dflong.D.a$sitetype <- "Adj. Waterbody"
+colnames(dflong.D.r)[c(3,4)] <-c("TempC","Depth")
+colnames(dflong.D.a)[c(3,4)] <-c("TempC","Depth")
+dflong.D <- rbind(dflong.D.r,dflong.D.a)
+
+dflong.F.r <- dfwideAll.Final[which(dfwideAll.Final$project== "Flyway"),c("dts2","project","Restoration","Depth_R","date2","year2")]
+dflong.F.a <- dfwideAll.Final[which(dfwideAll.Final$project== "Flyway"),c("dts2","project","Adjacent","Depth_A","date2","year2")]
+dflong.F.r$sitetype <- "Restoration"
+dflong.F.a$sitetype <- "Adj. Waterbody"
+colnames(dflong.F.r)[c(3,4)] <-c("TempC","Depth")
+colnames(dflong.F.a)[c(3,4)] <-c("TempC","Depth")
+dflong.F <- rbind(dflong.F.r,dflong.F.a)
+
+dflong <- rbind(dflong.D, dflong.F)
+
+test <- dflongTD[which(duplicated(dflongTD)==TRUE),]
+
+summThresh.Diff <- ddply(dfwideAll[which(dfwideAll$year2 >2020),], c("project","date2"), summarise,
+                         nTemp_R = length(Restoration),
+                         nTemp_A = length(Adjacent),
+                         oTemp_R = length(which(Restoration < 20)),
+                         oTemp_A = length(which(Adjacent < 20)),
+                         p_oTemp_R = oTemp_R/nTemp_R,
+                         p_oTemp_A = oTemp_A/nTemp_A,
+                         p_TimeDiff = p_oTemp_R - p_oTemp_A
+                         )
+
+
+summThresh <- ddply(dflong[which(dflong$year2 > 2020),], c("project","sitetype","date2"), summarise,
+                    nTemp = length(TempC),
+                    oTemp = length(which(TempC <20)),
+                    #sTemp = length(threshTemp[which(threshTemp == "Suboptimal")]),
+                    #mean20 = mean(TempC.20, na.rm = TRUE),
+                    meanTemp = mean(TempC, na.rm = TRUE))
+#summThresh$sitetype <- NA
+#summThresh$sitetype[which(summThresh$Site %in% c("Decker Breach","Decker Pool","Yolo Flyway Farm"))] <- "Restoration"
+#summThresh$sitetype[which(summThresh$Site %in% c("M13_USGS","SDI_USGS","TOED_USGS"))] <- "Adj. Waterbody"
+
+#summThresh$nTempCheck <- ifelse(sum(summThresh$oTemp,summThresh$sTemp) == summThresh$nTemp, TRUE, FALSE)
+summThresh$p_oTemp <- summThresh$oTemp/summThresh$nTemp
+summThresh$project2 <- factor(summThresh$project, levels = c("Flyway","Decker"))
+summThresh$sitetype2 <- factor(summThresh$sitetype, levels = c("Adj. Waterbody","Restoration"))
+
+sum(summThresh$nTemp[which(summThresh$Site == "Yolo Flyway Farm")])
+sum(summThresh$nTemp[which(summThresh$Site == "TOED_USGS")])
+sum(summThresh$nTemp[which(summThresh$project == "Decker")])
+sum(summThresh$nTemp[which(summThresh$project == "Decker" & summThresh$sitetype == "Restoration")])
+sum(summThresh$nTemp[which(summThresh$project== "Decker" & summThresh$sitetype == "Adj. Waterbody")])
+
+myPalette <- colorRampPalette(rev(brewer.pal(8, "Dark2")))
+# use this bit to grab the legend from one plot, must turn off legend(theme) after using
+get_legend<-function(myggplot){
+  tmp <- ggplot_gtable(ggplot_build(myggplot))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend <- tmp$grobs[[leg]]
+  return(legend)
+}
+
+heatDECK <- ggplot(summThresh[which(summThresh$project == "Decker"),], aes(x = date2, y = sitetype2, fill = p_oTemp)) + 
+  geom_tile() +
+  scale_fill_gradientn(colours = myPalette(5)) +
+  xlab("Date") +
+  guides(fill=guide_legend(title="Proportion of time\ntemperature was\n<20\u00b0C", reverse = TRUE)) +
+  theme_classic2() + 
+  theme(axis.title = element_blank(),
+        axis.text.y = element_blank()) 
+
+legendT <- get_legend(heatDECK)
+heatDECK <- heatDECK + theme(legend.position = "none")
+heatFLYW <- ggplot(summThresh[which(summThresh$project == "Flyway"),], aes(x = date2, y = sitetype2, fill = p_oTemp)) + 
+  geom_tile() +
+  scale_fill_gradientn(colours = myPalette(5)) +
+  guides(fill=guide_legend(title="Proportion of time\ntemperature was\n<20\u00b0C", reverse = TRUE)) +
+  theme_classic2() + 
+  theme(axis.title = element_blank(),
+        axis.text.y = element_text(angle =90, hjust = 0.5),
+        legend.position = "none")
+
+ggarrange(heatFLYW, heatDECK,
+          ncol = 2, nrow = 1,
+          common.legend = TRUE, legend = "right",
+          align = "hv"
+          )
+
+myPaletteDiff <- colorRampPalette(rev(brewer.pal(11, "RdYlBu")))
+range(summThresh.Diff$p_TimeDiff[which(summThresh.Diff$project == "Decker")])
+range(summThresh.Diff$p_TimeDiff[which(summThresh.Diff$project == "Flyway")])
+
+summThresh.Diff$Difference <- "Difference"
+heatDECK.diff <- ggplot(summThresh.Diff[which(summThresh.Diff$project == "Decker"),], aes(x = date2, y = project, fill = p_TimeDiff)) + 
+  geom_tile() +
+  scale_fill_gradientn(colours = myPaletteDiff(11),limits=c(range(summThresh.Diff$p_TimeDiff[which(summThresh.Diff$project == "Decker")]))) +
+  xlab("Date") +
+  guides(fill=guide_legend(title="Proportion of time\nRestoration is\nmore suitable", reverse = TRUE)) +
+  theme_classic2() + 
+  theme(axis.title = element_blank(),
+        axis.text.y = element_blank()) 
+legendT.Diff <- get_legend(heatDECK.diff)
+heatDECK.diff <- heatDECK.diff + theme(legend.position = "none")
+heatFLYW.diff <- ggplot(summThresh.Diff[which(summThresh.Diff$project == "Flyway"),], aes(x = date2, y = Difference, fill = p_TimeDiff)) + 
+  geom_tile() +
+  scale_fill_gradientn(colours = myPaletteDiff(11),limits=c(range(summThresh.Diff$p_TimeDiff[which(summThresh.Diff$project == "Decker")]))) +
+  xlab("Date") +
+  guides(fill=guide_legend(title="Proportion of time\nRestoration is\nmore suitable", reverse = TRUE)) +
+  theme_classic2() + 
+  theme(axis.title = element_blank(),
+        axis.text.y = element_text(angle =90, hjust = 0.5), 
+        legend.position = "none") 
+
+ggarrange(heatFLYW.diff, heatDECK.diff,
+          ncol = 2, nrow = 1,
+          common.legend = TRUE, legend = "right",
+          align = "hv"
+          )
+
+ggarrange(heatFLYW, heatDECK, legendT,
+          heatFLYW.diff, heatDECK.diff, legendT.Diff,
+          ncol = 3, nrow = 2,
+          align = "h",
+          widths = c(2,2,0.8))
+################################################################################
+```
+
+
+
+
+
+
+For Temperature (quarter-hourly) - now with fixing depth - OLD
+```{r}
+library(plyr)
+library(VulnToolkit)
+library(data.table)
+library(ggplot2)
+library(scales)
+library(gridExtra)
+library(metR)
+library(ggpubr)
+library(RColorBrewer)
+
+rm(list = ls())
+
+convertTime <- function(x){
+    Hour = (x * 24) %% 24 #For x>1, only the value after decimal will be considered
+    Minutes = (Hour %% 1) * 60
+    Seconds = (Minutes %% 1) * 60
+
+    hrs = ifelse (Hour < 10, paste("0",floor(Hour),sep = ""), as.character(floor(Hour)))
+    mins = ifelse (Minutes < 10, paste("0",floor(Minutes),sep = ""), as.character(floor(Minutes)))    
+    secs = ifelse (Seconds < 10, paste("0",round(Seconds,0),sep = ""), as.character(round(Seconds,0)))
+
+    return(paste(hrs, mins, secs, sep = ":"))
+}
+
+
+#load("LTM_CATCH_04.RData")
+load("AllLTM4AnalysisQC_TempQH_221230.RData")
+load("AllLTM4AnalysisQC_DepthQH_221230.RData")
+'%ni%' <- Negate('%in%')
+
+depth_final$depth <- depth_final$Temp
+depth_final$dts2 <- depth_final$Datetime
+list_All <- depth_final %>% 
+  dplyr::group_split(Station)
+list_All.2 <- list()
+for(i in 1:length(list_All)){
+  workingDF.1 <- data.frame(list_All[[i]])
+  workingDF.1$deltaTime <- as.numeric(workingDF.1$dts2 - data.table::shift(workingDF.1$dts2, fill = data.table::first(workingDF.1$dts2)))/60
+  workingDF.1$deltaTime[1] <- 15
+  workingDF.1$is15 <- ifelse(workingDF.1$deltaTime == 15, "Y","N")
+  List_Split <- split(workingDF.1, cumsum(c(TRUE, diff(workingDF.1$deltaTime > 15) != 0)))
+  List_Tides <- list()
+  for(j in 1:length(List_Split)){
+    workingDF.2 <- List_Split[j][[1]]
+    if(nrow(workingDF.2) > 20){
+      dd <- try(HL(workingDF.2$depth,workingDF.2$dts2))
+      if(is.data.frame(dd)==TRUE){
+        List_Tides[[j]] <- dd
+      }
+    } else{
+      List_Tides[[j]] <- data.frame()
+      }
+    workingDF.2 <- NULL
+    dd <- NULL
+  }
+  df_Tides <- do.call(rbind.data.frame, List_Tides)
+  colnames(df_Tides)[2] <- "dts2"
+  df_Tides$Station <- unique(workingDF.1$Station)
+  list_All.2[[i]] <- df_Tides
+  df_Tides <- NULL
+  workingDF.1 <- NULL
+}
+
+list_All.3 <- list()
+for(i in 1:length(list_All.2)){
+  workingDF.1 <- data.frame(list_All[[i]])
+  workingDF.1$dts3 <- lubridate::floor_date(workingDF.1$dts2, "15 minutes")
+  dts3 <- seq(lubridate::ymd_hms(workingDF.1$dts3[2],tz = "America/Los_Angeles"),lubridate::ymd_hms(workingDF.1$dts3[length(workingDF.1$dts3)],tz = "America/Los_Angeles"), by = '15 mins')
+  df_Tides <- list_All.2[[i]]
+  df_Tides$dts3 <- lubridate::floor_date(df_Tides$dts2, "15 minutes")
+  df_Tides.Long <- data.frame(dts3)
+  df_Tides.Long.2 <- merge(df_Tides.Long, df_Tides[,c("dts3","tide","tide2","Station")], by = c("dts3"), all.x = TRUE)
+  df_Tides.Long.3 <- merge(df_Tides.Long.2, workingDF.1[,c("dts2","dts3","depth")], by = c("dts3"), all.x = TRUE)
+  df_Tides.Long.3$tide_position <- ifelse(df_Tides.Long.3$tide == "H",0,NA)
+  df_Tides.Long.3$tide_position[which(df_Tides.Long.3$tide == "L")] <- 1
+  df_Tides.Long.3$isValue <- is.na(df_Tides.Long.3$tide_position)
+  df_Tides.Long.3$incrementsLength <- rowid(rleid(df_Tides.Long.3$isValue))*df_Tides.Long.3$isValue
+  df_Tides.Long.3$tide_position2 <- df_Tides.Long.3$tide_position
+  df_Tides.Long.3$tide[which(is.na(df_Tides.Long.3$tide)==TRUE)] <- "None"
+  for(j in 1:nrow(df_Tides.Long.3)){
+    if(df_Tides.Long.3$tide[j] == "H"){
+      df_Tides.Long.3$tide_position2[(j- df_Tides.Long.3$incrementsLength[j-1]):(j - 1)] <- 
+        seq(-1,0, length.out = df_Tides.Long.3$incrementsLength[j-1]+2)[2:((df_Tides.Long.3$incrementsLength[j-1])+1)]
+      }
+    if(df_Tides.Long.3$tide[j] == "L"){
+      df_Tides.Long.3$tide_position2[(j- df_Tides.Long.3$incrementsLength[j-1]):(j - 1)] <- 
+        seq(0,1, length.out = df_Tides.Long.3$incrementsLength[j-1]+2)[2:((df_Tides.Long.3$incrementsLength[j-1])+1)]
+      }
+    }
+  list_All.3[[i]] <- df_Tides.Long.3
+}
+
+list_All.4 <- list()
+for(i in 1:length(list_All)){
+  workingDF.1 <- list_All[[i]]
+  workingDF.2 <- list_All.3[[i]]
+  workingDF.3 <- merge(workingDF.1, workingDF.2[,c("dts2","tide","tide2","tide_position2")], by = c("dts2"), all.x = TRUE)
+  list_All.4[[i]] <- workingDF.3
+}
+
+depth_final.2 <- do.call(rbind.data.frame, list_All.4)
+rm(df_Tides,df_Tides.Long,df_Tides.Long.2,list_All,list_All.2,list_All.3,list_All.4, workingDF.1,workingDF.2,workingDF.3)
+
+#############dfDeck$slope1 <- dfDeck$Depthm - data.table::shift(dfDeck$Depthm, fill = data.table::first(dfDeck$Depthm)) #this is for slope of depth 
+dfcombined.2 <- merge(temp_final, depth_final.2[,c("Station","Datetime","depth","tide","tide_position2")], by = c("Station","Datetime"))
+rm(temp_final, depth_final)
+colnames(dfcombined.2) <- c("Site","dts","Date","TempC","Minute","depth","tide","tide_position2")
+dfcombined.2$dts2 <- lubridate::floor_date(dfcombined.2$dts, "15 minutes")
+dfcombined.2$date2 <- lubridate::date(dfcombined.2$dts2)
+dfcombined.2$yr <- lubridate::year(dfcombined.2$dts2)
+dfcombined.2$project <- NA
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Decker Breach","Decker Pool","M13_USGS","SDI_USGS"))] <- "Decker"
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Tule Breach","Tule Channel","Tule Pond","GRZB_USGS"))] <- "Tule"
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Yolo Flyway Farm", "TOED_USGS"))] <- "Flyway"
+dfcombined.2$sitetype <- NA
+dfcombined.2$sitetype[which(dfcombined.2$Site %in% c("M13_USGS","SDI_USGS", "TOED_USGS"))] <- "Adj. Waterbody"
+dfcombined.2$sitetype[which(dfcombined.2$Site %in% c("Decker Breach","Decker Pool", "Yolo Flyway Farm"))] <- "Restoration"
+#ggplot(dfcombined.2, aes(dts2, TempC)) + geom_point() + facet_grid(Site ~., scales = "free_y")
+
+
+###DMC230209: pick up here
+dfcombined.wideD <- reshape2::dcast(dfcombined.2[which(dfcombined.2$project == "Decker" & dfcombined.2$date2 < as.Date("2022-11-01")),], dts2 ~ Site, value.var = "TempC")
+dfcombined.wideD[is.na(dfcombined.wideD)] <- 0
+dfcombined.wideF <- reshape2::dcast(dfcombined.2[which(dfcombined.2$project == "Flyway" & dfcombined.2$date2 < as.Date("2022-11-01") & dfcombined.2$date2 > as.Date("2020-12-31")),], dts2 ~ Site, value.var = "TempC")
+dfcombined.wideF[is.na(dfcombined.wideF)] <- 0
+
+dfcombined.wideD$Restoration <- ifelse(dfcombined.wideD$`Decker Breach`==0, dfcombined.wideD$`Decker Pool`,dfcombined.wideD$`Decker Breach`)
+dfcombined.wideD$Adjacent <- dfcombined.wideD$M13_USGS#ifelse(dfcombined.wideD$M13_USGS==0, dfcombined.wideD$SDI_USGS,dfcombined.wideD$M13_USGS)
+dfcombined.wideD.2 <- dfcombined.wideD[-which(dfcombined.wideD$Adjacent == 0 | dfcombined.wideD$Restoration == 0 | is.na(dfcombined.wideD$Adjacent)==TRUE),c("dts2","Restoration","Adjacent")]
+dfcombined.wideD.2$Difference <- dfcombined.wideD.2$Restoration - dfcombined.wideD.2$Adjacent
+dfcombined.wideD.2$project <- "Decker"
+dfcombined.wideD.2$yr <- lubridate::year(dfcombined.wideD.2$dts2)
+
+dfcombined.wideF$Restoration <- dfcombined.wideF$`Yolo Flyway Farm`
+dfcombined.wideF$Adjacent <- dfcombined.wideF$TOED_USGS
+dfcombined.wideF.2 <- dfcombined.wideF[-which(dfcombined.wideF$Adjacent == 0 | dfcombined.wideF$Restoration == 0 | is.na(dfcombined.wideF$Adjacent)==TRUE),c("dts2","Restoration","Adjacent")]
+dfcombined.wideF.2$Difference <- dfcombined.wideF.2$Restoration - dfcombined.wideF.2$Adjacent
+dfcombined.wideF.2$project <- "Flyway"
+dfcombined.wideF.2$yr <- lubridate::year(dfcombined.wideF.2$dts2)
+
+dfwideAll <- rbind.data.frame(dfcombined.wideD.2[which(dfcombined.wideD.2$yr > 2020),],
+                              dfcombined.wideF.2[which(dfcombined.wideF.2$yr > 2020),])
+#ggplot(dfwideAll, aes(dts2, Difference)) + geom_point() + facet_grid(project ~., scales = "free_y")
+
+
+
+dfcombined.wideD <- reshape2::dcast(dfcombined.2[which(dfcombined.2$project == "Decker" & dfcombined.2$date2 < as.Date("2022-11-01")),], dts2 ~ Site, value.var = "tide_position2")
+dfcombined.wideD[is.na(dfcombined.wideD)] <- -99999
+#dfcombined.wideF <- reshape2::dcast(dfcombined.2[which(dfcombined.2$project == "Flyway" & dfcombined.2$date2 < as.Date("2022-11-01") & dfcombined.2$date2 > as.Date("2020-12-31")),], dts2 ~ Site, value.var = "depth")
+#dfcombined.wideF[is.na(dfcombined.wideF)] <- -99999
+
+dfcombined.wideD$Restoration <- ifelse(dfcombined.wideD$`Decker Breach`==-99999, dfcombined.wideD$`Decker Pool`,dfcombined.wideD$`Decker Breach`)
+#dfcombined.wideD$Adjacent <- dfcombined.wideD$M13_USGS#ifelse(dfcombined.wideD$M13_USGS==0, dfcombined.wideD$SDI_USGS,dfcombined.wideD$M13_USGS)
+dfcombined.wideD.2 <- dfcombined.wideD[-which(dfcombined.wideD$Restoration == -99999),c("dts2","Restoration")] #dfcombined.wideD$Adjacent == -99999 | is.na(dfcombined.wideD$Adjacent)==TRUE 
+#dfcombined.wideD.2$Difference <- dfcombined.wideD.2$Restoration - dfcombined.wideD.2$Adjacent
+dfcombined.wideD.2$project <- "Decker"
+dfcombined.wideD.2$yr <- lubridate::year(dfcombined.wideD.2$dts2)
+
+#dfcombined.wideF$Restoration <- dfcombined.wideF$`Yolo Flyway Farm`
+#dfcombined.wideF$Adjacent <- dfcombined.wideF$TOED_USGS
+#dfcombined.wideF.2 <- dfcombined.wideF[-which(dfcombined.wideF$Adjacent == -99999 | dfcombined.wideF$Restoration == -99999 | is.na(dfcombined.wideF$Adjacent)==TRUE),c("dts2","Restoration","Adjacent")]
+#dfcombined.wideF.2$Difference <- dfcombined.wideF.2$Restoration - dfcombined.wideF.2$Adjacent
+#dfcombined.wideF.2$project <- "Flyway"
+#dfcombined.wideF.2$yr <- lubridate::year(dfcombined.wideF.2$dts2)
+
+#dfwideAll.depth <- rbind.data.frame(dfcombined.wideD.2[which(dfcombined.wideD.2$yr > 2020),],
+#                                    dfcombined.wideF.2[which(dfcombined.wideF.2$yr > 2020),])
+dfwideAll.depth <- dfcombined.wideD.2[which(dfcombined.wideD.2$yr > 2020),]
+colnames(dfwideAll.depth) <- c("dts2","Depth_R","project","yr")
+
+dfwideAll.Final <- merge(dfwideAll,dfwideAll.depth[,c("dts2","Depth_R","project")], by = c("dts2","project"))
+
+#dfcombined.2$TempC.20 <- dfcombined.2$TempC - 20
+
+#ggplot(dfcombined.2, aes(x = dts, y = TempC.20, color = sitetype))  + geom_point() + geom_hline(yintercept = 0)+ facet_grid(Site ~.)
+
+
+
+dfwideAll$hr <- lubridate::hour(dfwideAll$dts2)
+dfwideAll$DoY <- lubridate::yday(dfwideAll$dts2)
+dfwideAll$ToD <- "Early"
+for(i in 1:nrow(dfwideAll)){
+  if(dfwideAll$hr[i] >= 8 & dfwideAll$hr[i] <= 15){
+    dfwideAll$ToD[i] = "Mid"
+  }
+  if(dfwideAll$hr[i] >= 16 & dfwideAll$hr[i] <= 24){
+    dfwideAll$ToD[i] = "Late"
+  }
+}
+
+
+dfwideAll.Final$date2 <- lubridate::date(dfwideAll.Final$dts2)
+dfwideAll.Final$year2 <- lubridate::year(dfwideAll.Final$dts2)
+dfwideAll.Final$DoY <- lubridate::yday(dfwideAll.Final$dts2)
+dfwideAll.Final$hr <- lubridate::hour(dfwideAll.Final$dts2)
+dfwideAll.Final$minute <- lubridate::minute(dfwideAll.Final$dts2)
+dfwideAll.Final$HM <- dfwideAll.Final$hr + dfwideAll.Final$minute/60
+dflong.D.r <- dfwideAll.Final[which(dfwideAll.Final$project== "Decker"),c("dts2","project","Restoration","Depth_R","date2","year2")]
+dflong.D.a <- dfwideAll.Final[which(dfwideAll.Final$project== "Decker"),c("dts2","project","Adjacent","Depth_A","date2","year2")]
+dflong.D.r$sitetype <- "Restoration"
+dflong.D.a$sitetype <- "Adj. Waterbody"
+colnames(dflong.D.r)[c(3,4)] <-c("TempC","Depth")
+colnames(dflong.D.a)[c(3,4)] <-c("TempC","Depth")
+dflong.D <- rbind(dflong.D.r,dflong.D.a)
+
+dflong.F.r <- dfwideAll.Final[which(dfwideAll.Final$project== "Flyway"),c("dts2","project","Restoration","Depth_R","date2","year2")]
+dflong.F.a <- dfwideAll.Final[which(dfwideAll.Final$project== "Flyway"),c("dts2","project","Adjacent","Depth_A","date2","year2")]
+dflong.F.r$sitetype <- "Restoration"
+dflong.F.a$sitetype <- "Adj. Waterbody"
+colnames(dflong.F.r)[c(3,4)] <-c("TempC","Depth")
+colnames(dflong.F.a)[c(3,4)] <-c("TempC","Depth")
+dflong.F <- rbind(dflong.F.r,dflong.F.a)
+
+dflong <- rbind(dflong.D, dflong.F)
+dflong$project2 <- factor(dflong$project, levels = c("Decker","Flyway"))
+dflong$sitetype2 <- factor(dflong$sitetype, levels = c("Restoration","Adj. Waterbody"))
+dflong$hr <- lubridate::hour(dflong$dts2)
+dflong$minute <- lubridate::minute(dflong$dts2)
+dflong$HM <- dflong$hr + dflong$minute/60
+dflong$DoY <- lubridate::yday(dflong$dts2)
+dflong$fYR <- factor(dflong$year2, levels = c("2021","2022"))
+
+library(mgcv)
+
+
+dfWide.DECK <- dfwideAll.Final[which(dfwideAll.Final$project == "Decker"),]
+colnames(dfWide.DECK)[7] <- "tide_position2"
+
+
+#bD.3 <- bam(Difference ~ te(DoY, Depth_R, resAnom, k = c(14,7,6), bs = c("cc","cc","tp")), data = dfWide.DECK)
+#bD.3 <- bam(Difference ~ te(DoY, HM, Depth_R, k = c(14,7,6), bs = c("cc","cc","cc")), data = dfWide.DECK) # Old, For paper
+bD.3 <- bam(Difference ~ te(DoY, HM, tide_position2, k = c(14,7,6), bs = c("cc","cc","cc")), data = dfWide.DECK)
+vis.gam(bD.3,n.grid=50, theta=35, phi=32, zlab="", too.far=0.1) 
+plot(bD.3)
+gam.check(bD.3)
+acf(residuals.gam(bD.3), ylab="", xlab="", main="")
+dfpred.D <- expand.grid(DoY = seq(1,365,1),
+                        HM = seq(0,23.75,0.25),
+                        tide_position2 = seq(-0.9,0.9,0.3))#Depth_R = seq(0.2,1,0.4)
+dfpred.D$predvalues = predict(bD.3, newdata = dfpred.D)
+dfpred.D$Depth_R <- factor(dfpred.D$tide_position2, levels = c(seq(-0.9,0.9,0.3)), labels = c("Early Flood","Mid Flood","Late Flood","High Slack","Early Ebb","Mid Ebb","Late Ebb"))#factor(dfpred.D$Depth_R, levels = c(0.2,0.6,1))
+dfpred.D$date <- as.Date(NA)
+dfpred.D$date<- as.Date(dfpred.D$DoY, origin = '2020-12-31')
+myPaletteContour <- colorRampPalette(rev(brewer.pal(6, "RdBu")))
+plo_deck <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = predvalues, fill = predvalues)) + 
+  geom_tile() + 
+  geom_contour(binwidth = 1) + 
+  geom_text_contour(rotate = FALSE, binwidth = 1) +
+  scale_y_continuous(breaks = c(seq(0,24,8)))+
+  scale_fill_gradientn(colours = myPaletteContour(11),
+                       name = "Difference in temperature (Restoration - Adj. Waterbody)")  +
+  ylab("Hour")+
+  xlab("Day of Year")+
+  #guides(fill=guide_legend(title="Difference in temperature (Restoration - Adj. Waterbody)")) +
+  facet_grid(.~ Depth_R) +
+  theme_classic2()+
+  theme(legend.position = "top")
+
+
+bD.2b <- bam(TempC ~ te(DoY, HM,Depth, k = c(-1,-1,-1), bs = c("cc","cc","tp")) + s(sitetype2, project2, xt = list(bs = "fs"), bs="re"), data = dflong)
+plot(bD.2b)
+gam.check(bD.2b)
+
+bD.2c <- bam(TempC ~ te(DoY, hr,Depth, k = c(-1,-1,-1), bs = c("cc","cc","tp")) + s(fYR,sitetype2, project2, xt = list(bs = "fs"), bs="re"), data = dflong)
+plot(bD.2c)
+gam.check(bD.2c)
+
+acf(bD.2c$residuals, ylab="", xlab="", main="")
+
+dflong.DECK <- dflong[which(dflong$project == "Decker" & dflong$sitetype == "Restoration"),]
+bD.3 <- bam(TempC ~ te(DoY, HM,Depth, k = c(14,7,6), bs = c("cc","cc","tp")) + s(fYR, bs = "re"), data = dflong.DECK, method = "REML")
+plot(bD.3)
+gam.check(bD.3)
+acf(bD.3$residuals, ylab="", xlab="", main="")
+gam.vcomp(bD.3)
+
+dfpred.D <- expand.grid(HM = seq(0,23.75,0.25),
+                      DoY = seq(1,365,1),
+                      Depth = seq(0,2,1),
+                      sitetype2 = c("Adj. Waterbody"),#"Restoration",
+                      fYR = factor(c(2021,2022),levels = c(2021,2022)))
+dfpred.D$predvalues = predict(bD.3, newdata = dfpred.D)
+dfpred.D$date <- as.Date(NA)
+dfpred.D$date[which(dfpred.D$fYR == "2021")] <- as.Date(dfpred.D$DoY[which(dfpred.D$fYR == "2021")], origin = '2020-12-31')
+dfpred.D$date[which(dfpred.D$fYR == "2022")] <- as.Date(dfpred.D$DoY[which(dfpred.D$fYR == "2022")], origin = '2021-12-31')
+dfpred.D$decDay <- dfpred.D$HM/24
+dfpred.D$time <- convertTime(dfpred.D$decDay)
+dfpred.D$dts <- paste(dfpred.D$date,dfpred.D$time, sep = " ")
+dfpred.D$dts2 <- as.POSIXct(strptime(dfpred.D$dts, format = "%Y-%m-%d %H:%M:%S"))
+
+
+myPaletteContour <- colorRampPalette(rev(brewer.pal(6, "RdBu")))
+plo_deck <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = predvalues, fill = predvalues)) + 
+  geom_tile() + 
+  geom_contour(binwidth = 1) + 
+  geom_text_contour(rotate = FALSE, binwidth = 0.5) +
+  scale_y_continuous(breaks = c(seq(0,24,8)))+
+  scale_fill_gradientn(colours = myPaletteContour(11)) +
+  ylab("Hour")+
+  xlab("Day of Year")+
+  #guides(fill=guide_legend(title="Difference in temperature (Restoration - Adj. Waterbody)")) +
+  facet_grid(.~ Depth_R) +
+  theme_classic2()
+
+plo_deck2 <- ggplot(dfpred.D, aes(x = dts2, y = predvalues)) + geom_point() + facet_grid(sitetype2 ~ .) +
+  geom_point(data = dflong.DECK, aes(x = dts2, y = TempC), color = "green")
+
+dflong.FLYW <- dflong[which(dflong$project == "Flyway"),]
+bF.3 <- bam(TempC ~ te(DoY, HM,Depth, k = c(14,7,6), bs = c("cc","cc","tp")) + s(sitetype2, by = fYR, bs="re"), data = dflong.FLYW, method = "REML")
+plot(bF.3)
+gam.check(bF.3)
+acf(bF.3$residuals, ylab="", xlab="", main="")
+gam.vcomp(bF.3)
+
+
+dfpred.F <- expand.grid(HM = seq(0,23.75,0.25),
+                      DoY = seq(1,365,1),
+                      Depth = seq(0,2,1),
+                      sitetype2 = c("Restoration","Adj. Waterbody"),
+                      fYR = factor(c(2021,2022),levels = c(2021,2022)))
+dfpred.F$predvalues = predict(bF.3, newdata = dfpred.F)
+
+myPaletteContour <- colorRampPalette(rev(brewer.pal(6, "RdBu")))
+plo_flyw <- ggplot(dfpred.F, aes(x = DoY, y = HM, z = predvalues, fill = predvalues)) + 
+  geom_tile() + 
+  geom_contour(binwidth = 1) + 
+  geom_text_contour(rotate = FALSE, binwidth = 0.5) +
+  scale_fill_gradientn(colours = myPaletteContour(11)) +
+  ylab("Yolo Flyway Farms\nHour")+
+  #guides(fill=guide_legend(title="Difference in temperature (Restoration - Adj. Waterbody)")) +
+  facet_grid(sitetype2~ Depth) +
+  theme_classic2()
+
+library(forecast)
+ggAcf(dflong.D$TempC)
+fit <- auto.arima(dflong.D[,"TempC"], xreg = dflong.D[,"Depth"])
+summary(fit)
+checkresiduals(fit)
+cbind("Regression Errors" = residuals(fit, type="regression"),
+      "ARIMA errors" = residuals(fit, type="innovation")) %>%
+  autoplot(facets=TRUE)
+
+dfwideAll.Final$project2 <- factor(dfwideAll.Final$project, levels = c("Decker","Flyway"))
+dfwideAll.Final$sitetype2 <- factor(dfwideAll.Final$sitetype, levels = c("Restoration","Adj. Waterbody"))
+dfwideAll.Final$hr <- lubridate::hour(dfwideAll.Final$dts2)
+dfwideAll.Final$minute <- lubridate::minute(dfwideAll.Final$dts2)
+dfwideAll.Final$HM <- dfwideAll.Final$hr + dfwideAll.Final$minute/60
+dfwideAll.Final$DoY <- lubridate::yday(dfwideAll.Final$dts2)
+dfwideAll.Final$fYR <- factor(dfwideAll.Final$year2, levels = c("2021","2022"))
+
+dfwideAll.Final.D <- dfwideAll.Final[which(dfwideAll.Final$project == "Decker"),]
+bD.3 <- bam(Difference ~ te(DoY, HM, Depth_R, k = c(14,7,6), bs = c("cc","cc","tp")) + s(fYR, bs = "re"), data = dfwideAll.Final.D)
+#bD.3.1 <- bam(Difference ~ te(DoY, hr, resAnom.1, k = c(14,7,6), bs = c("cc","cc","tp")), data = dfwideDECK.4)
+plot(bD.3)
+gam.check(bD.3)
+summary(bD.3)
+#anova(bD.3,bD.3.1)
+range(dfwideAll.Final.D$Depth_R)
+
+dfpred.D <- expand.grid(HM = seq(0,23.75,0.25),
+                      DoY = seq(1,365,1),
+                      Depth_R = seq(0,1,0.5),
+                      fYR = factor(c(2021,2022),levels = c(2021,2022)))
+dfpred.D$predvalues = predict(bD.3, newdata = dfpred.D)
+range(dfpred.D$predvalues)
+
+myPaletteContour <- colorRampPalette(rev(brewer.pal(6, "RdBu")))
+plo_deck <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = predvalues, fill = predvalues)) + 
+  geom_tile() + 
+  geom_contour(binwidth = 1) + 
+  geom_text_contour(rotate = FALSE, binwidth = 1) +
+  scale_fill_gradientn(colours = myPaletteContour(5)) +
+  ylab("Decker Island\nHour") +
+  xlab("Day of Year") +
+  #guides(fill=guide_legend(title="Difference in temperature (Restoration - Adj. Waterbody)")) +
+  facet_grid(.~Depth_R) +
+  theme_classic2()+
+  theme(strip.text = element_blank()) 
+
+
+bF.1 <- bam(Difference ~ s(DoY, k =5, bs = "cc"), data = dfwideAll[which(dfwideAll$project == "Flyway" & dfwideAll$ToD == "Early"),])
+plot(bF.1)
+
+dfwideFLYW.4 <- dfwideAll[which(dfwideAll$project == "Flyway"),]
+bF.2 <- bam(Restoration ~ te(DoY, hr, k = c(5,5), bs = c("cc","cc")), data = dfwideFLYW.4)
+plot(bF.2)
+gam.check(bF.2)
+dfwideFLYW.4$resAnom <- residuals(bF.2, type = "response")
+
+dfwideAll.Final.F <- dfwideAll.Final[which(dfwideAll.Final$project == "Flyway"),]
+bF.3 <- bam(Difference ~ te(DoY, HM, Depth_R, k = c(14,7,6), bs = c("cc","cc","tp")) + s(fYR, bs = "re"), data = dfwideAll.Final.F)
+#bD.3.1 <- bam(Difference ~ te(DoY, hr, resAnom.1, k = c(14,7,6), bs = c("cc","cc","tp")), data = dfwideDECK.4)
+plot(bF.3)
+gam.check(bF.3)
+summary(bF.3)
+#anova(bD.3,bD.3.1)
+range(dfwideAll.Final.F$Depth_R)
+
+dfpred.F <- expand.grid(HM = seq(0,23.75,0.25),
+                      DoY = seq(1,365,1),
+                      Depth_R = seq(0.3,0.9,0.3),
+                      fYR = factor(c(2021,2022),levels = c(2021,2022)))
+dfpred.F$predvalues = predict(bF.3, newdata = dfpred.F)
+range(dfpred.F$predvalues)
+
+
+plo_flyw <- ggplot(dfpred.F, aes(x = DoY, y = HM, z = predvalues, fill = predvalues)) + 
+  geom_tile() + 
+  geom_contour(binwidth = 1) + 
+  geom_text_contour(rotate = FALSE, binwidth = 0.5) +
+  scale_fill_gradientn(colours = myPaletteContour(11)) +
+  ylab("Yolo Flyway Farms\nHour")+
+  #guides(fill=guide_legend(title="Difference in temperature (Restoration - Adj. Waterbody)")) +
+  facet_grid(.~ Depth_R) +
+  theme_classic2()
+
+
+ggarrange(plo_flyw + rremove("xlab"), plo_deck, 
+          ncol = 1, nrow = 2,
+          common.legend = TRUE, legend = "top",
+          align = "hv")
+
+
+library(plyr)
+dfwideAll.Final$date2 <- lubridate::date(dfwideAll.Final$dts2)
+dfwideAll.Final$year2 <- lubridate::year(dfwideAll.Final$dts2)
+dflong.D.r <- dfwideAll.Final[which(dfwideAll.Final$project== "Decker"),c("dts2","project","Restoration","Depth_R","date2","year2")]
+dflong.D.a <- dfwideAll.Final[which(dfwideAll.Final$project== "Decker"),c("dts2","project","Adjacent","Depth_A","date2","year2")]
+dflong.D.r$sitetype <- "Restoration"
+dflong.D.a$sitetype <- "Adj. Waterbody"
+colnames(dflong.D.r)[c(3,4)] <-c("TempC","Depth")
+colnames(dflong.D.a)[c(3,4)] <-c("TempC","Depth")
+dflong.D <- rbind(dflong.D.r,dflong.D.a)
+
+dflong.F.r <- dfwideAll.Final[which(dfwideAll.Final$project== "Flyway"),c("dts2","project","Restoration","Depth_R","date2","year2")]
+dflong.F.a <- dfwideAll.Final[which(dfwideAll.Final$project== "Flyway"),c("dts2","project","Adjacent","Depth_A","date2","year2")]
+dflong.F.r$sitetype <- "Restoration"
+dflong.F.a$sitetype <- "Adj. Waterbody"
+colnames(dflong.F.r)[c(3,4)] <-c("TempC","Depth")
+colnames(dflong.F.a)[c(3,4)] <-c("TempC","Depth")
+dflong.F <- rbind(dflong.F.r,dflong.F.a)
+
+dflong <- rbind(dflong.D, dflong.F)
+
+test <- dflongTD[which(duplicated(dflongTD)==TRUE),]
+
+summThresh.Diff <- ddply(dfwideAll[which(dfwideAll$year2 >2020),], c("project","date2"), summarise,
+                         nTemp_R = length(Restoration),
+                         nTemp_A = length(Adjacent),
+                         oTemp_R = length(which(Restoration < 20)),
+                         oTemp_A = length(which(Adjacent < 20)),
+                         p_oTemp_R = oTemp_R/nTemp_R,
+                         p_oTemp_A = oTemp_A/nTemp_A,
+                         p_TimeDiff = p_oTemp_R - p_oTemp_A
+                         )
+
+
+summThresh <- ddply(dflong[which(dflong$year2 > 2020),], c("project","sitetype","date2"), summarise,
+                    nTemp = length(TempC),
+                    oTemp = length(which(TempC <20)),
+                    #sTemp = length(threshTemp[which(threshTemp == "Suboptimal")]),
+                    #mean20 = mean(TempC.20, na.rm = TRUE),
+                    meanTemp = mean(TempC, na.rm = TRUE))
+#summThresh$sitetype <- NA
+#summThresh$sitetype[which(summThresh$Site %in% c("Decker Breach","Decker Pool","Yolo Flyway Farm"))] <- "Restoration"
+#summThresh$sitetype[which(summThresh$Site %in% c("M13_USGS","SDI_USGS","TOED_USGS"))] <- "Adj. Waterbody"
+
+#summThresh$nTempCheck <- ifelse(sum(summThresh$oTemp,summThresh$sTemp) == summThresh$nTemp, TRUE, FALSE)
+summThresh$p_oTemp <- summThresh$oTemp/summThresh$nTemp
+summThresh$project2 <- factor(summThresh$project, levels = c("Flyway","Decker"))
+summThresh$sitetype2 <- factor(summThresh$sitetype, levels = c("Adj. Waterbody","Restoration"))
+
+sum(summThresh$nTemp[which(summThresh$Site == "Yolo Flyway Farm")])
+sum(summThresh$nTemp[which(summThresh$Site == "TOED_USGS")])
+sum(summThresh$nTemp[which(summThresh$project == "Decker")])
+sum(summThresh$nTemp[which(summThresh$project == "Decker" & summThresh$sitetype == "Restoration")])
+sum(summThresh$nTemp[which(summThresh$project== "Decker" & summThresh$sitetype == "Adj. Waterbody")])
+
+myPalette <- colorRampPalette(rev(brewer.pal(8, "Dark2")))
+# use this bit to grab the legend from one plot, must turn off legend(theme) after using
+get_legend<-function(myggplot){
+  tmp <- ggplot_gtable(ggplot_build(myggplot))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend <- tmp$grobs[[leg]]
+  return(legend)
+}
+
+heatDECK <- ggplot(summThresh[which(summThresh$project == "Decker"),], aes(x = date2, y = sitetype2, fill = p_oTemp)) + 
+  geom_tile() +
+  scale_fill_gradientn(colours = myPalette(5)) +
+  xlab("Date") +
+  guides(fill=guide_legend(title="Proportion of time\ntemperature was\n<20\u00b0C", reverse = TRUE)) +
+  theme_classic2() + 
+  theme(axis.title = element_blank(),
+        axis.text.y = element_blank()) 
+
+legendT <- get_legend(heatDECK)
+heatDECK <- heatDECK + theme(legend.position = "none")
+heatFLYW <- ggplot(summThresh[which(summThresh$project == "Flyway"),], aes(x = date2, y = sitetype2, fill = p_oTemp)) + 
+  geom_tile() +
+  scale_fill_gradientn(colours = myPalette(5)) +
+  guides(fill=guide_legend(title="Proportion of time\ntemperature was\n<20\u00b0C", reverse = TRUE)) +
+  theme_classic2() + 
+  theme(axis.title = element_blank(),
+        axis.text.y = element_text(angle =90, hjust = 0.5),
+        legend.position = "none")
+
+ggarrange(heatFLYW, heatDECK,
+          ncol = 2, nrow = 1,
+          common.legend = TRUE, legend = "right",
+          align = "hv"
+          )
+
+myPaletteDiff <- colorRampPalette(rev(brewer.pal(11, "RdYlBu")))
+range(summThresh.Diff$p_TimeDiff[which(summThresh.Diff$project == "Decker")])
+range(summThresh.Diff$p_TimeDiff[which(summThresh.Diff$project == "Flyway")])
+
+summThresh.Diff$Difference <- "Difference"
+heatDECK.diff <- ggplot(summThresh.Diff[which(summThresh.Diff$project == "Decker"),], aes(x = date2, y = project, fill = p_TimeDiff)) + 
+  geom_tile() +
+  scale_fill_gradientn(colours = myPaletteDiff(11),limits=c(range(summThresh.Diff$p_TimeDiff[which(summThresh.Diff$project == "Decker")]))) +
+  xlab("Date") +
+  guides(fill=guide_legend(title="Proportion of time\nRestoration is\nmore suitable", reverse = TRUE)) +
+  theme_classic2() + 
+  theme(axis.title = element_blank(),
+        axis.text.y = element_blank()) 
+legendT.Diff <- get_legend(heatDECK.diff)
+heatDECK.diff <- heatDECK.diff + theme(legend.position = "none")
+heatFLYW.diff <- ggplot(summThresh.Diff[which(summThresh.Diff$project == "Flyway"),], aes(x = date2, y = Difference, fill = p_TimeDiff)) + 
+  geom_tile() +
+  scale_fill_gradientn(colours = myPaletteDiff(11),limits=c(range(summThresh.Diff$p_TimeDiff[which(summThresh.Diff$project == "Decker")]))) +
+  xlab("Date") +
+  guides(fill=guide_legend(title="Proportion of time\nRestoration is\nmore suitable", reverse = TRUE)) +
+  theme_classic2() + 
+  theme(axis.title = element_blank(),
+        axis.text.y = element_text(angle =90, hjust = 0.5), 
+        legend.position = "none") 
+
+ggarrange(heatFLYW.diff, heatDECK.diff,
+          ncol = 2, nrow = 1,
+          common.legend = TRUE, legend = "right",
+          align = "hv"
+          )
+
+ggarrange(heatFLYW, heatDECK, legendT,
+          heatFLYW.diff, heatDECK.diff, legendT.Diff,
+          ncol = 3, nrow = 2,
+          align = "h",
+          widths = c(2,2,0.8))
+################################################################################
+```
 
 
 For Temperature (quarter-hourly)
@@ -1234,6 +2698,7 @@ load("AllLTM4AnalysisQC_DepthQH_221230.RData")
 '%ni%' <- Negate('%in%')
 
 depth_final$depth <- depth_final$Temp
+#############dfDeck$slope1 <- dfDeck$Depthm - data.table::shift(dfDeck$Depthm, fill = data.table::first(dfDeck$Depthm)) #this is for slope of depth 
 dfcombined.2 <- merge(temp_final, depth_final[,c("Station","Datetime","depth")], by = c("Station","Datetime"))
 rm(temp_final, depth_final)
 colnames(dfcombined.2) <- c("Site","dts","Date","TempC","Minute","depth")
@@ -1371,17 +2836,91 @@ plot(bD.2, resid = T, pch = 16)
 gam.vcomp(bD.2)
 
 dfWide.DECK <- dfwideAll.Final[which(dfwideAll.Final$project == "Decker"),]
-bD.3 <- bam(Difference ~ te(DoY, Depth_R, resAnom, k = c(14,7,6), bs = c("cc","cc","tp")), data = dfWide.DECK)
-bD.3 <- bam(Difference ~ te(DoY, HM, Depth_R, k = c(14,7,6), bs = c("cc","cc","cc")), data = dfWide.DECK)
-vis.gam(bD.3,n.grid=50, theta=35, phi=32, zlab="", too.far=0.1)
+### Get subsets of data with continuous 15-minute readings
+rownames(dfWide.DECK) <- NULL
+dfWide.DECK$deltaTime <- as.numeric(dfWide.DECK$dts2 - data.table::shift(dfWide.DECK$dts2, fill = data.table::first(dfWide.DECK$dts2)))/60
+dfWide.DECK$deltaTime[1] <- 15
+dfWide.DECK$is15 <- ifelse(dfWide.DECK$deltaTime == 15, "Y","N")
+length(dfWide.DECK$is15[which(dfWide.DECK$is15 == "N")])
+
+List_Split <- split(dfWide.DECK, cumsum(c(TRUE, diff(dfWide.DECK$deltaTime > 15) != 0)))
+library(VulnToolkit)
+List_Tides <- list()
+for(i in 1:length(List_Split)){
+  workingDF <- List_Split[i][[1]]
+  if(nrow(workingDF) > 20){
+    dd <- try(HL(workingDF$Depth_R,workingDF$dts2))
+    if(is.data.frame(dd)==TRUE){
+      List_Tides[[i]] <- dd
+    }
+  } else{
+    List_Tides[[i]] <- data.frame()
+  }
+  workingDF <- NULL
+  dd <- NULL
+}
+df_Tides <- do.call(rbind.data.frame, List_Tides)
+colnames(df_Tides)[2] <- "dts2"
+
+dts2 <- seq(lubridate::ymd_hms(dfWide.DECK$dts2[2],tz = "America/Los_Angeles"),lubridate::ymd_hms(dfWide.DECK$dts2[length(dfWide.DECK$dts2)],tz = "America/Los_Angeles"), by = '15 mins')
+df_Tides.Long <- data.frame(dts2)
+df_Tides.Long.2 <- merge(df_Tides.Long, df_Tides[,c("dts2","tide","tide2")], by = c("dts2"), all.x = TRUE)
+df_Tides.Long.3 <- merge(df_Tides.Long.2, dfWide.DECK[,c("dts2","Depth_R")], by = c("dts2"), all.x = TRUE)
+df_Tides.Long.3$tide_position <- ifelse(df_Tides.Long.3$tide == "H",0,NA)
+#df_Tides.Long.3$tide_position[which(df_Tides.Long.3$tide == "L")] <- 1
+df_Tides.Long.3$tide_position[which(df_Tides.Long.3$tide == "L")] <- 1
+df_Tides.Long.3$isValue <- is.na(df_Tides.Long.3$tide_position)
+library(data.table)
+df_Tides.Long.3$incrementsLength <- rowid(rleid(df_Tides.Long.3$isValue))*df_Tides.Long.3$isValue
+
+
+df_Tides.Long.3$tide_position2 <- df_Tides.Long.3$tide_position
+df_Tides.Long.3$tide[which(is.na(df_Tides.Long.3$tide)==TRUE)] <- "None"
+
+for(i in 1:nrow(df_Tides.Long.3)){
+  if(df_Tides.Long.3$tide[i] == "H"){
+    df_Tides.Long.3$tide_position2[(i- df_Tides.Long.3$incrementsLength[i-1]):(i - 1)] <- 
+      seq(-1,0, length.out = df_Tides.Long.3$incrementsLength[i-1]+2)[2:((df_Tides.Long.3$incrementsLength[i-1])+1)]
+  }
+  if(df_Tides.Long.3$tide[i] == "L"){
+    df_Tides.Long.3$tide_position2[(i- df_Tides.Long.3$incrementsLength[i-1]):(i - 1)] <- 
+      seq(0,1, length.out = df_Tides.Long.3$incrementsLength[i-1]+2)[2:((df_Tides.Long.3$incrementsLength[i-1])+1)]
+  }
+}
+
+#for(i in 1:nrow(df_Tides.Long.3)){
+#  if(df_Tides.Long.3$tide[i] == "H"){
+#    df_Tides.Long.3$tide_position2[(i- df_Tides.Long.3$incrementsLength[i-1]):(i - 1)] <- 
+#      seq(1,0, length.out = df_Tides.Long.3$incrementsLength[i-1]+2)[2:((df_Tides.Long.3$incrementsLength[i-1])+1)]
+#  }
+#  if(df_Tides.Long.3$tide[i] == "L"){
+#    df_Tides.Long.3$tide_position2[(i- df_Tides.Long.3$incrementsLength[i-1]):(i - 1)] <- 
+#      seq(0,1, length.out = df_Tides.Long.3$incrementsLength[i-1]+2)[2:((df_Tides.Long.3$incrementsLength[i-1])+1)]
+#  }
+#}
+
+#df_Tides.Long.3$tide_position[(23- df_Tides.Long.3$incrementsLength[23-1]):(23 - 1)] <- 
+#  seq(1,0, length.out = df_Tides.Long.3$incrementsLength[23-1]+2)[2:((df_Tides.Long.3$incrementsLength[23-1])+1)]
+
+#df_Tides.Long.3$tide_position2[(52- df_Tides.Long.3$incrementsLength[52-1]):(52 - 1)] <- 
+#      seq(0,1, length.out = df_Tides.Long.3$incrementsLength[52-1]+2)[2:((df_Tides.Long.3$incrementsLength[52-1])+1)]
+
+dfWide.DECK.2 <- merge(dfWide.DECK, df_Tides.Long.3[,c("dts2","tide","tide2","tide_position2")], by = c("dts2"), all.x = TRUE)
+dfWide.DECK.2$tide_position2[1] <- -1 # 1 for earlier version
+dfWide.DECK.2$tide_position2[48975:48981] <- seq(-0.95,-0.75, length.out = 7)
+
+#bD.3 <- bam(Difference ~ te(DoY, Depth_R, resAnom, k = c(14,7,6), bs = c("cc","cc","tp")), data = dfWide.DECK)
+#bD.3 <- bam(Difference ~ te(DoY, HM, Depth_R, k = c(14,7,6), bs = c("cc","cc","cc")), data = dfWide.DECK) # Old, For paper
+bD.3 <- bam(Difference ~ te(DoY, HM, tide_position2, k = c(14,7,6), bs = c("cc","cc","cc")), data = dfWide.DECK.2)
+vis.gam(bD.3,n.grid=50, theta=35, phi=32, zlab="", too.far=0.1) 
 plot(bD.3)
 gam.check(bD.3)
 acf(residuals.gam(bD.3), ylab="", xlab="", main="")
 dfpred.D <- expand.grid(DoY = seq(1,365,1),
                         HM = seq(0,23.75,0.25),
-                        Depth_R = seq(0.2,1,0.4))
+                        tide_position2 = seq(-0.9,0.9,0.3))#Depth_R = seq(0.2,1,0.4)
 dfpred.D$predvalues = predict(bD.3, newdata = dfpred.D)
-dfpred.D$Depth_R <- factor(dfpred.D$Depth_R, levels = c(0.2,0.6,1))
+dfpred.D$Depth_R <- factor(dfpred.D$tide_position2, levels = c(seq(-0.9,0.9,0.3)), labels = c("Early Flood","Mid Flood","Late Flood","High Slack","Early Ebb","Mid Ebb","Late Ebb"))#factor(dfpred.D$Depth_R, levels = c(0.2,0.6,1))
 dfpred.D$date <- as.Date(NA)
 dfpred.D$date<- as.Date(dfpred.D$DoY, origin = '2020-12-31')
 myPaletteContour <- colorRampPalette(rev(brewer.pal(6, "RdBu")))
@@ -1880,6 +3419,94 @@ gam.check(bD.1)
 
 
 dfWide.DECK <- dfwideAll.Final[which(dfwideAll.Final$project == "Decker"),]
+
+dfWide.DECK <- dfwideAll.Final[which(dfwideAll.Final$project == "Decker"),]
+### Get subsets of data with continuous 15-minute readings
+rownames(dfWide.DECK) <- NULL
+dfWide.DECK$deltaTime <- as.numeric(dfWide.DECK$dts2 - data.table::shift(dfWide.DECK$dts2, fill = data.table::first(dfWide.DECK$dts2)))/60
+dfWide.DECK$deltaTime[1] <- 15
+dfWide.DECK$is15 <- ifelse(dfWide.DECK$deltaTime == 15, "Y","N")
+length(dfWide.DECK$is15[which(dfWide.DECK$is15 == "N")])
+
+List_Split <- split(dfWide.DECK, cumsum(c(TRUE, diff(dfWide.DECK$deltaTime > 15) != 0)))
+library(VulnToolkit)
+List_Tides <- list()
+for(i in 1:length(List_Split)){
+  workingDF <- List_Split[i][[1]]
+  if(nrow(workingDF) > 20){
+    dd <- try(HL(workingDF$Depth_R,workingDF$dts2))
+    if(is.data.frame(dd)==TRUE){
+      List_Tides[[i]] <- dd
+    }
+  } else{
+    List_Tides[[i]] <- data.frame()
+  }
+  workingDF <- NULL
+  dd <- NULL
+}
+df_Tides <- do.call(rbind.data.frame, List_Tides)
+colnames(df_Tides)[2] <- "dts2"
+
+dts2 <- seq(lubridate::ymd_hms(dfWide.DECK$dts2[2],tz = "America/Los_Angeles"),lubridate::ymd_hms(dfWide.DECK$dts2[length(dfWide.DECK$dts2)],tz = "America/Los_Angeles"), by = '15 mins')
+df_Tides.Long <- data.frame(dts2)
+df_Tides.Long.2 <- merge(df_Tides.Long, df_Tides[,c("dts2","tide","tide2")], by = c("dts2"), all.x = TRUE)
+df_Tides.Long.3 <- merge(df_Tides.Long.2, dfWide.DECK[,c("dts2","Depth_R")], by = c("dts2"), all.x = TRUE)
+df_Tides.Long.3$tide_position <- ifelse(df_Tides.Long.3$tide == "H",0,NA)
+#df_Tides.Long.3$tide_position[which(df_Tides.Long.3$tide == "L")] <- 1
+df_Tides.Long.3$tide_position[which(df_Tides.Long.3$tide == "L")] <- 1
+df_Tides.Long.3$isValue <- is.na(df_Tides.Long.3$tide_position)
+library(data.table)
+df_Tides.Long.3$incrementsLength <- rowid(rleid(df_Tides.Long.3$isValue))*df_Tides.Long.3$isValue
+
+
+df_Tides.Long.3$tide_position2 <- df_Tides.Long.3$tide_position
+df_Tides.Long.3$tide[which(is.na(df_Tides.Long.3$tide)==TRUE)] <- "None"
+
+for(i in 1:nrow(df_Tides.Long.3)){
+  if(df_Tides.Long.3$tide[i] == "H"){
+    df_Tides.Long.3$tide_position2[(i- df_Tides.Long.3$incrementsLength[i-1]):(i - 1)] <- 
+      seq(-1,0, length.out = df_Tides.Long.3$incrementsLength[i-1]+2)[2:((df_Tides.Long.3$incrementsLength[i-1])+1)]
+  }
+  if(df_Tides.Long.3$tide[i] == "L"){
+    df_Tides.Long.3$tide_position2[(i- df_Tides.Long.3$incrementsLength[i-1]):(i - 1)] <- 
+      seq(0,1, length.out = df_Tides.Long.3$incrementsLength[i-1]+2)[2:((df_Tides.Long.3$incrementsLength[i-1])+1)]
+  }
+}
+dfWide.DECK.2 <- merge(dfWide.DECK, df_Tides.Long.3[,c("dts2","tide","tide2","tide_position2")], by = c("dts2"), all.x = TRUE)
+dfWide.DECK.2$tide_position2[1] <- -1 # 1 for earlier version
+dfWide.DECK.2$tide_position2[47142:47148] <- seq(-0.95,-0.75, length.out = 7)
+
+#bD.3 <- bam(Difference ~ te(DoY, Depth_R, resAnom, k = c(14,7,6), bs = c("cc","cc","tp")), data = dfWide.DECK)
+#bD.3 <- bam(Difference ~ te(DoY, HM, Depth_R, k = c(14,7,6), bs = c("cc","cc","cc")), data = dfWide.DECK) # Old, For paper
+bD.3 <- bam(Difference_DO ~ te(DoY, HM, tide_position2, k = c(14,7,6), bs = c("cc","cc","cc")), data = dfWide.DECK.2)
+vis.gam(bD.3,n.grid=50, theta=35, phi=32, zlab="", too.far=0.1) 
+plot(bD.3)
+gam.check(bD.3)
+acf(residuals.gam(bD.3), ylab="", xlab="", main="")
+dfpred.D <- expand.grid(DoY = seq(1,365,1),
+                        HM = seq(0,23.75,0.25),
+                        tide_position2 = seq(-0.9,0.9,0.3))#Depth_R = seq(0.2,1,0.4)
+dfpred.D$predvalues = predict(bD.3, newdata = dfpred.D)
+dfpred.D$Depth_R <- factor(dfpred.D$tide_position2, levels = c(seq(-0.9,0.9,0.3)), labels = c("Early Flood","Mid Flood","Late Flood","High Slack","Early Ebb","Mid Ebb","Late Ebb"))#factor(dfpred.D$Depth_R, levels = c(0.2,0.6,1))
+dfpred.D$date <- as.Date(NA)
+dfpred.D$date<- as.Date(dfpred.D$DoY, origin = '2020-12-31')
+myPaletteContour <- colorRampPalette(rev(brewer.pal(6, "RdBu")))
+plo_deck <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = predvalues, fill = predvalues)) + 
+  geom_tile() + 
+  geom_contour(binwidth = 5) + 
+  geom_text_contour(rotate = FALSE, binwidth = 5) +
+  scale_y_continuous(breaks = c(seq(0,24,8)))+
+  scale_fill_gradientn(colours = myPaletteContour(11),
+                       name = "Difference in Turbidity (Restoration - Adj. Waterbody)")  +
+  ylab("Hour")+
+  xlab("Day of Year")+
+  #guides(fill=guide_legend(title="Difference in temperature (Restoration - Adj. Waterbody)")) +
+  facet_grid(.~ Depth_R) +
+  theme_classic2()+
+  theme(legend.position = "top")
+
+
+
 bD.3 <- bam(Difference_DO ~ te(DoY, HM, Depth_R, k = c(14,7,6), bs = c("cc","cc","tp")), data = dfWide.DECK)
 vis.gam(bD.3,n.grid=50, theta=35, phi=32, zlab="", too.far=0.1)
 plot(bD.3)
@@ -1898,7 +3525,7 @@ plo_deck <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = predvalues, fill = predval
   geom_text_contour(rotate = FALSE, binwidth = 1) +
   scale_y_continuous(breaks = c(seq(0,24,8)))+
   scale_fill_gradientn(colours = myPaletteContour(11),
-                       name = "Difference in Dissolved Oxygen (Restoration - Adj. Waterbody)")  +
+                       name = "Difference in Turbidity (Restoration - Adj. Waterbody)")  +
   ylab("Hour")+
   xlab("Day of Year")+
   #guides(fill=guide_legend(title="Difference in temperature (Restoration - Adj. Waterbody)")) +
@@ -2402,6 +4029,94 @@ library(mgcv)
 bD.1 <- bam(DO ~ s(Depth, k =10, bs = "cc") + s(sitetype2, project2, xt = list(bs = "fs"), bs="re"), data = dflong)
 plot(bD.1)
 gam.check(bD.1)
+
+
+
+dfWide.DECK <- dfwideAll.Final[which(dfwideAll.Final$project == "Decker"),]
+### Get subsets of data with continuous 15-minute readings
+rownames(dfWide.DECK) <- NULL
+dfWide.DECK$deltaTime <- as.numeric(dfWide.DECK$dts2 - data.table::shift(dfWide.DECK$dts2, fill = data.table::first(dfWide.DECK$dts2)))/60
+dfWide.DECK$deltaTime[1] <- 15
+dfWide.DECK$is15 <- ifelse(dfWide.DECK$deltaTime == 15, "Y","N")
+length(dfWide.DECK$is15[which(dfWide.DECK$is15 == "N")])
+
+List_Split <- split(dfWide.DECK, cumsum(c(TRUE, diff(dfWide.DECK$deltaTime > 15) != 0)))
+library(VulnToolkit)
+List_Tides <- list()
+for(i in 1:length(List_Split)){
+  workingDF <- List_Split[i][[1]]
+  if(nrow(workingDF) > 20){
+    dd <- try(HL(workingDF$Depth_R,workingDF$dts2))
+    if(is.data.frame(dd)==TRUE){
+      List_Tides[[i]] <- dd
+    }
+  } else{
+    List_Tides[[i]] <- data.frame()
+  }
+  workingDF <- NULL
+  dd <- NULL
+}
+df_Tides <- do.call(rbind.data.frame, List_Tides)
+colnames(df_Tides)[2] <- "dts2"
+
+dts2 <- seq(lubridate::ymd_hms(dfWide.DECK$dts2[2],tz = "America/Los_Angeles"),lubridate::ymd_hms(dfWide.DECK$dts2[length(dfWide.DECK$dts2)],tz = "America/Los_Angeles"), by = '15 mins')
+df_Tides.Long <- data.frame(dts2)
+df_Tides.Long.2 <- merge(df_Tides.Long, df_Tides[,c("dts2","tide","tide2")], by = c("dts2"), all.x = TRUE)
+df_Tides.Long.3 <- merge(df_Tides.Long.2, dfWide.DECK[,c("dts2","Depth_R")], by = c("dts2"), all.x = TRUE)
+df_Tides.Long.3$tide_position <- ifelse(df_Tides.Long.3$tide == "H",0,NA)
+#df_Tides.Long.3$tide_position[which(df_Tides.Long.3$tide == "L")] <- 1
+df_Tides.Long.3$tide_position[which(df_Tides.Long.3$tide == "L")] <- 1
+df_Tides.Long.3$isValue <- is.na(df_Tides.Long.3$tide_position)
+library(data.table)
+df_Tides.Long.3$incrementsLength <- rowid(rleid(df_Tides.Long.3$isValue))*df_Tides.Long.3$isValue
+
+
+df_Tides.Long.3$tide_position2 <- df_Tides.Long.3$tide_position
+df_Tides.Long.3$tide[which(is.na(df_Tides.Long.3$tide)==TRUE)] <- "None"
+
+for(i in 1:nrow(df_Tides.Long.3)){
+  if(df_Tides.Long.3$tide[i] == "H"){
+    df_Tides.Long.3$tide_position2[(i- df_Tides.Long.3$incrementsLength[i-1]):(i - 1)] <- 
+      seq(-1,0, length.out = df_Tides.Long.3$incrementsLength[i-1]+2)[2:((df_Tides.Long.3$incrementsLength[i-1])+1)]
+  }
+  if(df_Tides.Long.3$tide[i] == "L"){
+    df_Tides.Long.3$tide_position2[(i- df_Tides.Long.3$incrementsLength[i-1]):(i - 1)] <- 
+      seq(0,1, length.out = df_Tides.Long.3$incrementsLength[i-1]+2)[2:((df_Tides.Long.3$incrementsLength[i-1])+1)]
+  }
+}
+dfWide.DECK.2 <- merge(dfWide.DECK, df_Tides.Long.3[,c("dts2","tide","tide2","tide_position2")], by = c("dts2"), all.x = TRUE)
+dfWide.DECK.2$tide_position2[1] <- -1 # 1 for earlier version
+dfWide.DECK.2$tide_position2[45164:45170] <- seq(-0.95,-0.75, length.out = 7)
+
+#bD.3 <- bam(Difference ~ te(DoY, Depth_R, resAnom, k = c(14,7,6), bs = c("cc","cc","tp")), data = dfWide.DECK)
+#bD.3 <- bam(Difference ~ te(DoY, HM, Depth_R, k = c(14,7,6), bs = c("cc","cc","cc")), data = dfWide.DECK) # Old, For paper
+bD.3 <- bam(Difference_Turb ~ te(DoY, HM, tide_position2, k = c(14,7,6), bs = c("cc","cc","cc")), data = dfWide.DECK.2)
+vis.gam(bD.3,n.grid=50, theta=35, phi=32, zlab="", too.far=0.1) 
+plot(bD.3)
+gam.check(bD.3)
+acf(residuals.gam(bD.3), ylab="", xlab="", main="")
+dfpred.D <- expand.grid(DoY = seq(1,365,1),
+                        HM = seq(0,23.75,0.25),
+                        tide_position2 = seq(-0.9,0.9,0.3))#Depth_R = seq(0.2,1,0.4)
+dfpred.D$predvalues = predict(bD.3, newdata = dfpred.D)
+dfpred.D$Depth_R <- factor(dfpred.D$tide_position2, levels = c(seq(-0.9,0.9,0.3)), labels = c("Early Flood","Mid Flood","Late Flood","High Slack","Early Ebb","Mid Ebb","Late Ebb"))#factor(dfpred.D$Depth_R, levels = c(0.2,0.6,1))
+dfpred.D$date <- as.Date(NA)
+dfpred.D$date<- as.Date(dfpred.D$DoY, origin = '2020-12-31')
+myPaletteContour <- colorRampPalette(rev(brewer.pal(6, "RdBu")))
+plo_deck <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = predvalues, fill = predvalues)) + 
+  geom_tile() + 
+  geom_contour(binwidth = 1) + 
+  geom_text_contour(rotate = FALSE, binwidth = 1) +
+  scale_y_continuous(breaks = c(seq(0,24,8)))+
+  scale_fill_gradientn(colours = myPaletteContour(11),
+                       name = "Difference in Turbidity (Restoration - Adj. Waterbody)")  +
+  ylab("Hour")+
+  xlab("Day of Year")+
+  #guides(fill=guide_legend(title="Difference in temperature (Restoration - Adj. Waterbody)")) +
+  facet_grid(.~ Depth_R) +
+  theme_classic2()+
+  theme(legend.position = "top")
+
 
 
 dfWide.DECK <- dfwideAll.Final[which(dfwideAll.Final$project == "Decker"),]
