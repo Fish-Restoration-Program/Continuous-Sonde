@@ -19,11 +19,107 @@ save(df_VarNames, file = "working/CDFW_VarNamesConversion.RData")
 ```
 
 
-First we are going to import 1 file into 2 pieces. The first piece will include the sonde metadata and the second piece will contain the continuous data.
+First we are going to import each file into 2 pieces. The first piece will include the sonde metadata and the second piece will contain the continuous data.
 ```{r}
 rm(list = ls())
 
-rawmeta <- data.frame(head(read.csv(here::here("raw","DECK","DeckerPool_211130to220127.csv"),skip = 6, fileEncoding = "utf-16")))
+# make a data frame with the file names of the raw datasets
+fname <- data.frame(fname = list.files(here::here("raw","DECK")), dfname = NA)
+# the name of the dataset will be the same as the file name but without the appendage
+fname$dfname <- substr(fname$fname, 0, nchar(fname$fname)-4)
+
+
+list_meta <- list()
+for(i in 1:nrow(fname)){
+  # read in the head of the file and skip the first 6 lines
+  rawmeta <- data.frame(head(read.csv(here::here("raw","DECK",fname$fname[i]),skip = 6, fileEncoding = "utf-16")))
+  # transpose the data
+  meta_1 <- data.frame(data.table::transpose(rawmeta))
+  # remove first 3 rows and re-order the columns
+  meta_2 <- meta_1[-c(1:3),c(2,1,3)]
+  # rename the columns
+  colnames(meta_2) <- c("ExoVariable","ExoValue","ToRemove")
+  # move the site name over to the column with the other variables of interest
+  meta_2$ExoValue[which(meta_2$ExoVariable == "Site Name")] <- meta_2$ToRemove[which(meta_2$ExoVariable == "Site Name")]
+  # keep only the 2 columns of interest
+  meta_3 <- meta_2[,c("ExoVariable","ExoValue")]
+  # make a new variable with the SondeID (stored in the 'Battery V' field)
+  meta_3[nrow(meta_3)+1,] <- c("Sonde",meta_3$ExoValue[which(meta_3$ExoVariable == "Battery V")])
+  # store the metadata data frame as a list object
+  list_meta[[i]] <- meta_3
+  # remove temporary objects from memory
+  rm(rawmeta,meta_1,meta_2,meta_3)
+}
+# rename list objects based on file names in the order they were processed
+names(list_meta) <- fname$dfname
+
+
+
+###
+# Now we will change the names of the columns using the conversion developed previously
+load(here::here("working","CDFW_VarNamesConversion.RData"))
+
+list_rawdata <- list()
+for(i in 1:nrow(fname)){
+  # read in the head of the file and skip the first 6 lines
+  rawdf <- data.frame(read.csv(here::here("raw","DECK",fname$fname[i]),skip = 9, fileEncoding = "utf-16", header = T))
+  # use a for loop to change the column name
+  for(j in 1:length(colnames(rawdf))){
+    for(k in 1:nrow(df_VarNames)){
+      if(colnames(rawdf)[j] == df_VarNames$ExoVariable[k]){
+        colnames(rawdf)[j] = df_VarNames$VarName[k]
+      }
+    }
+  }
+  # store the data frame as a list object
+  list_rawdata[[i]] <- rawdf
+  # remove temporary objects from memory
+  rm(rawdf)
+}
+# rename list objects based on file names in the order they were processed
+names(list_rawdata) <- fname$dfname
+
+
+###
+# Let's trim rows at the beginning and end
+# First, specify the values that obviously suggest that the sensor was in air
+air_spc <- 10
+air_fdom <- -0.0001 # works if fdom is calibrated correctly
+air_depth <- -0.0001 # works if sonde is deployed at a deep enough depth (DECK deployments cut it really close on very low tides)
+
+list_trimdata <- list()
+for(i in 1:nrow(fname)){
+  # make a temporary data frame copy of the raw dataset and add a column named 'trim'
+  To_trim <- cbind.data.frame(list_rawdata[[fname$dfname[i]]],data.frame(trim = NA))
+  # First, look at deployment start/end times
+  # dictate how many rows to look at in the beginning of the file
+  trim_head <- c(1:20)
+  # dictate how many rows to look at in the end of the file
+  trim_tail <- c(nrow(To_trim)-19):nrow(To_trim)
+  # Mark any rows in the upper 20 rows as TRUE if any of the sensor measurements violates the thresholds
+  To_trim$trim[trim_head] <- ifelse(To_trim$fDOMRFU[trim_head] < air_fdom | To_trim$SPC[trim_head] < air_spc | To_trim$Depthm[trim_head] < air_depth,
+                                    T,
+                                    F)
+  # Mark any rows in the final 20 rows as TRUE if any of the sensor measurements violates the thresholds
+  To_trim$trim[trim_tail] <- ifelse(To_trim$fDOMRFU[trim_tail] < air_fdom | To_trim$SPC[trim_tail] < air_spc | To_trim$Depthm[trim_tail] < air_depth,
+                                    T,
+                                    F)
+  # Mark middle rows as FALSE
+  To_trim$trim[which(is.na(To_trim$trim)==T)] <- F
+  # Keep rows marked as FALSE
+  df_trimmed <- To_trim[which(To_trim$trim == F),]
+  # Remove 'trim' column and store the data frame as a list object 
+  list_trimdata[[i]] <- df_trimmed[,-which(names(df_trimmed) %in% c("trim"))]
+  # remove temporary objects from memory
+  rm(To_trim, trim_head, trim_tail, df_trimmed)
+}
+```
+
+OLD (developing code without for loop) - First we are going to import 1 file into 2 pieces. The first piece will include the sonde metadata and the second piece will contain the continuous data.
+```{r}
+rm(list = ls())
+
+rawmeta <- data.frame(head(read.csv(here::here("raw","DECK",fname[1]),skip = 6, fileEncoding = "utf-16")))
 meta_1 <- data.frame(data.table::transpose(rawmeta))
 meta_2 <- meta_1[-c(1:3),c(2,1,3)]
 colnames(meta_2) <- c("ExoVariable","ExoValue","ToRemove")
@@ -45,5 +141,28 @@ for(i in 1:length(colnames(rawdf))){
   }
 }
 
+###
+# Let's trim rows at the beginning and end
+To_trim <- cbind.data.frame(rawdf,data.frame(trim = NA))
+# First, look at deployment start/end times
+
+# Now, look at values that obviously show that the sensor was in air
+air_spc <- 10
+air_fdom <- -0.0001 # works if fdom is calibrated correctly
+air_depth <- -0.0001 # works if sonde is deployed at a deep enough depth (DECK deployments cut it really close on very low tides)
+trim_head <- c(1:20)
+trim_tail <- c(nrow(To_trim)-19):nrow(To_trim)
+
+head(rawdf)
+tail(rawdf)
+
+To_trim$trim[trim_head] <- ifelse(To_trim$fDOMRFU[trim_head] < air_fdom | To_trim$SPC[trim_head] < air_spc | To_trim$Depthm[trim_head] < air_depth,
+                       T,
+                       F)
+To_trim$trim[trim_tail] <- ifelse(To_trim$fDOMRFU[trim_tail] < air_fdom | To_trim$SPC[trim_tail] < air_spc | To_trim$Depthm[trim_tail] < air_depth,
+                       T,
+                       F)
+
+df_trimmed <- To_trim[-which(To_trim$trim == T),]
 ```
 
