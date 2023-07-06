@@ -19,11 +19,10 @@ df_VarNames <- data.frame(ExoVariable = c("Date..MM.DD.YYYY.", "Time..HH.mm.ss."
 save(df_VarNames, file = "working/CDFW_VarNamesConversion.RData")
 ```
 
-
 First we are going to import each file into 2 pieces. The first piece will include the sonde metadata and the second piece will contain the continuous data.
 ```{r}
 rm(list = ls())
-'%ni%' = Negate('%in%')
+'%ni%' = Negate('%in%') # new function that serves as the opposit of %in% operator
 
 path2_FLYW <- here::here("raw","DECK", "Pool")
 path2_DECK_Breach <- here::here("raw","DECK", "Breach")
@@ -66,13 +65,10 @@ for(i in 1:nrow(fname)){
   if(skip_to_next) {next}
 }
 
-# if(length(list_meta) != nrow(fname)){
-#   list_meta[[nrow(fname)]] <- list(NULL)
-#   list_meta[[nrow(fname)]] <- as.null.default()
-# }
 # rename list objects based on file names in the order they were processed
 names(list_meta) <- fname$dfname
 
+# need to run a new for loop to account for data frames that did not get entered due to the errors encountered in previous for loop
 for(i in 1:nrow(fname)){
   if(is.data.frame(list_meta[[i]]) == FALSE){
     rawmeta <- data.frame(head(read.csv(here::here(path2_FLYW,fname$fname[i]),skip = 6)))
@@ -126,9 +122,11 @@ for(i in 1:nrow(fname)){
   error = function(e){ skip_to_next <<- TRUE})
   if(skip_to_next) {next}
 }
+
 # rename list objects based on file names in the order they were processed
 names(list_rawdata) <- fname$dfname
 
+# need to run a new for loop to account for data frames that did not get entered due to the errors encountered in previous for loop
 for(i in 1:nrow(fname)){
   if(is.data.frame(list_rawdata[[i]]) == FALSE){
   # read in the head of the file and skip the first 6 lines
@@ -158,6 +156,7 @@ air_spc <- 10
 air_fdom <- -0.0001 # works if fdom is calibrated correctly
 air_depth <- -0.0001 # works if sonde is deployed at a deep enough depth (DECK deployments cut it really close on very low tides)
 
+# create a list to store the data frames
 list_trimdata <- list()
 for(i in 1:nrow(fname)){
   # make a temporary data frame copy of the raw dataset and add a column named 'trim'
@@ -193,11 +192,15 @@ for(i in 1:nrow(fname)){
 }
 names(list_trimdata) <- fname$dfname
 
+# Make a new column to check how many rows were eliminated during this trimming process
 fname$rowsTrimmed <- NA
 for(i in 1:nrow(fname)){
   fname$rowsTrimmed[[i]] <- nrow(list_rawdata[[i]]) - nrow(list_trimdata[[i]])
 }
 ```
+
+
+
 
 OLD (developing code without for loop) - First we are going to import 1 file into 2 pieces. The first piece will include the sonde metadata and the second piece will contain the continuous data.
 ```{r}
