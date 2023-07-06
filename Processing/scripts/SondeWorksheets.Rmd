@@ -1,0 +1,60 @@
+---
+title: "FRP_ContinuousWQ_Processing"
+author: "DMC"
+date: "6/23/2023"
+output: html_document
+---
+
+The goal of this file is to import worksheets from Survey123 and make RData files to use in the Processing script
+
+First, we'll import the crosswalk files (these were generated using the first version of the CDFW Survey123 e-forms)
+```{r}
+rm(list = ls())
+
+cw_Exch <- data.frame(read.csv(here::here("raw","Survey123", "Exchanges230630_ColumnCrosswalk.csv")))
+
+df_Exch <- data.frame(read.csv(here::here("raw","Survey123", "Exchanges230630_Export230703.csv")))
+colnames(df_Exch) <- cw_Exch$Var_Name
+
+df_Exch$date2 <- as.Date(format(lubridate::mdy_hms(df_Exch$exchange_date), tz = "America/Los_Angeles"))
+
+df_ExchTimes <- df_Exch[,stringr::str_detect(colnames(df_Exch), "_time")]
+df_ExchTimes2 <- cbind(df_ExchTimes, data.frame(date2 = df_Exch$date2))
+df_ExchTimes3 <- df_ExchTimes2[,-13]
+df_ExchTimes3[,] <- NA
+for(i in 1:ncol(df_ExchTimes3)){
+  df_ExchTimes3[,i] = as.POSIXct(strptime(paste(as.character(df_ExchTimes2[,"date2"]),df_ExchTimes[,i],sep = " "), format = "%Y-%m-%d %H:%M"))
+}
+
+for(i in 1:ncol(df_ExchTimes3)){
+  for(j in 1:ncol(df_Exch)){
+    if(colnames(df_ExchTimes3)[i] == colnames(df_Exch)[j]){
+      df_Exch[,j] = df_ExchTimes3[,i]
+    }
+  }
+}
+
+df_DeployTimes <- df_Exch[,c("station","date2","deployed_sonde_id","deployment_start_time","departure_time")]
+df_RecoveryTimes <- df_Exch[,c("station","date2","recovered_sonde_id","recovery_stop_time","arrival_time")]
+
+
+#testTime <- data.frame(origTime = df_Exch$exchange_date, newTime = NA)
+#testTime$newTime <- lubridate::mdy_hms(testTime$origTime)
+#testTime$pacTime <- format(testTime$newTime, tz = "America/Los_Angeles")
+#testTime$pacDate <- as.Date(testTime$pacTime)
+
+save(df_Exch, df_DeployTimes, df_RecoveryTimes, file = here::here("working","CDFW_ExchangeWorksheet.RData"))
+```
+
+
+```{r}
+rm(list = ls())
+cw_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibration230612_ColumnCrosswalk.csv")))
+df_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibration230612_Export230706.csv")))
+colnames(df_Calib) <- cw_Calib$Var_Name
+
+df_Calib$dts_startstop <- format(lubridate::mdy_hms(df_Calib$deployment_startstop_time), tz = "America/Los_Angeles")
+
+save(df_Calib, file = here::here("working","CDFW_CalibrationWorksheet.RData"))
+```
+

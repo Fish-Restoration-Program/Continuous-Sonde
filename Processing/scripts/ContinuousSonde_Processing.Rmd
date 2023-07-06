@@ -9,7 +9,7 @@ The goal of this file is to make all data processing of raw EXO2 exports happen 
 
 
 This chunk makes a dataframe with all the potential column names for CDFW FRP sondes so that we can replace them with simple versions
-```{r}
+```{r column naming}
 df_VarNames <- data.frame(ExoVariable = c("Date..MM.DD.YYYY.", "Time..HH.mm.ss.", "Time..Fract..Sec.", "Site.Name", "Chlorophyll.RFU", "Chlorophyll.ug.L", "Cond.µS.cm", "Depth.m", "fDOM.QSU", "fDOM.RFU", "nLF.Cond.µS.cm", "ODO...sat", "ODO...CB", "ODO.mg.L", "Pressure.psi.a", "Sal.psu", "SpCond.µS.cm", "TAL.PC.RFU", "BGA.PC.ug.L", "TDS.mg.L", "Turbidity.FNU", "TSS.mg.L", "Wiper.Position.volt", "Temp..C", "Vertical.Position.m", "Battery.V", "Cable.Pwr.V"),
                           ExoVariable_v2 = c("Date (MM/DD/YYYY)", "Time (HH:mm:ss)", "Time (Fract. Sec)", "Site Name", "Chlorophyll RFU", "Chlorophyll ug/L", "Cond \xb5S/cm", "Depth m", "fDOM QSU", "fDOM RFU", "nLF Cond \xb5S/cm", "ODO % sat", "ODO % local", "ODO mg/L", "Pressure psi a", "Sal psu", "SpCond \xb5S/cm", "BGA PC RFU", "BGA PC ug/L", "TDS mg/L", "Turbidity FNU", "TSS mg/L", "Wiper Position volt", "Temp \xb0C", "Vertical Position m", "Battery V", "Cable Pwr V"), 
                           VarName = c("Date", "Time", "tFracSec", "Site", "ChlRFU","ChlugL","Cond", "Depthm", "fDOMQSU", "fDOMRFU", "nCond", "DOsat", "DOcb", "DOmgL", "PressurePSI", "SalPSU", "SPC", "PCRFU", "PCugL", "TDSmgL", "Turb", "TSSmgL", "WiperPos", "TempC", "VertPositionm", "Battery", "CablePwr"),
@@ -20,19 +20,27 @@ save(df_VarNames, file = "working/CDFW_VarNamesConversion.RData")
 ```
 
 First we are going to import each file into 2 pieces. The first piece will include the sonde metadata and the second piece will contain the continuous data.
-```{r}
+```{r import datasets}
 rm(list = ls())
 '%ni%' = Negate('%in%') # new function that serves as the opposit of %in% operator
+###
+# Now we will change the names of the columns using the conversion developed previously
+load(here::here("working","CDFW_VarNamesConversion.RData"))
 
-path2_FLYW <- here::here("raw","DECK", "Pool")
+path2_DECK_Pool <- here::here("raw","DECK", "Pool")
 path2_DECK_Breach <- here::here("raw","DECK", "Breach")
 path2_FLYW <- here::here("raw","FLYW")
 
-# make a data frame with the file names of the raw datasets
-fname <- data.frame(fname = list.files(here::here(path2_FLYW)), dfname = NA)
+pathnames <- data.frame(SiteName = c("FLYW","DECK_Pool","DECK_Breach"), 
+                        pathname = c(path2_FLYW, path2_DECK_Pool, path2_DECK_Breach))
+
+list_all_meta <- list()
+list_all_raw <- list()
+for(x in 1:nrow(pathnames)){
+  # make a data frame with the file names of the raw datasets
+fname <- data.frame(fname = list.files(here::here(pathnames$pathname[x])), dfname = NA)
 # the name of the dataset will be the same as the file name but without the appendage
 fname$dfname <- substr(fname$fname, 0, nchar(fname$fname)-4)
-
 
 list_meta <- list()
 for(i in 1:nrow(fname)){
@@ -42,7 +50,7 @@ for(i in 1:nrow(fname)){
   tryCatch({
     list_meta[[i]] <- NA
   # read in the head of the file and skip the first 6 lines
-  rawmeta <- data.frame(head(read.csv(here::here(path2_FLYW,fname$fname[i]),skip = 6, fileEncoding = "utf-16")))
+  rawmeta <- data.frame(head(read.csv(here::here(pathnames$pathname[x],fname$fname[i]),skip = 6, fileEncoding = "utf-16")))
   # transpose the data
   meta_1 <- data.frame(data.table::transpose(rawmeta))
   # remove first 3 rows and re-order the columns
@@ -71,7 +79,7 @@ names(list_meta) <- fname$dfname
 # need to run a new for loop to account for data frames that did not get entered due to the errors encountered in previous for loop
 for(i in 1:nrow(fname)){
   if(is.data.frame(list_meta[[i]]) == FALSE){
-    rawmeta <- data.frame(head(read.csv(here::here(path2_FLYW,fname$fname[i]),skip = 6)))
+    rawmeta <- data.frame(head(read.csv(here::here(pathnames$pathname[x],fname$fname[i]),skip = 6)))
   # transpose the data
   meta_1 <- data.frame(data.table::transpose(rawmeta))
   # remove first 3 rows and re-order the columns
@@ -90,11 +98,8 @@ for(i in 1:nrow(fname)){
   rm(rawmeta,meta_1,meta_2,meta_3)
   }
 }
+list_all_meta[[x]] <- list_meta
 
-
-###
-# Now we will change the names of the columns using the conversion developed previously
-load(here::here("working","CDFW_VarNamesConversion.RData"))
 
 list_rawdata <- list()
 for(i in 1:nrow(fname)){
@@ -104,7 +109,7 @@ for(i in 1:nrow(fname)){
   tryCatch({
     list_rawdata[[i]] <- NA
   # read in the head of the file and skip the first 6 lines
-  rawdf <- data.frame(read.csv(here::here(path2_FLYW,fname$fname[i]),skip = 9, fileEncoding = "utf-16", header = T))
+  rawdf <- data.frame(read.csv(here::here(pathnames$pathname[x],fname$fname[i]),skip = 9, fileEncoding = "utf-16", header = T))
   # use a for loop to change the column name
   for(j in 1:length(colnames(rawdf))){
     for(k in 1:nrow(df_VarNames)){
@@ -130,7 +135,7 @@ names(list_rawdata) <- fname$dfname
 for(i in 1:nrow(fname)){
   if(is.data.frame(list_rawdata[[i]]) == FALSE){
   # read in the head of the file and skip the first 6 lines
-  rawdf <- data.frame(read.csv(here::here(path2_FLYW,fname$fname[i]),skip = 8, header = F))
+  rawdf <- data.frame(read.csv(here::here(pathnames$pathname[x],fname$fname[i]),skip = 8, header = F))
   colnames(rawdf) <- rawdf[1,]
   rawdf <- rawdf[-1,]
   # use a for loop to change the column name
@@ -147,7 +152,29 @@ for(i in 1:nrow(fname)){
   rm(rawdf)
   }
 }
+list_all_raw[[x]] <- list_rawdata
 
+for(i in 1:nrow(fname)){
+  df_temp <- list_all_raw[[x]][[i]]
+  firstObs <- as.POSIXct(strptime(paste(df_temp$Date[1],df_temp$Time[1],sep = " "), format = "%m/%d/%Y %H:%M:%S"))
+  lastObs <- as.POSIXct(strptime(paste(df_temp$Date[nrow(df_temp)],df_temp$Time[nrow(df_temp)],sep = " "), format = "%m/%d/%Y %H:%M:%S"))
+  timing <- data.frame(ExoVariable = c("firstObs","lastObs"), ExoValue = c(firstObs,lastObs))
+  list_all_meta[[x]][[i]] <- rbind.data.frame(list_all_meta[[x]][[i]], data.frame(ExoVariable = c("firstObs","lastObs"), 
+                                                                                  ExoValue = c(as.character(firstObs),as.character(lastObs))))
+  rm(df_temp,firstObs,lastObs,timing)
+}
+}
+names(list_all_meta) <- pathnames$SiteName
+names(list_all_raw) <- pathnames$SiteName
+
+
+
+save(list_all_raw, list_all_meta, file = "working/CDFW_Lists_Raw_Meta.RData")
+```
+
+
+
+```{r}
 ###
 # Let's trim rows at the beginning and end
 # First, specify the values that obviously suggest that the sensor was in air
