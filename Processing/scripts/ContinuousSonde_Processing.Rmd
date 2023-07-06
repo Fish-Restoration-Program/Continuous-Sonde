@@ -1,5 +1,5 @@
 ---
-title: "FRP_2022_SiteReports_Phyto"
+title: "FRP_ContinuousWQ_Processing"
 author: "DMC"
 date: "6/23/2023"
 output: html_document
@@ -10,29 +10,39 @@ The goal of this file is to make all data processing of raw EXO2 exports happen 
 
 This chunk makes a dataframe with all the potential column names for CDFW FRP sondes so that we can replace them with simple versions
 ```{r}
-df_VarNames <- data.frame(ExoVariable = c("Date..MM.DD.YYYY.", "Time..HH.mm.ss.", "Time..Fract..Sec.", "Site.Name", "Chlorophyll.RFU", "Cond.µS.cm", "Depth.m", "fDOM.QSU", "fDOM.RFU", "nLF.Cond.µS.cm", "ODO...sat", "ODO...CB", "ODO.mg.L", "Pressure.psi.a", "Sal.psu", "SpCond.µS.cm", "TAL.PC.RFU", "TDS.mg.L", "Turbidity.FNU", "TSS.mg.L", "Wiper.Position.volt", "Temp..C", "Vertical.Position.m", "Battery.V", "Cable.Pwr.V"),
-                          VarName = c("Date", "Time", "tFracSec", "Site", "ChlRFU","Cond", "Depthm", "fDOMQSU", "fDOMRFU", "nCond", "DOsat", "DOcb", "DOmgL", "PressurePSI", "SalPSU", "SPC", "PCRFU", "TDSmgL", "Turb", "TSSmgL", "WiperPos", "TempC", "VertPositionm", "Battery", "CablePwr"),
-                          PortalName = c("Date","Time",NA,"Site","Chl",NA,"Depth",NA,"fDOM",NA,"DOsat",NA,"DOconc",NA,NA,"SPC","PC",NA,"Turb",NA,NA,"TempC",NA,"Battery",NA))#,
+df_VarNames <- data.frame(ExoVariable = c("Date..MM.DD.YYYY.", "Time..HH.mm.ss.", "Time..Fract..Sec.", "Site.Name", "Chlorophyll.RFU", "Chlorophyll.ug.L", "Cond.µS.cm", "Depth.m", "fDOM.QSU", "fDOM.RFU", "nLF.Cond.µS.cm", "ODO...sat", "ODO...CB", "ODO.mg.L", "Pressure.psi.a", "Sal.psu", "SpCond.µS.cm", "TAL.PC.RFU", "BGA.PC.ug.L", "TDS.mg.L", "Turbidity.FNU", "TSS.mg.L", "Wiper.Position.volt", "Temp..C", "Vertical.Position.m", "Battery.V", "Cable.Pwr.V"),
+                          ExoVariable_v2 = c("Date (MM/DD/YYYY)", "Time (HH:mm:ss)", "Time (Fract. Sec)", "Site Name", "Chlorophyll RFU", "Chlorophyll ug/L", "Cond \xb5S/cm", "Depth m", "fDOM QSU", "fDOM RFU", "nLF Cond \xb5S/cm", "ODO % sat", "ODO % local", "ODO mg/L", "Pressure psi a", "Sal psu", "SpCond \xb5S/cm", "BGA PC RFU", "BGA PC ug/L", "TDS mg/L", "Turbidity FNU", "TSS mg/L", "Wiper Position volt", "Temp \xb0C", "Vertical Position m", "Battery V", "Cable Pwr V"), 
+                          VarName = c("Date", "Time", "tFracSec", "Site", "ChlRFU","ChlugL","Cond", "Depthm", "fDOMQSU", "fDOMRFU", "nCond", "DOsat", "DOcb", "DOmgL", "PressurePSI", "SalPSU", "SPC", "PCRFU", "PCugL", "TDSmgL", "Turb", "TSSmgL", "WiperPos", "TempC", "VertPositionm", "Battery", "CablePwr"),
+                          PortalName = c("Date","Time",NA,"Site","Chl",NA,NA,"Depth",NA,"fDOM",NA,"DOsat",NA,"DOconc",NA,NA,"SPC","PC",NA,NA,"Turb",NA,NA,"TempC",NA,"Battery",NA))#,
                           #keepTorF = c(T,T,F,T,T,F,T,F,T,F,T,F,T,F,F,T,T,F,T,F,T,T,F,T,F))
 
 save(df_VarNames, file = "working/CDFW_VarNamesConversion.RData")
 ```
 
-
 First we are going to import each file into 2 pieces. The first piece will include the sonde metadata and the second piece will contain the continuous data.
 ```{r}
 rm(list = ls())
+'%ni%' = Negate('%in%') # new function that serves as the opposit of %in% operator
+
+path2_FLYW <- here::here("raw","DECK", "Pool")
+path2_DECK_Breach <- here::here("raw","DECK", "Breach")
+path2_FLYW <- here::here("raw","FLYW")
 
 # make a data frame with the file names of the raw datasets
-fname <- data.frame(fname = list.files(here::here("raw","DECK")), dfname = NA)
+fname <- data.frame(fname = list.files(here::here(path2_FLYW)), dfname = NA)
 # the name of the dataset will be the same as the file name but without the appendage
 fname$dfname <- substr(fname$fname, 0, nchar(fname$fname)-4)
 
 
 list_meta <- list()
 for(i in 1:nrow(fname)){
+  # make a logical variable to force loop to continue even if it hits a file that can't be read in
+  skip_to_next <- FALSE
+  # use the wrapper tryCatch to force loop
+  tryCatch({
+    list_meta[[i]] <- NA
   # read in the head of the file and skip the first 6 lines
-  rawmeta <- data.frame(head(read.csv(here::here("raw","DECK",fname$fname[i]),skip = 6, fileEncoding = "utf-16")))
+  rawmeta <- data.frame(head(read.csv(here::here(path2_FLYW,fname$fname[i]),skip = 6, fileEncoding = "utf-16")))
   # transpose the data
   meta_1 <- data.frame(data.table::transpose(rawmeta))
   # remove first 3 rows and re-order the columns
@@ -49,10 +59,37 @@ for(i in 1:nrow(fname)){
   list_meta[[i]] <- meta_3
   # remove temporary objects from memory
   rm(rawmeta,meta_1,meta_2,meta_3)
+  }, 
+  # when an error is encountered, the loop will be forced to continue and the warning(s) will be shown at the end
+  error = function(e){ skip_to_next <<- TRUE})
+  if(skip_to_next) {next}
 }
+
 # rename list objects based on file names in the order they were processed
 names(list_meta) <- fname$dfname
 
+# need to run a new for loop to account for data frames that did not get entered due to the errors encountered in previous for loop
+for(i in 1:nrow(fname)){
+  if(is.data.frame(list_meta[[i]]) == FALSE){
+    rawmeta <- data.frame(head(read.csv(here::here(path2_FLYW,fname$fname[i]),skip = 6)))
+  # transpose the data
+  meta_1 <- data.frame(data.table::transpose(rawmeta))
+  # remove first 3 rows and re-order the columns
+  meta_2 <- meta_1[-c(1:3),c(2,1,3)]
+  # rename the columns
+  colnames(meta_2) <- c("ExoVariable","ExoValue","ToRemove")
+  # move the site name over to the column with the other variables of interest
+  meta_2$ExoValue[which(meta_2$ExoVariable == "Site Name")] <- meta_2$ToRemove[which(meta_2$ExoVariable == "Site Name")]
+  # keep only the 2 columns of interest
+  meta_3 <- meta_2[,c("ExoVariable","ExoValue")]
+  # make a new variable with the SondeID (stored in the 'Battery V' field)
+  meta_3[nrow(meta_3)+1,] <- c("Sonde",meta_3$ExoValue[which(meta_3$ExoVariable == "Battery V")])
+  # store the metadata data frame as a list object
+  list_meta[[i]] <- meta_3
+  # remove temporary objects from memory
+  rm(rawmeta,meta_1,meta_2,meta_3)
+  }
+}
 
 
 ###
@@ -61,8 +98,13 @@ load(here::here("working","CDFW_VarNamesConversion.RData"))
 
 list_rawdata <- list()
 for(i in 1:nrow(fname)){
+  # make a logical variable to force loop to continue even if it hits a file that can't be read in
+  skip_to_next <- FALSE
+  # use the wrapper tryCatch to force loop
+  tryCatch({
+    list_rawdata[[i]] <- NA
   # read in the head of the file and skip the first 6 lines
-  rawdf <- data.frame(read.csv(here::here("raw","DECK",fname$fname[i]),skip = 9, fileEncoding = "utf-16", header = T))
+  rawdf <- data.frame(read.csv(here::here(path2_FLYW,fname$fname[i]),skip = 9, fileEncoding = "utf-16", header = T))
   # use a for loop to change the column name
   for(j in 1:length(colnames(rawdf))){
     for(k in 1:nrow(df_VarNames)){
@@ -75,18 +117,46 @@ for(i in 1:nrow(fname)){
   list_rawdata[[i]] <- rawdf
   # remove temporary objects from memory
   rm(rawdf)
+  }, 
+  # when an error is encountered, the loop will be forced to continue and the warning(s) will be shown at the end
+  error = function(e){ skip_to_next <<- TRUE})
+  if(skip_to_next) {next}
 }
+
 # rename list objects based on file names in the order they were processed
 names(list_rawdata) <- fname$dfname
 
+# need to run a new for loop to account for data frames that did not get entered due to the errors encountered in previous for loop
+for(i in 1:nrow(fname)){
+  if(is.data.frame(list_rawdata[[i]]) == FALSE){
+  # read in the head of the file and skip the first 6 lines
+  rawdf <- data.frame(read.csv(here::here(path2_FLYW,fname$fname[i]),skip = 8, header = F))
+  colnames(rawdf) <- rawdf[1,]
+  rawdf <- rawdf[-1,]
+  # use a for loop to change the column name
+  for(j in 1:length(colnames(rawdf))){
+    for(k in 1:nrow(df_VarNames)){
+      if(colnames(rawdf)[j] == df_VarNames$ExoVariable_v2[k]){
+        colnames(rawdf)[j] = df_VarNames$VarName[k]
+      }
+    }
+  }
+  # store the data frame as a list object
+  list_rawdata[[i]] <- rawdf
+  # remove temporary objects from memory
+  rm(rawdf)
+  }
+}
 
 ###
 # Let's trim rows at the beginning and end
 # First, specify the values that obviously suggest that the sensor was in air
+var2check <- c("fDOMRFU","SPC","Depthm")
 air_spc <- 10
 air_fdom <- -0.0001 # works if fdom is calibrated correctly
 air_depth <- -0.0001 # works if sonde is deployed at a deep enough depth (DECK deployments cut it really close on very low tides)
 
+# create a list to store the data frames
 list_trimdata <- list()
 for(i in 1:nrow(fname)){
   # make a temporary data frame copy of the raw dataset and add a column named 'trim'
@@ -96,6 +166,13 @@ for(i in 1:nrow(fname)){
   trim_head <- c(1:20)
   # dictate how many rows to look at in the end of the file
   trim_tail <- c(nrow(To_trim)-19):nrow(To_trim)
+  for(j in 1:length(var2check)){
+    if(var2check[j] %ni% colnames(To_trim)==TRUE){
+      varNeeded <- var2check[j]
+      To_trim <- cbind.data.frame(To_trim, data.frame(varNeeded = NA))
+      colnames(To_trim)[ncol(To_trim)] <- varNeeded
+    }
+  }
   # Mark any rows in the upper 20 rows as TRUE if any of the sensor measurements violates the thresholds
   To_trim$trim[trim_head] <- ifelse(To_trim$fDOMRFU[trim_head] < air_fdom | To_trim$SPC[trim_head] < air_spc | To_trim$Depthm[trim_head] < air_depth,
                                     T,
@@ -113,7 +190,17 @@ for(i in 1:nrow(fname)){
   # remove temporary objects from memory
   rm(To_trim, trim_head, trim_tail, df_trimmed)
 }
+names(list_trimdata) <- fname$dfname
+
+# Make a new column to check how many rows were eliminated during this trimming process
+fname$rowsTrimmed <- NA
+for(i in 1:nrow(fname)){
+  fname$rowsTrimmed[[i]] <- nrow(list_rawdata[[i]]) - nrow(list_trimdata[[i]])
+}
 ```
+
+
+
 
 OLD (developing code without for loop) - First we are going to import 1 file into 2 pieces. The first piece will include the sonde metadata and the second piece will contain the continuous data.
 ```{r}

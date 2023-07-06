@@ -1,0 +1,98 @@
+﻿Var_ExportLabel,Var_BuilderLabel,Var_Name
+ObjectID,ObjectID,ObjectID
+GlobalID,GlobalID,GlobalID
+Station,Station,station
+Crewmembers,Crewmembers,crewmembers
+Other Cremembers,Other Cremembers,crewmembers_other
+Date,Date,exchange_date
+Arrival Time,Arrival Time,arrival_time
+Recovery Stop Time,Recovery Stop Time,recovery_stop_time
+Deployment Start Time,Deployment Start Time,deployment_start_time
+Departure Time,Departure Time,departure_time
+Recovered Sonde ID,Recovered Sonde ID,recovered_sonde_id
+Recovered Other SondeID,Recovered Other SondeID,recovered_sonde_other
+Deployed Sonde ID,Deployed Sonde ID,deployed_sonde_id
+Deployed Other SondeID,Deployed Other SondeID,deployed_sonde_other
+Verification Sonde ID,Verification Sonde ID,verification_sonde_id
+Verification Other SondeID,Verification Other SondeID,verification_sonde_other
+Is there a buoy?,Is there a buoy?,arrival_YorN
+Recovery Check Time,Recovery Check Time,arrival_recov_time
+Temperature,Temperature,arrival_recov_temp
+DO,DO,arrival_recov_DO
+SpC,SpC,arrival_recov_sc
+pH,pH,arrival_recov_pH
+Turbidity,Turbidity,arrival_recov_turb
+PC,PC,arrival_recov_pc
+Chl,Chl,arrival_recov_chl
+fDOM,fDOM,arrival_recov_fdom
+Verification Check Time,Verification Check Time,arrival_verif_time
+Temperature,Temperature,arrival_verif_temp
+DO,DO,arrival_verif_DO
+SpC,SpC,arrival_verif_sc
+pH,pH,arrival_verif_pH
+Turbidity,Turbidity,arrival_verif_turb
+PC,PC,arrival_verif_pc
+Chl,Chl,arrival_verif_chl
+fDOM,fDOM,arrival_verif_fdom
+Recovery Check Time,Recovery Check Time,preclean_recov_time
+Temperature,Temperature,preclean_recov_temp
+DO,DO,preclean_recov_DO
+SpC,SpC,preclean_recov_sc
+pH,pH,preclean_recov_pH
+Turbidity,Turbidity,preclean_recov_turb
+PC,PC,preclean_recov_pc
+Chl,Chl,preclean_recov_chl
+fDOM,fDOM,preclean_recov_fdom
+Verification Check Time,Verification Check Time,preclean_verif_time
+Temperature,Temperature,preclean_verif_temp
+DO,DO,preclean_verif_DO
+SpC,SpC,preclean_verif_sc
+pH,pH,preclean_verif_pH
+Turbidity,Turbidity,preclean_verif_turb
+PC,PC,preclean_verif_pc
+Chl,Chl,preclean_verif_chl
+fDOM,fDOM,preclean_verif_fdom
+Recovery Check Time,Recovery Check Time,postclean_recov_time
+Temperature,Temperature,postclean_recov_temp
+DO,DO,postclean_recov_DO
+SpC,SpC,postclean_recov_sc
+pH,pH,postclean_recov_pH
+Turbidity,Turbidity,postclean_recov_turb
+PC,PC,postclean_recov_pc
+Chl,Chl,postclean_recov_chl
+fDOM,fDOM,postclean_recov_fdom
+Verification Check Time,Verification Check Time,postclean_verif_time
+Temperature,Temperature,postclean_verif_temp
+DO,DO,postclean_verif_DO
+SpC,SpC,postclean_verif_sc
+pH,pH,postclean_verif_pH
+Turbidity,Turbidity,postclean_verif_turb
+PC,PC,postclean_verif_pc
+Chl,Chl,postclean_verif_chl
+fDOM,fDOM,postclean_verif_fdom
+Is there a buoy?,Is there a buoy?,departure_YorN
+Deployed Check Time,Deployed Check Time,departure_recov_time
+Temperature,Temperature,departure_recov_temp
+DO,DO,departure_recov_DO
+SpC,SpC,departure_recov_sc
+pH,pH,departure_recov_pH
+Turbidity,Turbidity,departure_recov_turb
+PC,PC,departure_recov_pc
+Chl,Chl,departure_recov_chl
+fDOM,fDOM,departure_recov_fdom
+Verification Check Time,Verification Check Time,departure_verif_time
+Temperature,Temperature,departure_verif_temp
+DO,DO,departure_verif_DO
+SpC,SpC,departure_verif_sc
+pH,pH,departure_verif_pH
+Turbidity,Turbidity,departure_verif_turb
+PC,PC,departure_verif_pc
+Chl,Chl,departure_verif_chl
+fDOM,fDOM,departure_verif_fdom
+Notes,Notes,notes
+CreationDate,CreationDate,CreationDate
+Creator,Creator,Creator
+EditDate,EditDate,EditDate
+Editor,Editor,Editor
+x,x,x
+y,y,y
