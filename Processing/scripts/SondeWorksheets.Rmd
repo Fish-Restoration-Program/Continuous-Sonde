@@ -1,5 +1,5 @@
 ---
-title: "FRP_ContinuousWQ_Processing"
+title: "FRP_ContinuousWQ_SondeWorksheets"
 author: "DMC"
 date: "6/23/2023"
 output: html_document
@@ -11,21 +11,31 @@ First, we'll import the crosswalk files (these were generated using the first ve
 ```{r}
 rm(list = ls())
 
+# read in the crosswalk file for renaming columns of raw Survey123 export file (Must make sure version matches)
 cw_Exch <- data.frame(read.csv(here::here("raw","Survey123", "Exchanges230630_ColumnCrosswalk.csv")))
 
+# read in the export frile from Survey123
 df_Exch <- data.frame(read.csv(here::here("raw","Survey123", "Exchanges230630_Export230703.csv")))
+
+# rename the columns of the export data
 colnames(df_Exch) <- cw_Exch$Var_Name
 
+# make a date variable that is in local timezone
 df_Exch$date2 <- as.Date(format(lubridate::mdy_hms(df_Exch$exchange_date), tz = "America/Los_Angeles"))
 
+### make datetime variable for the individual measurements
+# first, we will subset all columns with time in name
 df_ExchTimes <- df_Exch[,stringr::str_detect(colnames(df_Exch), "_time")]
+# attach the new date object to subset
 df_ExchTimes2 <- cbind(df_ExchTimes, data.frame(date2 = df_Exch$date2))
-df_ExchTimes3 <- df_ExchTimes2[,-13]
+# make a blank version of subset to repopulate with datetime objects
+df_ExchTimes3 <- df_ExchTimes
 df_ExchTimes3[,] <- NA
+# populate blank version of subset with newly created datetime objects
 for(i in 1:ncol(df_ExchTimes3)){
   df_ExchTimes3[,i] = as.POSIXct(strptime(paste(as.character(df_ExchTimes2[,"date2"]),df_ExchTimes[,i],sep = " "), format = "%Y-%m-%d %H:%M"))
 }
-
+# populate the original exchange dataset with the newly created datetime objects
 for(i in 1:ncol(df_ExchTimes3)){
   for(j in 1:ncol(df_Exch)){
     if(colnames(df_ExchTimes3)[i] == colnames(df_Exch)[j]){
@@ -34,27 +44,34 @@ for(i in 1:ncol(df_ExchTimes3)){
   }
 }
 
+# make simple subsets of deployment/recovery times. These will be used for trimming datasets based on time
 df_DeployTimes <- df_Exch[,c("station","date2","deployed_sonde_id","deployment_start_time","departure_time")]
 df_RecoveryTimes <- df_Exch[,c("station","date2","recovered_sonde_id","recovery_stop_time","arrival_time")]
-
 
 #testTime <- data.frame(origTime = df_Exch$exchange_date, newTime = NA)
 #testTime$newTime <- lubridate::mdy_hms(testTime$origTime)
 #testTime$pacTime <- format(testTime$newTime, tz = "America/Los_Angeles")
 #testTime$pacDate <- as.Date(testTime$pacTime)
 
-save(df_Exch, df_DeployTimes, df_RecoveryTimes, file = here::here("working","CDFW_ExchangeWorksheet.RData"))
+# save the exchange times for use in 'ContinuousSonde_Processing.Rmd'
+save(df_DeployTimes, df_RecoveryTimes, file = here::here("working","CDFW_ExchangeTimes.RData"))
+# save the exchange worksheet for use in 'ErrorCalculations.Rmd'
+save(df_Exch, file = here::here("working","CDFW_ExchangeWorksheet.RData"))
 ```
 
 
 ```{r}
 rm(list = ls())
+'%ni%' = Negate('%in%')
 cw_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibration230612_ColumnCrosswalk.csv")))
 df_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibration230612_Export230706.csv")))
 colnames(df_Calib) <- cw_Calib$Var_Name
 
 df_Calib$dts_startstop <- format(lubridate::mdy_hms(df_Calib$deployment_startstop_time), tz = "America/Los_Angeles")
 
-save(df_Calib, file = here::here("working","CDFW_CalibrationWorksheet.RData"))
+df_CalibData <- df_Calib[,c("GlobalID","sonde_id","sonde_other","discrete_or_continuous","pre_post","dts_startstop",colnames(df_Calib)[53:95])]
+df_CalibMeta <- df_Calib[,c("GlobalID","sonde_id","sonde_other","discrete_or_continuous","pre_post","dts_startstop",colnames(df_Calib)[7:52])]
+
+save(df_Calib, df_CalibData, df_CalibMeta, file = here::here("working","CDFW_CalibrationWorksheet.RData"))
 ```
 

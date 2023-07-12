@@ -1,0 +1,46 @@
+---
+title: "FRP_ContinuousWQ_ErrorCalculations"
+author: "DMC"
+date: "7/12/2023"
+output: html_document
+---
+
+The goal of this file is to use exchange worksheets and calibration worksheets to calculate the error due to fouling of sensors and sensor drift.
+
+First, we'll load and manipulate the Exchange Worksheet for the fouling data
+```{r Fouling data}
+rm(list = ls())
+load(here::here("working","CDFW_ExchangeWorksheet.RData"))
+
+preclean_recov <- c("preclean_recov_temp","preclean_recov_DO","preclean_recov_sc","preclean_recov_pH","preclean_recov_turb","preclean_recov_pc","preclean_recov_chl","preclean_recov_fdom")
+preclean_verif <- c("preclean_verif_temp","preclean_verif_DO","preclean_verif_sc","preclean_verif_pH","preclean_verif_turb","preclean_verif_pc","preclean_verif_chl","preclean_verif_fdom")
+
+postclean_recov <- c("postclean_recov_temp","postclean_recov_DO","postclean_recov_sc","postclean_recov_pH","postclean_recov_turb","postclean_recov_pc","postclean_recov_chl","postclean_recov_fdom")
+postclean_verif <- c("postclean_verif_temp","postclean_verif_DO","postclean_verif_sc","postclean_verif_pH","postclean_verif_turb","postclean_verif_pc","postclean_verif_chl","postclean_verif_fdom")
+
+
+list_foul <- list()
+for(i in 1:nrow(df_Exch)){
+  sondeID <- ifelse(df_Exch$recovered_sonde_id[i] == "Other", df_Exch$recovered_sonde_other[i], df_Exch$recovered_sonde_id[i])
+  dateRecov <- df_Exch$date2[i]
+  station <- df_Exch$station[i]
+  mat_recov_pre <- as.matrix(data.frame(sapply(df_Exch[i,c(preclean_recov)], function(x) as.numeric(as.character(x)))))
+  mat_recov_post <- as.matrix(data.frame(sapply(df_Exch[i,c(postclean_recov)], function(x) as.numeric(as.character(x)))))
+  mat_recov_diff <- mat_recov_post - mat_recov_pre
+  mat_verif_pre <- as.matrix(data.frame(sapply(df_Exch[i,c(preclean_verif)], function(x) as.numeric(as.character(x)))))
+  mat_verif_post <- as.matrix(data.frame(sapply(df_Exch[i,c(postclean_verif)], function(x) as.numeric(as.character(x)))))
+  mat_verif_diff <- mat_verif_post - mat_verif_pre
+  mat_foul_num <- mat_recov_diff - mat_verif_diff
+  mat_foul_perc <- (mat_foul_num/mat_recov_pre)*100
+  #mat_foul_perc$varX <- substr(rownames(mat_foul_perc),17, nchar(rownames(mat_foul_perc)))
+  list_temp <- list(mat_foul_num, mat_foul_perc, sondeID, dateRecov, station)
+  names(list_temp) <- c("foul_num","foul_perc","sondeID","dateRecov","station")
+  list_foul[[i]] <- list_temp
+  rm(list_temp, mat_recov_pre, mat_recov_post, mat_recov_diff, mat_recov_post, mat_verif_pre, mat_verif_post, mat_verif_diff, mat_foul_num, mat_foul_perc, sondeID, station, dateRecov)
+}
+names(list_foul) <- paste(ifelse(df_Exch$recovered_sonde_id == "Other", df_Exch$recovered_sonde_other, df_Exch$recovered_sonde_id),
+                          df_Exch$date2, sep = " ")
+
+save(list_foul, file = here::here("working","FoulingError.RData"))
+```
+
