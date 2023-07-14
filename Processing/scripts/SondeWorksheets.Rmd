@@ -7,7 +7,7 @@ output: html_document
 
 The goal of this file is to import worksheets from Survey123 and make RData files to use in the Processing script
 
-First, we'll import the crosswalk files (these were generated using the first version of the CDFW Survey123 e-forms)
+First, we'll import the Exchange Worksheets and their crosswalk (these were generated using the first version of the CDFW Survey123 e-forms)
 ```{r}
 rm(list = ls())
 
@@ -59,7 +59,7 @@ save(df_DeployTimes, df_RecoveryTimes, file = here::here("working","CDFW_Exchang
 save(df_Exch, file = here::here("working","CDFW_ExchangeWorksheet.RData"))
 ```
 
-
+Now, let's import the Calibration Worksheets and their crosswalk (these were generated using the first version of the CDFW Survey123 e-forms)
 ```{r}
 rm(list = ls())
 '%ni%' = Negate('%in%')
@@ -67,8 +67,10 @@ cw_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibration230612
 df_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibration230612_Export230706.csv")))
 colnames(df_Calib) <- cw_Calib$Var_Name
 
+# make a datetime object for the deployment start/stop time
 df_Calib$dts_startstop <- format(lubridate::mdy_hms(df_Calib$deployment_startstop_time), tz = "America/Los_Angeles")
 
+# make 2 separate dataframes (1 with just the data we are interested and 1 with the metadata)
 df_CalibData <- df_Calib[,c("GlobalID","sonde_id","sonde_other","discrete_or_continuous","pre_post","dts_startstop",colnames(df_Calib)[53:95])]
 df_CalibMeta <- df_Calib[,c("GlobalID","sonde_id","sonde_other","discrete_or_continuous","pre_post","dts_startstop",colnames(df_Calib)[7:52])]
 
