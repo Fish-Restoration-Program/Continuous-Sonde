@@ -47,6 +47,28 @@ for(i in 1:ncol(df_ExchTimes3)){
 # make simple subsets of deployment/recovery times. These will be used for trimming datasets based on time
 df_DeployTimes <- df_Exch[,c("station","date2","deployed_sonde_id","deployment_start_time","departure_time")]
 df_RecoveryTimes <- df_Exch[,c("station","date2","recovered_sonde_id","recovery_stop_time","arrival_time")]
+df_Times <- df_Exch[,c("station","date2","deployed_sonde_id","deployment_start_time","departure_time","recovered_sonde_id","recovery_stop_time","arrival_time")]
+
+df_TimesLong <- rbind.data.frame(data.frame(action = c("Recovered"),
+                                            sondeID = df_RecoveryTimes$recovered_sonde_id,
+                                            timeX = df_RecoveryTimes$arrival_time,
+                                            dateX = df_RecoveryTimes$date2),
+                                 data.frame(action = c("Deployed"),
+                                            sondeID = df_DeployTimes$deployed_sonde_id,
+                                            timeX = df_DeployTimes$departure_time,
+                                            dateX = df_DeployTimes$date2)
+                                 )
+df_TimesLong$sonde_date <- paste(df_TimesLong$sondeID,
+                                 df_TimesLong$dateX,
+                                 sep = " ")
+# make a new variable to match with the raw data in downstream processes
+
+df_DeployTimes$sonde_dateDeploy <- paste(df_DeployTimes$deployed_sonde_id,
+                                   df_DeployTimes$date2,
+                                   sep = " ")
+df_RecoveryTimes$sonde_dateRecov <- paste(df_RecoveryTimes$recovered_sonde_id,
+                                     df_RecoveryTimes$date2,
+                                     sep = " ")
 
 #testTime <- data.frame(origTime = df_Exch$exchange_date, newTime = NA)
 #testTime$newTime <- lubridate::mdy_hms(testTime$origTime)

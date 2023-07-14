@@ -167,11 +167,40 @@ for(i in 1:nrow(fname)){
 names(list_all_meta) <- pathnames$SiteName
 names(list_all_raw) <- pathnames$SiteName
 
-
+# rename the objects in the list of raw data so that they can match up easily with objects made in other scripts
+for(i in 1:length(list_all_raw)){
+  for(j in 1:length(list_all_raw[[i]])){
+    names(list_all_raw[[i]])[j] <- paste(list_all_meta[[i]][[j]]$ExoValue[which(list_all_meta[[i]][[j]]$ExoVariable == "Sonde")],
+                                         substr(list_all_meta[[i]][[j]]$ExoValue[which(list_all_meta[[i]][[j]]$ExoVariable == "firstObs")],0,10),
+                                         substr(list_all_meta[[i]][[j]]$ExoValue[which(list_all_meta[[i]][[j]]$ExoVariable == "lastObs")],0,10),
+                                         sep = " ")
+  }
+}
 
 save(list_all_raw, list_all_meta, file = "working/CDFW_Lists_Raw_Meta.RData")
 ```
 
+
+Trim datasets based on Start/Stop times of each deployment recorded in the Exchange Worksheet (See 'SondeWorksheets.Rmd')
+```{r}
+rm(list = ls())
+
+load(here::here("working", "CDFW_Lists_Raw_Meta.RData"))
+load(here::here("working","CDFW_ExchangeTimes.RData"))
+
+###DMC230714: pick up here. Need to parse out 3 parts of raw names to find matches with deploy/recovery times based on action. Also need to transcribe last of 2021 exchanges to Survey 123
+list_all_trim1 <- list_all_raw
+for(i in 1:length(list_all_trim1)){
+  for(j in 1:length(list_all_trim1[[1]])){
+    for(k in 1:nrow(df_DeployTimes)){
+      if(names(list_all_trim1[[1]])[1] == df_DeployTimes$sonde_date[1]){
+        list_all_trim1[[1]][[1]] <- list_all_trim1[[1]][[1]][which(list_all_trim1[[1]][[1]]$)]
+      }
+    }
+  }
+}
+
+```
 
 
 ```{r}
