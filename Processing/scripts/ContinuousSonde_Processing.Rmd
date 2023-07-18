@@ -10,8 +10,9 @@ The goal of this file is to make all data processing of raw EXO2 exports happen 
 
 This chunk makes a dataframe with all the potential column names for CDFW FRP sondes so that we can replace them with simple versions
 ```{r column naming}
-df_VarNames <- data.frame(ExoVariable = c("Date..MM.DD.YYYY.", "Time..HH.mm.ss.", "Time..Fract..Sec.", "Site.Name", "Chlorophyll.RFU", "Chlorophyll.ug.L", "Cond.µS.cm", "Depth.m", "fDOM.QSU", "fDOM.RFU", "nLF.Cond.µS.cm", "ODO...sat", "ODO...CB", "ODO.mg.L", "Pressure.psi.a", "Sal.psu", "SpCond.µS.cm", "TAL.PC.RFU", "BGA.PC.ug.L", "TDS.mg.L", "Turbidity.FNU", "TSS.mg.L", "Wiper.Position.volt", "Temp..C", "Vertical.Position.m", "Battery.V", "Cable.Pwr.V"),
+df_VarNames <- data.frame(ExoVariable = c("Date..MM.DD.YYYY.", "Time..HH.mm.ss.", "Time..Fract..Sec.", "Site.Name", "Chlorophyll.RFU", "Chlorophyll.ug.L", "Cond.µS.cm", "Depth.m", "fDOM.QSU", "fDOM.RFU", "nLF.Cond.µS.cm", "ODO...sat", "ODO...CB", "ODO.mg.L", "Pressure.psi.a", "Sal.psu", "SpCond.µS.cm", "BGA.PC.RFU", "BGA.PC.ug.L", "TDS.mg.L", "Turbidity.FNU", "TSS.mg.L", "Wiper.Position.volt", "Temp..C", "Vertical.Position.m", "Battery.V", "Cable.Pwr.V"),
                           ExoVariable_v2 = c("Date (MM/DD/YYYY)", "Time (HH:mm:ss)", "Time (Fract. Sec)", "Site Name", "Chlorophyll RFU", "Chlorophyll ug/L", "Cond \xb5S/cm", "Depth m", "fDOM QSU", "fDOM RFU", "nLF Cond \xb5S/cm", "ODO % sat", "ODO % local", "ODO mg/L", "Pressure psi a", "Sal psu", "SpCond \xb5S/cm", "BGA PC RFU", "BGA PC ug/L", "TDS mg/L", "Turbidity FNU", "TSS mg/L", "Wiper Position volt", "Temp \xb0C", "Vertical Position m", "Battery V", "Cable Pwr V"), 
+                          ExoVariable_v3 = c("Date..MM.DD.YYYY.", "Time..HH.mm.ss.", "Time..Fract..Sec.", "Site.Name", "Chlorophyll.RFU", "Chlorophyll.ug.L", "Cond.µS.cm", "Depth.m", "fDOM.QSU", "fDOM.RFU", "nLF.Cond.µS.cm", "ODO...sat", "ODO...CB", "ODO.mg.L", "Pressure.psi.a", "Sal.psu", "SpCond.µS.cm", "TAL.PC.RFU", "BGA.PC.ug.L", "TDS.mg.L", "Turbidity.FNU", "TSS.mg.L", "Wiper.Position.volt", "Temp..C", "Vertical.Position.m", "Battery.V", "Cable.Pwr.V"),
                           VarName = c("Date", "Time", "tFracSec", "Site", "ChlRFU","ChlugL","Cond", "Depthm", "fDOMQSU", "fDOMRFU", "nCond", "DOsat", "DOcb", "DOmgL", "PressurePSI", "SalPSU", "SPC", "PCRFU", "PCugL", "TDSmgL", "Turb", "TSSmgL", "WiperPos", "TempC", "VertPositionm", "Battery", "CablePwr"),
                           PortalName = c("Date","Time",NA,"Site","Chl",NA,NA,"Depth",NA,"fDOM",NA,"DOsat",NA,"DOconc",NA,NA,"SPC","PC",NA,NA,"Turb",NA,NA,"TempC",NA,"Battery",NA))#,
                           #keepTorF = c(T,T,F,T,T,F,T,F,T,F,T,F,T,F,F,T,T,F,T,F,T,T,F,T,F))
@@ -113,7 +114,7 @@ for(i in 1:nrow(fname)){
   # use a for loop to change the column name
   for(j in 1:length(colnames(rawdf))){
     for(k in 1:nrow(df_VarNames)){
-      if(colnames(rawdf)[j] == df_VarNames$ExoVariable[k]){
+      if(colnames(rawdf)[j] == df_VarNames$ExoVariable[k] | colnames(rawdf)[j] == df_VarNames$ExoVariable_v2[k] | colnames(rawdf)[j] == df_VarNames$ExoVariable_v3[k]){
         colnames(rawdf)[j] = df_VarNames$VarName[k]
       }
     }
@@ -141,7 +142,7 @@ for(i in 1:nrow(fname)){
   # use a for loop to change the column name
   for(j in 1:length(colnames(rawdf))){
     for(k in 1:nrow(df_VarNames)){
-      if(colnames(rawdf)[j] == df_VarNames$ExoVariable_v2[k]){
+      if(colnames(rawdf)[j] == df_VarNames$ExoVariable_v2[k] | colnames(rawdf)[j] == df_VarNames$ExoVariable_v2[k] | colnames(rawdf)[j] == df_VarNames$ExoVariable_v3[k]){
         colnames(rawdf)[j] = df_VarNames$VarName[k]
       }
     }
@@ -174,6 +175,7 @@ for(i in 1:length(list_all_raw)){
                                          substr(list_all_meta[[i]][[j]]$ExoValue[which(list_all_meta[[i]][[j]]$ExoVariable == "firstObs")],0,10),
                                          substr(list_all_meta[[i]][[j]]$ExoValue[which(list_all_meta[[i]][[j]]$ExoVariable == "lastObs")],0,10),
                                          sep = " ")
+    list_all_raw[[i]][[j]]$dts <- as.POSIXct(strptime(paste(list_all_raw[[i]][[j]]$Date,list_all_raw[[i]][[j]]$Time,sep = " "), format = "%m/%d/%Y %H:%M:%S"))
   }
 }
 
@@ -182,28 +184,47 @@ save(list_all_raw, list_all_meta, file = "working/CDFW_Lists_Raw_Meta.RData")
 
 
 Trim datasets based on Start/Stop times of each deployment recorded in the Exchange Worksheet (See 'SondeWorksheets.Rmd')
-```{r}
+```{r Primary Trim}
 rm(list = ls())
 
 load(here::here("working", "CDFW_Lists_Raw_Meta.RData"))
 load(here::here("working","CDFW_ExchangeTimes.RData"))
 
-###DMC230714: pick up here. Need to parse out 3 parts of raw names to find matches with deploy/recovery times based on action. Also need to transcribe last of 2021 exchanges to Survey 123
+# create a new list of trimmed data frames
 list_all_trim1 <- list_all_raw
+list_all_excess <- list() # create a list of removed rows from each data frame to review after process
 for(i in 1:length(list_all_trim1)){
-  for(j in 1:length(list_all_trim1[[1]])){
-    for(k in 1:nrow(df_DeployTimes)){
-      if(names(list_all_trim1[[1]])[1] == df_DeployTimes$sonde_date[1]){
-        list_all_trim1[[1]][[1]] <- list_all_trim1[[1]][[1]][which(list_all_trim1[[1]][[1]]$)]
+  list_excess <- list() # temporary list
+  for(j in 1:length(list_all_trim1[[i]])){
+    rtd_sondeID <- strsplit(names(list_all_trim1[[i]])[j], split = " ", fixed = TRUE)[[1]][1] # variable for sondeID
+    rtd_dateDeploy <- strsplit(names(list_all_trim1[[i]])[j], split = " ", fixed = TRUE)[[1]][2] # variable for Deployment date
+    rtd_dateRecov <- strsplit(names(list_all_trim1[[i]])[j], split = " ", fixed = TRUE)[[1]][3] # variable for Recovery date
+    for(k in 1:nrow(df_DeployTimes)){ # remove rows for observations recorded after departure time 
+      if(rtd_sondeID == df_DeployTimes$deployed_sonde_id[k] & rtd_dateDeploy == as.character(df_DeployTimes$date2[k])){
+        list_all_trim1[[i]][[j]] <- list_all_trim1[[i]][[j]][which(list_all_trim1[[i]][[j]]$dts > df_DeployTimes$departure_time[k]),]
       }
     }
+    for(kz in 1:nrow(df_DeployTimes)){ # remove rows for observations recorded before arrival time
+      if(rtd_sondeID == df_RecoveryTimes$recovered_sonde_id[kz] & rtd_dateDeploy == as.character(df_RecoveryTimes$date2[kz])){
+        list_all_trim1[[i]][[j]] <- list_all_trim1[[i]][[j]][which(list_all_trim1[[i]][[j]]$dts < df_RecoveryTimes$arrival_time[kz]),]
+      }
+    }
+    list_excess[[j]] <- suppressMessages(dplyr::anti_join(list_all_raw[[i]][[j]],list_all_trim1[[i]][[j]])) # suppressMessages prevents the console from being overtaken by anti_join messages
   }
+  names(list_excess) <- names(list_all_trim1[[i]])
+  list_all_excess[[i]] <- list_excess
+  rm(list_excess, rtd_sondeID, rtd_dateDeploy, rtd_dateRecov)
 }
+names(list_all_excess) <- names(list_all_trim1)
 
+save(list_all_trim1, file = here::here("working","RTD_Trim1.RData"))
 ```
 
-
-```{r}
+Trim the edges of the dataset based on whether the sonde has observations indicating it was out of the water.
+```{r Secondary Trim}
+rm(list = ls())
+'%ni%' = Negate('%in%')
+load(here::here("working","RTD_Trim1.RData"))
 ###
 # Let's trim rows at the beginning and end
 # First, specify the values that obviously suggest that the sensor was in air
@@ -213,99 +234,120 @@ air_fdom <- -0.0001 # works if fdom is calibrated correctly
 air_depth <- -0.0001 # works if sonde is deployed at a deep enough depth (DECK deployments cut it really close on very low tides)
 
 # create a list to store the data frames
-list_trimdata <- list()
-for(i in 1:nrow(fname)){
-  # make a temporary data frame copy of the raw dataset and add a column named 'trim'
-  To_trim <- cbind.data.frame(list_rawdata[[fname$dfname[i]]],data.frame(trim = NA))
-  # First, look at deployment start/end times
-  # dictate how many rows to look at in the beginning of the file
-  trim_head <- c(1:20)
-  # dictate how many rows to look at in the end of the file
-  trim_tail <- c(nrow(To_trim)-19):nrow(To_trim)
-  for(j in 1:length(var2check)){
-    if(var2check[j] %ni% colnames(To_trim)==TRUE){
-      varNeeded <- var2check[j]
-      To_trim <- cbind.data.frame(To_trim, data.frame(varNeeded = NA))
-      colnames(To_trim)[ncol(To_trim)] <- varNeeded
+list_all_trim2 <- list_all_trim1
+list_all_excess2 <- list()
+for(i in 1:length(list_all_trim1)){
+  list_excess <- list()
+  for(j in 1:length(list_all_trim1[[i]])){
+    # make a temporary data frame copy of the raw dataset and add a column named 'trim'
+    To_trim <- cbind.data.frame(list_all_trim2[[i]][[j]],data.frame(trim = NA))
+    # First, look at deployment start/end times
+    # dictate how many rows to look at in the beginning of the file
+    trim_head <- c(1:20)
+    # dictate how many rows to look at in the end of the file
+    trim_tail <- c(nrow(To_trim)-19):nrow(To_trim)
+    for(k in 1:length(var2check)){
+      if(var2check[k] %ni% colnames(To_trim)==TRUE){
+        varNeeded <- var2check[k]
+        To_trim <- cbind.data.frame(To_trim, data.frame(varNeeded = NA))
+        colnames(To_trim)[ncol(To_trim)] <- varNeeded
+      }
     }
+    # Mark any rows in the upper 20 rows as TRUE if any of the sensor measurements violates the thresholds
+    To_trim$trim[trim_head] <- ifelse(To_trim$fDOMRFU[trim_head] < air_fdom | To_trim$SPC[trim_head] < air_spc | To_trim$Depthm[trim_head] < air_depth,
+                                      T,
+                                      F)
+    # Mark any rows in the final 20 rows as TRUE if any of the sensor measurements violates the thresholds
+    To_trim$trim[trim_tail] <- ifelse(To_trim$fDOMRFU[trim_tail] < air_fdom | To_trim$SPC[trim_tail] < air_spc | To_trim$Depthm[trim_tail] < air_depth,
+                                      T,
+                                      F)
+    # Mark middle rows as FALSE
+    To_trim$trim[which(is.na(To_trim$trim)==T)] <- F
+    # Keep rows marked as FALSE
+    df_trimmed <- To_trim[which(To_trim$trim == F),]
+    # Remove 'trim' column and store the data frame as a list object 
+    list_all_trim2[[i]][[j]] <- df_trimmed[,-which(names(df_trimmed) %in% c("trim"))]
+    list_excess[[j]] <- suppressMessages(dplyr::anti_join(list_all_trim1[[i]][[j]],list_all_trim2[[i]][[j]]))
+    # remove temporary objects from memory
+    rm(To_trim, trim_head, trim_tail, df_trimmed)
   }
-  # Mark any rows in the upper 20 rows as TRUE if any of the sensor measurements violates the thresholds
-  To_trim$trim[trim_head] <- ifelse(To_trim$fDOMRFU[trim_head] < air_fdom | To_trim$SPC[trim_head] < air_spc | To_trim$Depthm[trim_head] < air_depth,
-                                    T,
-                                    F)
-  # Mark any rows in the final 20 rows as TRUE if any of the sensor measurements violates the thresholds
-  To_trim$trim[trim_tail] <- ifelse(To_trim$fDOMRFU[trim_tail] < air_fdom | To_trim$SPC[trim_tail] < air_spc | To_trim$Depthm[trim_tail] < air_depth,
-                                    T,
-                                    F)
-  # Mark middle rows as FALSE
-  To_trim$trim[which(is.na(To_trim$trim)==T)] <- F
-  # Keep rows marked as FALSE
-  df_trimmed <- To_trim[which(To_trim$trim == F),]
-  # Remove 'trim' column and store the data frame as a list object 
-  list_trimdata[[i]] <- df_trimmed[,-which(names(df_trimmed) %in% c("trim"))]
-  # remove temporary objects from memory
-  rm(To_trim, trim_head, trim_tail, df_trimmed)
+  names(list_excess) <- names(list_all_trim1[[i]])
+  list_all_excess2[[i]] <- list_excess
+  rm(list_excess)
 }
-names(list_trimdata) <- fname$dfname
+names(list_all_trim2) <- names(list_all_trim1) 
+names(list_all_excess2) <- names(list_all_trim1) 
 
-# Make a new column to check how many rows were eliminated during this trimming process
-fname$rowsTrimmed <- NA
-for(i in 1:nrow(fname)){
-  fname$rowsTrimmed[[i]] <- nrow(list_rawdata[[i]]) - nrow(list_trimdata[[i]])
-}
+save(list_all_excess2, list_all_trim2, file = here::here("working","RTD_Trim2.RData"))
 ```
 
-
-
-
-OLD (developing code without for loop) - First we are going to import 1 file into 2 pieces. The first piece will include the sonde metadata and the second piece will contain the continuous data.
-```{r}
+Now, we will bring in the sensor ratings and associate them with each dataset. Ratings were calculated in the 'ErrorCalculations.Rmd' script
+```{r Apply quality scores}
 rm(list = ls())
-
-rawmeta <- data.frame(head(read.csv(here::here("raw","DECK",fname[1]),skip = 6, fileEncoding = "utf-16")))
-meta_1 <- data.frame(data.table::transpose(rawmeta))
-meta_2 <- meta_1[-c(1:3),c(2,1,3)]
-colnames(meta_2) <- c("ExoVariable","ExoValue","ToRemove")
-meta_2$ExoValue[which(meta_2$ExoVariable == "Site Name")] <- meta_2$ToRemove[which(meta_2$ExoVariable == "Site Name")]
-meta_3 <- meta_2[,c("ExoVariable","ExoValue")]
-meta_3[nrow(meta_3)+1,] <- c("Sonde",meta_3$ExoValue[which(meta_3$ExoVariable == "Battery V")])
-
-rawdf <- data.frame(read.csv(here::here("raw","DECK","DeckerPool_211130to220127.csv"),skip = 9, fileEncoding = "utf-16", header = T))
-
-### 
-# Now we will change the names of the columns using the conversion developed previously
+'%ni%' = Negate('%in%')
+load(here::here("working","RTD_Trim2.RData"))
+load(here::here("working","SensorRatings230714.RData"))
 load(here::here("working","CDFW_VarNamesConversion.RData"))
-# use a for loop to change the column name
-for(i in 1:length(colnames(rawdf))){
-  for(j in 1:nrow(df_VarNames)){
-    if(colnames(rawdf)[i] == df_VarNames$ExoVariable[j]){
-      colnames(rawdf)[i] = df_VarNames$VarName[j]
+rm(list_all_excess2)
+colnames(list_all_trim2[[1]][[1]])
+df_VarNames$VarName
+list_ratings[[1]]$varX
+df_xNames <- data.frame(VarName = c("TempC","DOmgL","SPC","ChlRFU","PCRFU","fDOMRFU","Turb"),
+                        ErrorName = c("temp","DO", "sc","chl","pc","fdom","turb"),
+                        qcName = c("TempC_qcE","DOmgL_qcE","SPC_qcE","ChlRFU_qcE","PCRFU_qcE","fDOMRFU_qcE","Turb_qcE"))
+
+# create a new list of trimmed data frames
+list_all_qc <- list_all_trim2
+allRatings$nObs <- NA
+#list_all_excess <- list() # create a list of removed rows from each data frame to review after process
+for(i in 1:length(list_all_qc)){
+  list_qc <- list() # temporary list
+  for(j in 1:length(list_all_qc[[i]])){
+    rtd_sondeID <- strsplit(names(list_all_qc[[i]])[j], split = " ", fixed = TRUE)[[1]][1] # variable for sondeID
+    rtd_dateDeploy <- strsplit(names(list_all_qc[[i]])[j], split = " ", fixed = TRUE)[[1]][2] # variable for Deployment date
+    rtd_dateRecov <- strsplit(names(list_all_qc[[i]])[j], split = " ", fixed = TRUE)[[1]][3] # variable for Recovery date
+    df_temp <- cbind.data.frame(list_all_qc[[i]][[j]],
+                                data.frame(TempC_qcE = NA,
+                                           DOmgL_qcE = NA,
+                                           SPC_qcE = NA,
+                                           ChlRFU_qcE = NA,
+                                           PCRFU_qcE = NA,
+                                           fDOMRFU_qcE = NA,
+                                           Turb_qcE = NA))
+    # fill in rating columns of deployment dataframe with the Final Rating
+    for(a in 1:ncol(df_temp)){
+      for(b in 1:nrow(df_xNames)){
+        if(colnames(df_temp)[a] == df_xNames$VarName[b]){
+          df_temp[,df_xNames$qcName[b]] = allRatings$Rating_final[which(allRatings$varX == df_xNames$ErrorName[b] 
+                                                                       & allRatings$sondeID == rtd_sondeID 
+                                                                       & allRatings$dateRecov == rtd_dateRecov)]
+        }
+        # copy in number of rows (observations) for each deployment to determine % coverage of quality data
+        allRatings$nObs[which(allRatings$sondeID == rtd_sondeID & allRatings$dateRecov == rtd_dateRecov)] <- nrow(df_temp)
+      }
     }
+    list_qc[[j]] <- df_temp
   }
+  names(list_qc) <- names(list_all_trim2[[i]])
+  list_all_qc[[i]] <- list_qc
+  rm(list_qc, rtd_sondeID, rtd_dateDeploy, rtd_dateRecov)
 }
+names(list_all_qc) <- names(list_all_trim2)
 
-###
-# Let's trim rows at the beginning and end
-To_trim <- cbind.data.frame(rawdf,data.frame(trim = NA))
-# First, look at deployment start/end times
+library(plyr)
+summ_2022 <- ddply(allRatings[-which(allRatings$varX %in% c("pH","DO_sat","sc_InAir")),], c("varX","Rating_final"), summarise,
+                   v = sum(nObs, na.rm = TRUE))
+tot_2022 <- ddply(allRatings, c("sondeID","dateRecov"), summarise,
+                   v = sum(nObs, na.rm = TRUE),
+                   t = mean(nObs, na.rm = TRUE))
+allObs <- sum(tot_2022$t)
 
-# Now, look at values that obviously show that the sensor was in air
-air_spc <- 10
-air_fdom <- -0.0001 # works if fdom is calibrated correctly
-air_depth <- -0.0001 # works if sonde is deployed at a deep enough depth (DECK deployments cut it really close on very low tides)
-trim_head <- c(1:20)
-trim_tail <- c(nrow(To_trim)-19):nrow(To_trim)
+summ_2022$propX <- summ_2022$v/allObs
+summ_2022$Rating_finalF <- factor(summ_2022$Rating_final, levels = c("Excellent","Fair","Good","Poor","MaxLimit","NA"))
+summ_2022$varX_F <- factor(summ_2022$varX, levels = c("temp","sc","DO","turb","chl","pc","fdom"))
 
-head(rawdf)
-tail(rawdf)
-
-To_trim$trim[trim_head] <- ifelse(To_trim$fDOMRFU[trim_head] < air_fdom | To_trim$SPC[trim_head] < air_spc | To_trim$Depthm[trim_head] < air_depth,
-                       T,
-                       F)
-To_trim$trim[trim_tail] <- ifelse(To_trim$fDOMRFU[trim_tail] < air_fdom | To_trim$SPC[trim_tail] < air_spc | To_trim$Depthm[trim_tail] < air_depth,
-                       T,
-                       F)
-
-df_trimmed <- To_trim[-which(To_trim$trim == T),]
+library(ggplot2)
+plo_summ <- ggplot(summ_2022, aes(varX_F, propX)) + geom_bar(aes(fill = Rating_finalF), stat = "identity")
+plo_summ
 ```
 

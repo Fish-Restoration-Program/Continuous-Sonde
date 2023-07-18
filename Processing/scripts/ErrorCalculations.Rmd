@@ -234,13 +234,35 @@ for(i in 1:length(list_foul)){
           # when an error is encountered, the loop will be forced to continue and the warning(s) will be shown at the end
           error = function(e){ skip_to_next <<- TRUE})
         if(skip_to_next) {next}
-        }
+      }
+      # this next part assigns a Final Rating. some variables need just one of the two ratings (numeric or percent) while others need to account for both types (assign the lower score). DO uses both and then we also compare it with 
+      # first, order the variable so that you can compare between ratings
+      df_TotalError$Rating_num <- ordered(df_TotalError$Rating_num, levels = rev(colnames(df_Ratings_num)[3:7]))
+      df_TotalError$Rating_perc <- ordered(df_TotalError$Rating_perc, levels = rev(colnames(df_Ratings_num)[3:7]))
+      df_TotalError$Rating_final <- NA
+      # assign numeric rating for the Final Rating of these variables
+      df_TotalError$Rating_final[which(df_TotalError$varX %in% c("temp","pH","chl","pc","fdom"))] <-
+        as.character(df_TotalError$Rating_num[which(df_TotalError$varX %in% c("temp","pH","chl","pc","fdom"))])
+      # assign percent rating for the Final Rating of these variables
+      df_TotalError$Rating_final[which(df_TotalError$varX %in% c("sc"))] <-
+        as.character(df_TotalError$Rating_perc[which(df_TotalError$varX %in% c("sc"))])
+      # Assign lowest rating between percent and numeric for these variables
+      df_TotalError$Rating_final[which(df_TotalError$varX %in% c("turb","DO"))] <-
+        ifelse(df_TotalError$Rating_perc[which(df_TotalError$varX %in% c("turb","DO"))] < df_TotalError$Rating_num[which(df_TotalError$varX %in% c("turb","DO"))],
+               as.character(df_TotalError$Rating_perc[which(df_TotalError$varX %in% c("turb","DO"))]),
+               as.character(df_TotalError$Rating_num[which(df_TotalError$varX %in% c("turb","DO"))]))
+      # Assign lowest rating between this final rating of DOmg/L with the rating for DO_saturation
+      df_TotalError$Rating_final[which(df_TotalError$varX %in% c("DO"))] <-
+        ifelse(df_TotalError$Rating_final[which(df_TotalError$varX %in% c("DO"))] < df_TotalError$Rating_perc[which(df_TotalError$varX %in% c("DO_sat"))],
+               as.character(df_TotalError$Rating_final[which(df_TotalError$varX %in% c("DO"))]),
+               as.character(df_TotalError$Rating_perc[which(df_TotalError$varX %in% c("DO_sat"))]))
+      # place data frame of ratings into list
       list_ratings[i] <- list(df_TotalError)
     }
   }
 }
 toc()
-names(list_ratings) <- names(list_foul)
+names(list_ratings) <- names(list_foul)[1:22] # there are only 22 deployments with both Deployment and Recovery exchanges (needed times for fir st 2022 deployment)
 
 allRatings <- do.call(rbind.data.frame, list_ratings)
 rownames(allRatings) <- NULL

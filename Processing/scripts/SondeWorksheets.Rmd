@@ -23,6 +23,7 @@ colnames(df_Exch) <- cw_Exch$Var_Name
 # make a date variable that is in local timezone
 df_Exch$date2 <- as.Date(format(lubridate::mdy_hms(df_Exch$exchange_date), tz = "America/Los_Angeles"))
 
+
 ### make datetime variable for the individual measurements
 # first, we will subset all columns with time in name
 df_ExchTimes <- df_Exch[,stringr::str_detect(colnames(df_Exch), "_time")]
@@ -69,6 +70,13 @@ df_DeployTimes$sonde_dateDeploy <- paste(df_DeployTimes$deployed_sonde_id,
 df_RecoveryTimes$sonde_dateRecov <- paste(df_RecoveryTimes$recovered_sonde_id,
                                      df_RecoveryTimes$date2,
                                      sep = " ")
+
+# force date change of recovery date for the two deployments since the battery died prior to recovery. This step allows for further matching downstream
+df_RecoveryTimes$date2[which(df_RecoveryTimes$station == "FLYW_Bifurcation" & df_RecoveryTimes$recovered_sonde_id == "19C101554" & as.character(df_RecoveryTimes$date2) == "2022-09-22")] <- as.Date("2022-08-21", format = "%Y-%m-%d")
+df_RecoveryTimes$date2[which(df_RecoveryTimes$station == "FLYW_Bifurcation" & df_RecoveryTimes$recovered_sonde_id == "19C101551" & as.character(df_RecoveryTimes$date2) == "2022-10-24")] <- as.Date("2022-10-23", format = "%Y-%m-%d")
+# force date change of recovery date for the two deployments since the battery died prior to recovery. This step allows for further matching downstream
+df_Exch$date2[which(df_Exch$station == "FLYW_Bifurcation" & df_Exch$recovered_sonde_id == "19C101554" & as.character(df_Exch$date2) == "2022-09-22")] <- as.Date("2022-08-21", format = "%Y-%m-%d")
+df_Exch$date2[which(df_Exch$station == "FLYW_Bifurcation" & df_Exch$recovered_sonde_id == "19C101551" & as.character(df_Exch$date2) == "2022-10-24")] <- as.Date("2022-10-23", format = "%Y-%m-%d")
 
 #testTime <- data.frame(origTime = df_Exch$exchange_date, newTime = NA)
 #testTime$newTime <- lubridate::mdy_hms(testTime$origTime)
