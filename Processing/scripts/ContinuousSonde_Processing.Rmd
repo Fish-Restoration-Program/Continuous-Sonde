@@ -343,7 +343,7 @@ tot_2022 <- ddply(allRatings, c("sondeID","dateRecov"), summarise,
 allObs <- sum(tot_2022$t)
 
 summ_2022$propX <- summ_2022$v/allObs
-summ_2022$Rating_finalF <- factor(summ_2022$Rating_final, levels = c("Excellent","Fair","Good","Poor","MaxLimit","NA"))
+summ_2022$Rating_finalF <- factor(summ_2022$Rating_final, levels = c("Excellent","Good","Fair","Poor","MaxLimit","NA"))
 summ_2022$varX_F <- factor(summ_2022$varX, levels = c("temp","sc","DO","turb","chl","pc","fdom"))
 
 library(ggplot2)
