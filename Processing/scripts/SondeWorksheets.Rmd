@@ -1,0 +1,109 @@
+---
+title: "FRP_ContinuousWQ_SondeWorksheets"
+author: "DMC"
+date: "6/23/2023"
+output: html_document
+---
+
+The goal of this file is to import worksheets from Survey123 and make RData files to use in the Processing script
+
+First, we'll import the Exchange Worksheets and their crosswalk (these were generated using the first version of the CDFW Survey123 e-forms)
+```{r}
+rm(list = ls())
+
+# read in the crosswalk file for renaming columns of raw Survey123 export file (Must make sure version matches)
+cw_Exch <- data.frame(read.csv(here::here("raw","Survey123", "Exchanges230630_ColumnCrosswalk.csv")))
+
+# read in the export frile from Survey123
+df_Exch <- data.frame(read.csv(here::here("raw","Survey123", "Exchanges230630_Export230703.csv")))
+
+# rename the columns of the export data
+colnames(df_Exch) <- cw_Exch$Var_Name
+
+# make a date variable that is in local timezone
+df_Exch$date2 <- as.Date(format(lubridate::mdy_hms(df_Exch$exchange_date), tz = "America/Los_Angeles"))
+
+
+### make datetime variable for the individual measurements
+# first, we will subset all columns with time in name
+df_ExchTimes <- df_Exch[,stringr::str_detect(colnames(df_Exch), "_time")]
+# attach the new date object to subset
+df_ExchTimes2 <- cbind(df_ExchTimes, data.frame(date2 = df_Exch$date2))
+# make a blank version of subset to repopulate with datetime objects
+df_ExchTimes3 <- df_ExchTimes
+df_ExchTimes3[,] <- NA
+# populate blank version of subset with newly created datetime objects
+for(i in 1:ncol(df_ExchTimes3)){
+  df_ExchTimes3[,i] = as.POSIXct(strptime(paste(as.character(df_ExchTimes2[,"date2"]),df_ExchTimes[,i],sep = " "), format = "%Y-%m-%d %H:%M"))
+}
+# populate the original exchange dataset with the newly created datetime objects
+for(i in 1:ncol(df_ExchTimes3)){
+  for(j in 1:ncol(df_Exch)){
+    if(colnames(df_ExchTimes3)[i] == colnames(df_Exch)[j]){
+      df_Exch[,j] = df_ExchTimes3[,i]
+    }
+  }
+}
+
+# make simple subsets of deployment/recovery times. These will be used for trimming datasets based on time
+df_DeployTimes <- df_Exch[,c("station","date2","deployed_sonde_id","deployment_start_time","departure_time")]
+df_RecoveryTimes <- df_Exch[,c("station","date2","recovered_sonde_id","recovery_stop_time","arrival_time")]
+df_Times <- df_Exch[,c("station","date2","deployed_sonde_id","deployment_start_time","departure_time","recovered_sonde_id","recovery_stop_time","arrival_time")]
+
+df_TimesLong <- rbind.data.frame(data.frame(action = c("Recovered"),
+                                            sondeID = df_RecoveryTimes$recovered_sonde_id,
+                                            timeX = df_RecoveryTimes$arrival_time,
+                                            dateX = df_RecoveryTimes$date2),
+                                 data.frame(action = c("Deployed"),
+                                            sondeID = df_DeployTimes$deployed_sonde_id,
+                                            timeX = df_DeployTimes$departure_time,
+                                            dateX = df_DeployTimes$date2)
+                                 )
+df_TimesLong$sonde_date <- paste(df_TimesLong$sondeID,
+                                 df_TimesLong$dateX,
+                                 sep = " ")
+# make a new variable to match with the raw data in downstream processes
+
+df_DeployTimes$sonde_dateDeploy <- paste(df_DeployTimes$deployed_sonde_id,
+                                   df_DeployTimes$date2,
+                                   sep = " ")
+df_RecoveryTimes$sonde_dateRecov <- paste(df_RecoveryTimes$recovered_sonde_id,
+                                     df_RecoveryTimes$date2,
+                                     sep = " ")
+
+# force date change of recovery date for the two deployments since the battery died prior to recovery. This step allows for further matching downstream
+df_RecoveryTimes$date2[which(df_RecoveryTimes$station == "FLYW_Bifurcation" & df_RecoveryTimes$recovered_sonde_id == "19C101554" & as.character(df_RecoveryTimes$date2) == "2022-09-22")] <- as.Date("2022-08-21", format = "%Y-%m-%d")
+df_RecoveryTimes$date2[which(df_RecoveryTimes$station == "FLYW_Bifurcation" & df_RecoveryTimes$recovered_sonde_id == "19C101551" & as.character(df_RecoveryTimes$date2) == "2022-10-24")] <- as.Date("2022-10-23", format = "%Y-%m-%d")
+# force date change of recovery date for the two deployments since the battery died prior to recovery. This step allows for further matching downstream
+df_Exch$date2[which(df_Exch$station == "FLYW_Bifurcation" & df_Exch$recovered_sonde_id == "19C101554" & as.character(df_Exch$date2) == "2022-09-22")] <- as.Date("2022-08-21", format = "%Y-%m-%d")
+df_Exch$date2[which(df_Exch$station == "FLYW_Bifurcation" & df_Exch$recovered_sonde_id == "19C101551" & as.character(df_Exch$date2) == "2022-10-24")] <- as.Date("2022-10-23", format = "%Y-%m-%d")
+
+#testTime <- data.frame(origTime = df_Exch$exchange_date, newTime = NA)
+#testTime$newTime <- lubridate::mdy_hms(testTime$origTime)
+#testTime$pacTime <- format(testTime$newTime, tz = "America/Los_Angeles")
+#testTime$pacDate <- as.Date(testTime$pacTime)
+
+# save the exchange times for use in 'ContinuousSonde_Processing.Rmd'
+save(df_DeployTimes, df_RecoveryTimes, file = here::here("working","CDFW_ExchangeTimes.RData"))
+# save the exchange worksheet for use in 'ErrorCalculations.Rmd'
+save(df_Exch, file = here::here("working","CDFW_ExchangeWorksheet.RData"))
+```
+
+Now, let's import the Calibration Worksheets and their crosswalk (these were generated using the first version of the CDFW Survey123 e-forms)
+```{r}
+rm(list = ls())
+'%ni%' = Negate('%in%')
+cw_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibration230612_ColumnCrosswalk.csv")))
+df_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibration230612_Export230706.csv")))
+colnames(df_Calib) <- cw_Calib$Var_Name
+
+# make a datetime object for the deployment start/stop time
+df_Calib$dts_startstop <- format(lubridate::mdy_hms(df_Calib$deployment_startstop_time), tz = "America/Los_Angeles")
+
+# make 2 separate dataframes (1 with just the data we are interested and 1 with the metadata)
+df_CalibData <- df_Calib[,c("GlobalID","sonde_id","sonde_other","discrete_or_continuous","pre_post","dts_startstop",colnames(df_Calib)[53:95])]
+df_CalibMeta <- df_Calib[,c("GlobalID","sonde_id","sonde_other","discrete_or_continuous","pre_post","dts_startstop",colnames(df_Calib)[7:52])]
+
+save(df_Calib, df_CalibData, df_CalibMeta, file = here::here("working","CDFW_CalibrationWorksheet.RData"))
+```
+
