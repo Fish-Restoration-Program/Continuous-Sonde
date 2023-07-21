@@ -349,5 +349,43 @@ summ_2022$varX_F <- factor(summ_2022$varX, levels = c("temp","sc","DO","turb","c
 library(ggplot2)
 plo_summ <- ggplot(summ_2022, aes(varX_F, propX)) + geom_bar(aes(fill = Rating_finalF), stat = "identity")
 plo_summ
+
+save(list_all_qc, file = here::here("final","QCd_Data_FRP.RData"))
+```
+
+```{r}
+rm(list = ls())
+load(here::here("final","QCd_Data_FRP.RData"))
+
+# create a new list of trimmed data frames
+list_all_2022 <- list_all_qc
+
+#list_all_excess <- list() # create a list of removed rows from each data frame to review after process
+for(i in 1:length(list_all_qc)){
+  list_2022 <- list() # temporary list
+  for(j in 1:length(list_all_2022[[i]])){
+    rtd_sondeID <- strsplit(names(list_all_2022[[1]])[1], split = " ", fixed = TRUE)[[1]][1] # variable for sondeID
+    rtd_dateDeploy <- strsplit(names(list_all_2022[[1]])[1], split = " ", fixed = TRUE)[[1]][2] # variable for Deployment date
+    rtd_dateRecov <- strsplit(names(list_all_2022[[1]])[1], split = " ", fixed = TRUE)[[1]][3] # variable for Recovery date
+    ###DMC230721: pick up here and get 2022 based on dates in preceding two lines
+    # fill in rating columns of deployment dataframe with the Final Rating
+    for(a in 1:ncol(df_temp)){
+      for(b in 1:nrow(df_xNames)){
+        if(colnames(df_temp)[a] == df_xNames$VarName[b]){
+          df_temp[,df_xNames$qcName[b]] = allRatings$Rating_final[which(allRatings$varX == df_xNames$ErrorName[b] 
+                                                                       & allRatings$sondeID == rtd_sondeID 
+                                                                       & allRatings$dateRecov == rtd_dateRecov)]
+        }
+        # copy in number of rows (observations) for each deployment to determine % coverage of quality data
+        allRatings$nObs[which(allRatings$sondeID == rtd_sondeID & allRatings$dateRecov == rtd_dateRecov)] <- nrow(df_temp)
+      }
+    }
+    list_qc[[j]] <- df_temp
+  }
+  names(list_qc) <- names(list_all_trim2[[i]])
+  list_all_2022[[i]] <- list_qc
+  rm(list_qc, rtd_sondeID, rtd_dateDeploy, rtd_dateRecov)
+}
+names(list_all_2022) <- names(list_all_trim2)
 ```
 
