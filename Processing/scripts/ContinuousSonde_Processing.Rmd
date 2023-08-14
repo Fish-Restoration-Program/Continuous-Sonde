@@ -158,8 +158,8 @@ list_all_raw[[x]] <- list_rawdata
 
 for(i in 1:nrow(fname)){
   df_temp <- list_all_raw[[x]][[i]]
-  firstObs <- as.POSIXct(strptime(paste(df_temp$Date[1],df_temp$Time[1],sep = " "), format = "%m/%d/%Y %H:%M:%S"))
-  lastObs <- as.POSIXct(strptime(paste(df_temp$Date[nrow(df_temp)],df_temp$Time[nrow(df_temp)],sep = " "), format = "%m/%d/%Y %H:%M:%S"))
+  firstObs <- as.POSIXct(strptime(paste(df_temp$Date[1],df_temp$Time[1],sep = " "), format = "%m/%d/%Y %H:%M:%S"), tz = "America/Los_Angeles")
+  lastObs <- as.POSIXct(strptime(paste(df_temp$Date[nrow(df_temp)],df_temp$Time[nrow(df_temp)],sep = " "), format = "%m/%d/%Y %H:%M:%S"), tz = "America/Los_Angeles")
   timing <- data.frame(ExoVariable = c("firstObs","lastObs"), ExoValue = c(firstObs,lastObs))
   list_all_meta[[x]][[i]] <- rbind.data.frame(list_all_meta[[x]][[i]], data.frame(ExoVariable = c("firstObs","lastObs"), 
                                                                                   ExoValue = c(as.character(firstObs),as.character(lastObs))))
@@ -176,7 +176,7 @@ for(i in 1:length(list_all_raw)){
                                          substr(list_all_meta[[i]][[j]]$ExoValue[which(list_all_meta[[i]][[j]]$ExoVariable == "firstObs")],0,10),
                                          substr(list_all_meta[[i]][[j]]$ExoValue[which(list_all_meta[[i]][[j]]$ExoVariable == "lastObs")],0,10),
                                          sep = " ")
-    list_all_raw[[i]][[j]]$dts <- as.POSIXct(strptime(paste(list_all_raw[[i]][[j]]$Date,list_all_raw[[i]][[j]]$Time,sep = " "), format = "%m/%d/%Y %H:%M:%S"))
+      list_all_raw[[i]][[j]]$dts <- as.POSIXct(strptime(paste(list_all_raw[[i]][[j]]$Date,list_all_raw[[i]][[j]]$Time,sep = " "), format = "%m/%d/%Y %H:%M:%S"), tz = "America/Los_Angeles")
   }
 }
 
@@ -380,3 +380,5 @@ save(list_all_2022, file = here::here("working","QCd_2022.RData"))
 FLYW <- do.call(rbind.data.frame, list_all_2022[[1]])
 DECK <- do.call(rbind.data.frame, list_all_2022[[2]])
 ```
+
+Call in list_all_2022 into the scripts "WaterVAR_QC.Rmd" (where VAR is the variable of interest) to perform further quality control measures.

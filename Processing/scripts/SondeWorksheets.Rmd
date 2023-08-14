@@ -34,7 +34,7 @@ df_ExchTimes3 <- df_ExchTimes
 df_ExchTimes3[,] <- NA
 # populate blank version of subset with newly created datetime objects
 for(i in 1:ncol(df_ExchTimes3)){
-  df_ExchTimes3[,i] = as.POSIXct(strptime(paste(as.character(df_ExchTimes2[,"date2"]),df_ExchTimes[,i],sep = " "), format = "%Y-%m-%d %H:%M"))
+  df_ExchTimes3[,i] = as.POSIXct(strptime(paste(as.character(df_ExchTimes2[,"date2"]),df_ExchTimes[,i],sep = " "), format = "%Y-%m-%d %H:%M"), tz = "America/Los_Angeles")
 }
 # populate the original exchange dataset with the newly created datetime objects
 for(i in 1:ncol(df_ExchTimes3)){
