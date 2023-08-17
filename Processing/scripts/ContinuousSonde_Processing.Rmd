@@ -7,8 +7,8 @@ output: html_document
 
 The goal of this file is to make all data processing of raw EXO2 exports happen in R rather than a multitude of Excel files.
 
-
 This chunk makes a dataframe with all the potential column names for CDFW FRP sondes so that we can replace them with simple versions
+
 ```{r column naming}
 df_VarNames <- data.frame(ExoVariable = c("Date..MM.DD.YYYY.", "Time..HH.mm.ss.", "Time..Fract..Sec.", "Site.Name", "Chlorophyll.RFU", "Chlorophyll.ug.L", "Cond.µS.cm", "Depth.m", "fDOM.QSU", "fDOM.RFU", "nLF.Cond.µS.cm", "ODO...sat", "ODO...CB", "ODO.mg.L", "Pressure.psi.a", "Sal.psu", "SpCond.µS.cm", "BGA.PC.RFU", "BGA.PC.ug.L", "TDS.mg.L", "Turbidity.FNU", "TSS.mg.L", "Wiper.Position.volt", "Temp..C", "Vertical.Position.m", "Battery.V", "Cable.Pwr.V"),
                           ExoVariable_v2 = c("Date (MM/DD/YYYY)", "Time (HH:mm:ss)", "Time (Fract. Sec)", "Site Name", "Chlorophyll RFU", "Chlorophyll ug/L", "Cond \xb5S/cm", "Depth m", "fDOM QSU", "fDOM RFU", "nLF Cond \xb5S/cm", "ODO % sat", "ODO % local", "ODO mg/L", "Pressure psi a", "Sal psu", "SpCond \xb5S/cm", "BGA PC RFU", "BGA PC ug/L", "TDS mg/L", "Turbidity FNU", "TSS mg/L", "Wiper Position volt", "Temp \xb0C", "Vertical Position m", "Battery V", "Cable Pwr V"), 
@@ -21,6 +21,7 @@ save(df_VarNames, file = "working/CDFW_VarNamesConversion.RData")
 ```
 
 First we are going to import each file into 2 pieces. The first piece will include the sonde metadata and the second piece will contain the continuous data.
+
 ```{r import datasets}
 rm(list = ls())
 '%ni%' = Negate('%in%') # new function that serves as the opposit of %in% operator
@@ -157,8 +158,8 @@ list_all_raw[[x]] <- list_rawdata
 
 for(i in 1:nrow(fname)){
   df_temp <- list_all_raw[[x]][[i]]
-  firstObs <- as.POSIXct(strptime(paste(df_temp$Date[1],df_temp$Time[1],sep = " "), format = "%m/%d/%Y %H:%M:%S"))
-  lastObs <- as.POSIXct(strptime(paste(df_temp$Date[nrow(df_temp)],df_temp$Time[nrow(df_temp)],sep = " "), format = "%m/%d/%Y %H:%M:%S"))
+  firstObs <- as.POSIXct(strptime(paste(df_temp$Date[1],df_temp$Time[1],sep = " "), format = "%m/%d/%Y %H:%M:%S"), tz = "America/Los_Angeles")
+  lastObs <- as.POSIXct(strptime(paste(df_temp$Date[nrow(df_temp)],df_temp$Time[nrow(df_temp)],sep = " "), format = "%m/%d/%Y %H:%M:%S"), tz = "America/Los_Angeles")
   timing <- data.frame(ExoVariable = c("firstObs","lastObs"), ExoValue = c(firstObs,lastObs))
   list_all_meta[[x]][[i]] <- rbind.data.frame(list_all_meta[[x]][[i]], data.frame(ExoVariable = c("firstObs","lastObs"), 
                                                                                   ExoValue = c(as.character(firstObs),as.character(lastObs))))
@@ -175,15 +176,15 @@ for(i in 1:length(list_all_raw)){
                                          substr(list_all_meta[[i]][[j]]$ExoValue[which(list_all_meta[[i]][[j]]$ExoVariable == "firstObs")],0,10),
                                          substr(list_all_meta[[i]][[j]]$ExoValue[which(list_all_meta[[i]][[j]]$ExoVariable == "lastObs")],0,10),
                                          sep = " ")
-    list_all_raw[[i]][[j]]$dts <- as.POSIXct(strptime(paste(list_all_raw[[i]][[j]]$Date,list_all_raw[[i]][[j]]$Time,sep = " "), format = "%m/%d/%Y %H:%M:%S"))
+      list_all_raw[[i]][[j]]$dts <- as.POSIXct(strptime(paste(list_all_raw[[i]][[j]]$Date,list_all_raw[[i]][[j]]$Time,sep = " "), format = "%m/%d/%Y %H:%M:%S"), tz = "America/Los_Angeles")
   }
 }
 
 save(list_all_raw, list_all_meta, file = "working/CDFW_Lists_Raw_Meta.RData")
 ```
 
-
 Trim datasets based on Start/Stop times of each deployment recorded in the Exchange Worksheet (See 'SondeWorksheets.Rmd')
+
 ```{r Primary Trim}
 rm(list = ls())
 
@@ -221,6 +222,7 @@ save(list_all_trim1, file = here::here("working","RTD_Trim1.RData"))
 ```
 
 Trim the edges of the dataset based on whether the sonde has observations indicating it was out of the water.
+
 ```{r Secondary Trim}
 rm(list = ls())
 '%ni%' = Negate('%in%')
@@ -282,6 +284,7 @@ save(list_all_excess2, list_all_trim2, file = here::here("working","RTD_Trim2.RD
 ```
 
 Now, we will bring in the sensor ratings and associate them with each dataset. Ratings were calculated in the 'ErrorCalculations.Rmd' script
+
 ```{r Apply quality scores}
 rm(list = ls())
 '%ni%' = Negate('%in%')
@@ -343,11 +346,39 @@ tot_2022 <- ddply(allRatings, c("sondeID","dateRecov"), summarise,
 allObs <- sum(tot_2022$t)
 
 summ_2022$propX <- summ_2022$v/allObs
-summ_2022$Rating_finalF <- factor(summ_2022$Rating_final, levels = c("Excellent","Fair","Good","Poor","MaxLimit","NA"))
+summ_2022$Rating_finalF <- factor(summ_2022$Rating_final, levels = c("Excellent","Good","Fair","Poor","MaxLimit","NA"))
 summ_2022$varX_F <- factor(summ_2022$varX, levels = c("temp","sc","DO","turb","chl","pc","fdom"))
 
 library(ggplot2)
 plo_summ <- ggplot(summ_2022, aes(varX_F, propX)) + geom_bar(aes(fill = Rating_finalF), stat = "identity")
 plo_summ
+
+save(list_all_qc, file = here::here("working","QCd_Data_FRP.RData"))
 ```
 
+```{r Subset all 2022 data}
+rm(list = ls())
+load(here::here("working","QCd_Data_FRP.RData"))
+
+# create a new list of qc'd data frames to be filtered by year
+list_all_2022 <- list_all_qc
+
+for(i in 1:length(list_all_qc)){
+  #list_2022 <- list() # temporary list
+  for(j in 1:length(list_all_qc[[i]])){
+    rtd_sondeID <- strsplit(names(list_all_qc[[i]])[j], split = " ", fixed = TRUE)[[1]][1] # variable for sondeID
+    rtd_dateDeploy <- as.numeric(substr(strsplit(names(list_all_qc[[i]])[j], split = " ", fixed = TRUE)[[1]][2],0,4)) # variable for Deployment date
+    rtd_dateRecov <- as.numeric(substr(strsplit(names(list_all_qc[[i]])[j], split = " ", fixed = TRUE)[[1]][3],0,4)) # variable for Recovery date                              0)
+    if((rtd_dateDeploy <= 2021 & rtd_dateRecov <= 2021) | (rtd_dateDeploy >= 2023 & rtd_dateRecov >= 2023)){
+      list_all_2022[[i]][[j]] <- list(NULL)
+    }
+    rm(rtd_sondeID, rtd_dateDeploy, rtd_dateRecov)
+  }
+}
+
+save(list_all_2022, file = here::here("working","QCd_2022.RData"))
+FLYW <- do.call(rbind.data.frame, list_all_2022[[1]])
+DECK <- do.call(rbind.data.frame, list_all_2022[[2]])
+```
+
+Call in list_all_2022 into the scripts "WaterVAR_QC.Rmd" (where VAR is the variable of interest) to perform further quality control measures.
