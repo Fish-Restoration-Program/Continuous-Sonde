@@ -40,6 +40,8 @@ rm(list = ls())
 #temp_H_0 <- readRDS("WaterTemp/data/Temp_all_H.rds")
 load(here::here("working","QCd_2022.RData"))
 df_ts <- do.call(rbind.data.frame, list_all_2022[["DECK_Pool"]])
+# df_ts <- rbind.data.frame(do.call(rbind.data.frame, list_all_2022[["DECK_Pool"]]),
+#                           do.call(rbind.data.frame, list_all_2022[["FLYW"]]))
 df_ts$date <- lubridate::date(df_ts$dts)
 df_ts$hour <- lubridate::hour(df_ts$dts)
 df_ts$minute <- lubridate::minute(df_ts$dts)

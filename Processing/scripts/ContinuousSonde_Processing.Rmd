@@ -356,7 +356,7 @@ plo_summ
 save(list_all_qc, file = here::here("working","QCd_Data_FRP.RData"))
 ```
 
-```{r}
+```{r Subset all 2022 data}
 rm(list = ls())
 load(here::here("working","QCd_Data_FRP.RData"))
 
