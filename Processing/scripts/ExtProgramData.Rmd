@@ -18,6 +18,7 @@ endDate <- "2022-12-31T23:45"
 timezone <- "America/Los_Angeles"
 
 parameterQ <- read.csv(here::here("raw","ExtPrograms","USGS","USGS_parameters.csv"))
+
 dailyDataAvailable <- whatNWISdata(
  siteNumber = siteNumber,
  service = "iv"
