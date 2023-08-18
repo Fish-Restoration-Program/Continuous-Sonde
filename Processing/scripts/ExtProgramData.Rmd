@@ -27,5 +27,7 @@ dailyDataAvailable$parameter <- NA
 dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
 siteINFO <- readNWISsite(siteNumber)
 siteAll <- readNWISdata(sites = "11455485", service = "iv", startDate = "2021-04-29T00:00", endDate ="2021-12-31T12:00",tz = "America/Los_Angeles")
+
+save(siteAll, file = here::here("working", "USGS_11455485.RData"))
 ```
 
