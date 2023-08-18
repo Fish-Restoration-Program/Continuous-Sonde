@@ -26,8 +26,16 @@ dailyDataAvailable <- whatNWISdata(
 dailyDataAvailable$parameter <- NA
 dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
 siteINFO <- readNWISsite(siteNumber)
-siteAll <- readNWISdata(sites = "11455485", service = "iv", startDate = "2021-04-29T00:00", endDate ="2021-12-31T12:00",tz = "America/Los_Angeles")
+siteAll <- readNWISdata(sites = siteNumber, service = "iv", startDate = startDate, endDate = endDate,tz = timezone)
 
 save(siteAll, file = here::here("working", "USGS_11455485.RData"))
+
+load(here::here("working", "USGS_11455485.RData"))
+
+col2get <- data.frame(colnames(siteAll),NA)
+col2get[,2] <- stringr::str_match(col2get[,1], "_\\d+")
+col2get$parm_cd <- substr(col2get[,2],2,nchar(col2get[,2]))
+colnames(col2get) <- c("colsNames","num1","parm_cd")
+col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
 ```
 
