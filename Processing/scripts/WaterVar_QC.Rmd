@@ -226,7 +226,7 @@ rm(list = ls())
 load(here::here("working","VarQC_step3.RData"))
 
 df_Trend <- data.frame(xVar = xVar,
-                        xTrend = c("6 months","6 months","3 months","15 days","15 days","15 days","6 months"))
+                        xTrend = c("6 months","6 months","6 month","7 days","7 days","15 days","6 months"))
 
 list_all_QC4 <- list()
 for(i in 1:length(xSite)){
@@ -266,6 +266,7 @@ for(i in 1:length(xSite)){
     q4_b <- df_q4 %>%
       filter(Flag_QC4 == "Y")
     
+    df_q4$Flag_QC4 <- "N"
     list_QC4[[j]] <- df_q4
     rm(df, df_q4, q4_a, q4_b, q4_c, q4_d)
   }
@@ -431,7 +432,7 @@ save(list_all_QC7, xSite, xVar, file = here::here("working","VarQC_step7.RData")
 #save(temp_final, file = "AllLTM4AnalysisQC_TempQH_221230.RData")
 ```
 
-```{r Plotting}
+```{r Plotting filtered over unfiltered}
 library(ggplot2)
 library(ggpubr)
 rm(list = ls())
@@ -439,6 +440,7 @@ load(here::here("working","VarQC_step1.RData"))
 load(here::here("working","VarQC_step7.RData"))
 
 list_all_plo <- list()
+list_all_multi <- list()
 for(i in 1:length(xSite)){
   list_plo <- list()
   for(j in 1:length(xVar)){
@@ -458,11 +460,14 @@ for(i in 1:length(xSite)){
                          ncol = 1, nrow = 7)
                          #common.legend = TRUE, legend = "bottom")
   ggsave(paste("ContinuousWQ_",xSite[i],".png",sep = ""), multi_plo, width = 625, height = 800, dpi = 96, units = "px")
-  list_all_plo[[i]] <- multi_plo
-  #rm(list_plo)
+  list_all_multi[[i]] <- multi_plo
+  list_all_plo[[i]] <- list_plo
+  rm(list_plo, multi_plo)
 }
+names(list_all_multi) <- xSite
 names(list_all_plo) <- xSite
 ```
+
 
 
 ## Write individual and combined station files (Optional)
