@@ -466,6 +466,8 @@ for(i in 1:length(xSite)){
 }
 names(list_all_multi) <- xSite
 names(list_all_plo) <- xSite
+
+save(list_all_QC7, xSite, xVar, file = here::here("final","QCd2_Data_FRP.RData"))
 ```
 
 
