@@ -98,3 +98,99 @@ colnames(df_ToeDrain)[3:16] <- c("tempC","tempC_flag","gage","gage_flag","sc","s
 
 save(df_ToeDrain, file = here::here("working", "ExtPrograms", "USGS_ToeDrain.RData"))
 ```
+
+For 2022 data from USGS Liberty Island station near Yolo Flyway Farms
+```{r}
+library(tidyverse)
+library(dataRetrieval)
+rm(list = ls())
+
+siteNumber <- "11455315"
+parameterCd <- "00065" # Discharge
+startDate <- "2022-01-01T00:00"
+endDate <- "2022-12-31T23:45"
+timezone <- "America/Los_Angeles"
+
+parameterQ <- read.csv(here::here("raw","ExtPrograms","USGS","USGS_parameters.csv"))
+
+dailyDataAvailable <- whatNWISdata(
+ siteNumber = siteNumber,
+ service = "iv"
+)
+dailyDataAvailable$parameter <- NA
+dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
+siteINFO <- readNWISsite(siteNumber)
+siteAll <- readNWISdata(sites = siteNumber, service = "iv", startDate = startDate, endDate = endDate,tz = timezone)
+
+#save(siteAll, file = here::here("working", "USGS_11455485.RData"))
+
+#load(here::here("working", "USGS_11455485.RData"))
+
+col2get <- data.frame(colnames(siteAll),NA)
+col2get[,2] <- stringr::str_match(col2get[,1], "_\\d+")
+col2get$parm_cd <- substr(col2get[,2],2,nchar(col2get[,2]))
+colnames(col2get) <- c("colsNames","num1","parm_cd")
+col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
+
+df_Liberty <- siteAll[,c(2,3,which(colnames(siteAll) %in% col2get2[c(1,2, #temperature of upper sonde and its QC status
+                                                                    7,8,# SC of upper sonde and its QC status
+                                                                    13,14,# fdom of upper sonde and its QC status
+                                                                    15,16,# chl of upper sonde and its QC status
+                                                                    17,18,# turb of upper sonde and its QC status
+                                                                    9,10,# pH and its QC status
+                                                                    5,6) # gage height and its QC status
+                                                                  ,"colsNames"] 
+                                  ))] 
+
+colnames(df_Liberty)[3:16] <- c("tempC","tempC_flag","gage","gage_flag","sc","sc_flag", "pH","pH_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag")
+
+save(df_Liberty, file = here::here("working", "ExtPrograms", "USGS_ToeDrain.RData"))
+```
+
+For 2022 data from USGS Grizzly Bay station near Tule Red
+```{r}
+library(tidyverse)
+library(dataRetrieval)
+rm(list = ls())
+
+siteNumber <- "380631122032201"
+parameterCd <- "00065" # Discharge
+startDate <- "2022-01-01T00:00"
+endDate <- "2022-12-31T23:45"
+timezone <- "America/Los_Angeles"
+
+parameterQ <- read.csv(here::here("raw","ExtPrograms","USGS","USGS_parameters.csv"))
+
+dailyDataAvailable <- whatNWISdata(
+ siteNumber = siteNumber,
+ service = "iv"
+)
+dailyDataAvailable$parameter <- NA
+dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
+siteINFO <- readNWISsite(siteNumber)
+siteAll <- readNWISdata(sites = siteNumber, service = "iv", startDate = startDate, endDate = endDate,tz = timezone)
+
+#save(siteAll, file = here::here("working", "USGS_11455485.RData"))
+
+#load(here::here("working", "USGS_11455485.RData"))
+
+col2get <- data.frame(colnames(siteAll),NA)
+col2get[,2] <- stringr::str_match(col2get[,1], "_\\d+")
+col2get$parm_cd <- substr(col2get[,2],2,nchar(col2get[,2]))
+colnames(col2get) <- c("colsNames","num1","parm_cd")
+col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
+
+df_Grizzly <- siteAll[,c(2,3,which(colnames(siteAll) %in% col2get2[c(1,2, #temperature of upper sonde and its QC status
+                                                                    7,8,# SC of upper sonde and its QC status
+                                                                    13,14,# fdom of upper sonde and its QC status
+                                                                    15,16,# chl of upper sonde and its QC status
+                                                                    17,18,# turb of upper sonde and its QC status
+                                                                    9,10,# pH and its QC status
+                                                                    5,6) # gage height and its QC status
+                                                                  ,"colsNames"] 
+                                  ))] 
+
+colnames(df_Grizzly)[3:16] <- c("tempC","tempC_flag","gage","gage_flag","sc","sc_flag", "pH","pH_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag")
+
+save(df_Grizzly, file = here::here("working", "ExtPrograms", "USGS_Grizzly.RData"))
+```
