@@ -38,7 +38,8 @@ col2get$parm_cd <- substr(col2get[,2],2,nchar(col2get[,2]))
 colnames(col2get) <- c("colsNames","num1","parm_cd")
 col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
 
-df_Toland <- siteAll[,c(2,3,which(colnames(siteAll) %in% col2get2[c(3,4, #temperature of upper sonde and its QC status
+df_Toland <- siteAll[,c(2,3,14,15, # 14 and 15 are DO and its QC status
+                        which(colnames(siteAll) %in% col2get2[c(3,4, #temperature of upper sonde and its QC status
                                                                     8,9,# SC of upper sonde and its QC status
                                                                     13,14,# fdom of upper sonde and its QC status
                                                                     15,16,# chl of upper sonde and its QC status
@@ -46,7 +47,7 @@ df_Toland <- siteAll[,c(2,3,which(colnames(siteAll) %in% col2get2[c(3,4, #temper
                                                                   ,"colsNames"] 
                                   ))] 
 
-colnames(df_Toland)[3:12] <- c("tempC","tempC_flag","sc","sc_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag")
+colnames(df_Toland)[3:14] <- c("do","do_flag","tempC","tempC_flag","sc","sc_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag")
 
 save(df_Toland, file = here::here("working", "ExtPrograms", "USGS_Toland.RData"))
 ```
@@ -84,7 +85,8 @@ col2get$parm_cd <- substr(col2get[,2],2,nchar(col2get[,2]))
 colnames(col2get) <- c("colsNames","num1","parm_cd")
 col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
 
-df_ToeDrain <- siteAll[,c(2,3,which(colnames(siteAll) %in% col2get2[c(1,2, #temperature of upper sonde and its QC status
+df_ToeDrain <- siteAll[,c(2,3,12,13, # 12 and 13 are DO and its QC status
+                          which(colnames(siteAll) %in% col2get2[c(1,2, #temperature of upper sonde and its QC status
                                                                     7,8,# SC of upper sonde and its QC status
                                                                     13,14,# fdom of upper sonde and its QC status
                                                                     15,16,# chl of upper sonde and its QC status
@@ -94,7 +96,7 @@ df_ToeDrain <- siteAll[,c(2,3,which(colnames(siteAll) %in% col2get2[c(1,2, #temp
                                                                   ,"colsNames"] 
                                   ))] 
 
-colnames(df_ToeDrain)[3:16] <- c("tempC","tempC_flag","gage","gage_flag","sc","sc_flag", "pH","pH_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag")
+colnames(df_ToeDrain)[3:18] <- c("do","do_flag","tempC","tempC_flag","gage","gage_flag","sc","sc_flag", "pH","pH_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag")
 
 save(df_ToeDrain, file = here::here("working", "ExtPrograms", "USGS_ToeDrain.RData"))
 ```
@@ -132,19 +134,20 @@ col2get$parm_cd <- substr(col2get[,2],2,nchar(col2get[,2]))
 colnames(col2get) <- c("colsNames","num1","parm_cd")
 col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
 
-df_Liberty <- siteAll[,c(2,3,which(colnames(siteAll) %in% col2get2[c(1,2, #temperature of upper sonde and its QC status
+df_Liberty <- siteAll[,c(2,3,12,13,# 12 and 13 are DO and its QC status
+                         which(colnames(siteAll) %in% col2get2[c(1,2, #temperature of upper sonde and its QC status
                                                                     7,8,# SC of upper sonde and its QC status
                                                                     13,14,# fdom of upper sonde and its QC status
                                                                     15,16,# chl of upper sonde and its QC status
-                                                                    17,18,# turb of upper sonde and its QC status
+                                                                    19,20,# turb of upper sonde and its QC status
                                                                     9,10,# pH and its QC status
                                                                     5,6) # gage height and its QC status
                                                                   ,"colsNames"] 
                                   ))] 
 
-colnames(df_Liberty)[3:16] <- c("tempC","tempC_flag","gage","gage_flag","sc","sc_flag", "pH","pH_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag")
+colnames(df_Liberty)[3:18] <- c("do","do_flag","tempC","tempC_flag","gage","gage_flag","sc","sc_flag", "pH","pH_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag")
 
-save(df_Liberty, file = here::here("working", "ExtPrograms", "USGS_ToeDrain.RData"))
+save(df_Liberty, file = here::here("working", "ExtPrograms", "USGS_Liberty.RData"))
 ```
 
 For 2022 data from USGS Grizzly Bay station near Tule Red
@@ -180,17 +183,17 @@ col2get$parm_cd <- substr(col2get[,2],2,nchar(col2get[,2]))
 colnames(col2get) <- c("colsNames","num1","parm_cd")
 col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
 
-df_Grizzly <- siteAll[,c(2,3,which(colnames(siteAll) %in% col2get2[c(1,2, #temperature of upper sonde and its QC status
-                                                                    7,8,# SC of upper sonde and its QC status
-                                                                    13,14,# fdom of upper sonde and its QC status
-                                                                    15,16,# chl of upper sonde and its QC status
-                                                                    17,18,# turb of upper sonde and its QC status
-                                                                    9,10,# pH and its QC status
-                                                                    5,6) # gage height and its QC status
+df_Grizzly <- siteAll[,c(2,3,8,9, # 8 and 9 are DO and its QC status
+                         which(colnames(siteAll) %in% col2get2[c(1,2, #temperature of upper sonde and its QC status
+                                                                    3,4,# SC of upper sonde and its QC status
+                                                                    9,10,# fdom of upper sonde and its QC status
+                                                                    11,12,# chl of upper sonde and its QC status
+                                                                    13,14,# turb of upper sonde and its QC status
+                                                                    5,6)# pH and its QC status
                                                                   ,"colsNames"] 
                                   ))] 
 
-colnames(df_Grizzly)[3:16] <- c("tempC","tempC_flag","gage","gage_flag","sc","sc_flag", "pH","pH_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag")
+colnames(df_Grizzly)[3:16] <- c("do","do_flag","tempC","tempC_flag","sc","sc_flag", "pH","pH_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag")
 
 save(df_Grizzly, file = here::here("working", "ExtPrograms", "USGS_Grizzly.RData"))
 ```
