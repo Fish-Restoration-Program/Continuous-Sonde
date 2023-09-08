@@ -197,3 +197,44 @@ colnames(df_Grizzly)[3:16] <- c("do","do_flag","tempC","tempC_flag","sc","sc_fla
 
 save(df_Grizzly, file = here::here("working", "ExtPrograms", "USGS_Grizzly.RData"))
 ```
+
+Check the coverage of Accepted vs Provisional data
+```{r}
+library(ggplot2)
+library(ggpubr)
+rm(list = ls())
+
+load(here::here("working", "ExtPrograms", "USGS_ToeDrain.RData"))
+load(here::here("working", "ExtPrograms", "USGS_Liberty.RData"))
+load(here::here("working", "ExtPrograms", "USGS_Toland.RData"))
+load(here::here("working", "ExtPrograms", "USGS_Grizzly.RData"))
+
+list_all <- list(df_ToeDrain, df_Liberty, df_Toland, df_Grizzly)
+names(list_all) <- c("Toe Drain","Liberty Island","Toland Landing", "Grizzly Bay")
+
+dat2subset <- c("dateTime","do","tempC","sc","pH","fdom","chl","turb")
+flag2subset <- c("dateTime","do_flag","tempC_flag","sc_flag","pH_flag","fdom_flag","chl_flag","turb_flag")
+
+list_plo <- list()
+for(i in 1:length(list_all)){
+        df_longData <- reshape2::melt(list_all[[i]][,colnames(list_all[[i]]) %in% dat2subset], id.vars = c("dateTime"))
+        df_longQC <- reshape2::melt(list_all[[i]][,colnames(list_all[[i]]) %in% flag2subset], id.vars = c("dateTime"))
+        
+        df_long <- cbind.data.frame(df_longData, df_longQC[,3])
+        colnames(df_long)[4] <- "flag"
+        ploX <- ggplot(df_long[which(df_long$flag %in% c("A","P")),], aes(x = dateTime, y = value)) +
+                geom_point(aes(color = flag)) +
+                facet_grid(variable ~., scales = "free") +
+                ggtitle(names(list_all)[[i]])
+        list_plo[[i]] <- ploX
+}
+names(list_plo) <- names(list_all)
+
+multi_plo <- ggarrange(list_plo[[1]], list_plo[[2]], list_plo[[3]], list_plo[[4]],
+                         ncol = 4, nrow = 1,
+                         common.legend = FALSE, legend = "bottom")
+ggsave(paste("ExtPrograms_All",".png",sep = ""), multi_plo, width = 1920, height = 1080, dpi = 150, units = "px")
+
+save(list_all, file = here::here("working","ExtPrograms","AllExtProgram_Long.RData"))
+```
+
