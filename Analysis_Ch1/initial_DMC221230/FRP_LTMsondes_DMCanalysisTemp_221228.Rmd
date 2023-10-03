@@ -1316,7 +1316,7 @@ library(dplyr)
 
 rm(list = ls())
 
-load("AllLTM4AnalysisQC_DepthQH_221230.RData")
+load(here::here("initial_DMC221230","AllLTM4AnalysisQC_DepthQH_221230.RData"))
 '%ni%' <- Negate('%in%')
 
 

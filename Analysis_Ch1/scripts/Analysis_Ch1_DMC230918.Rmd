@@ -25,7 +25,7 @@ for(i in 1:length(list_all_qc)){
     } else {
       skip_to_next <- FALSE
       tryCatch({
-      list_all[[i]][[j]] <- list_all_qc[[i]][[j]][,c("Site","dts","TempC","SPC","DOmgL","Turb","TempC_qcE","SPC_qcE","DOmgL_qcE","Turb_qcE")]
+      list_all[[i]][[j]] <- list_all_qc[[i]][[j]][,c("Site","dts","TempC","SPC","DOmgL","Turb","TempC_qcE","SPC_qcE","DOmgL_qcE","Turb_qcE","Depthm")]
       },
       error = function(e){ skip_to_next <<- TRUE})
       if(skip_to_next) {next}
