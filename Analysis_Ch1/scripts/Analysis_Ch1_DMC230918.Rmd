@@ -88,8 +88,8 @@ load(here::here("working","All_Raw.RData"))
 xSite <- names(list_all)
 cols.num <- c("TempC","DOmgL","SPC","Turb")
 for(i in 1:length(xSite)){
-  df <- list_all[[xSite[4]]]
-  df$Site2 <- names(list_all)[4]
+  df <- list_all[[xSite[2]]]
+  df$Site2 <- names(list_all)[2]
   df[cols.num] <- sapply(df[cols.num], as.numeric)
   rownames(df) <- NULL
   dfDUP <- df[duplicated(df$dts2),]
