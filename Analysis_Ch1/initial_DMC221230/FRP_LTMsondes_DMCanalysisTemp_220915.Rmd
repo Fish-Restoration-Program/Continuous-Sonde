@@ -1,0 +1,3634 @@
+---
+title: "FRP_LTMsonde analysis"
+author: "DMC"
+date: "5/25/2022"
+output: html_document
+---
+
+
+This file contains a preliminary view of the long-term sonde deployments for Yolo Flyway Farms and Decker (breach + pool)
+OLD - DMC210722 - this was modified to include the new compiled data perfomed by DMC on 210722
+DMC220526 - this was modified to work with the new compiled data performed by DMC on 220525
+
+```{r}
+rm(list = ls())
+
+df_DeckB <- data.frame(read.csv(file = "DMC_CompileDataRaw4R_DeckerBreach.csv"))
+df_DeckB$Site.Name <- c("Decker Breach")
+df_DeckP <- data.frame(read.csv(file = "DMC_CompileDataRaw4R_DeckerPool.csv"))
+df_DeckP$Site.Name <- c("Decker Pool")
+df_YoloF <- data.frame(read.csv(file = "DMC_CompileDataRaw4R_YoloFlyway.csv"))
+df_YoloF$Site.Name <- c("Yolo Flyway Farm")
+df <- rbind.data.frame(df_DeckB,df_DeckP,df_YoloF)
+colnames(df) <- c("SondeName","Date","Time","tFracSec","Site","ChlRFU","Depthm","fDOMRFU","DOsat","DOmgL","SPC","PCRFU","Turb","TempC","WiperPos")
+df$dts <- paste(df$Date,df$Time,sep = " ")
+df$dts <- as.POSIXct(strptime(df$dts, format = "%m/%d/%Y %H:%M:%S"))
+df$Chlconc <- c(rep(NA,length(df$SondeName)))
+df$fDOMconc <- c(rep(NA,length(df$SondeName)))
+
+save(df, file = "FRP_LTMsonde_221207.RData") ###DMC220714: saved again to include Decker Breach data from 210414-210707
+```
+
+For Tule Red data collected by ESA (2020, 2022) and DWR (2021)
+```{r}
+library(ggplot2)
+
+rm(list = ls())
+
+df_TuleESA_B <- data.frame(read.csv(file = "DMC_CompileDataRaw4R_ESA_TULEbreach.csv"))
+df_TuleESA_B.2 <- df_TuleESA_B[-which(df_TuleESA_B$datetimestamp == ""),]
+df_TuleESA_B.2$Site <- "Tule Breach"
+df_TuleESA_P <- data.frame(read.csv(file = "DMC_CompileDataRaw4R_ESA_TULEpond.csv"))
+df_TuleESA_P.2 <- df_TuleESA_P[-which(df_TuleESA_P$datetimestamp == ""),] 
+df_TuleESA_P.2$Site <- "Tule Pond"
+df_TuleESA_P.2[,c("Pressure_psi","Depth_ft")] <- NA
+df_TuleESA_Ch <- data.frame(read.csv(file = "DMC_CompileDataRaw4R_ESA_TULEchannel.csv"))
+df_TuleESA_Ch$Site <- "Tule Channel"
+df_TuleESA_Ch[,c("Baro_psi","Pressure_psi","Depth_ft","Chla_RFU","Chla_ugL","SPC","Saln_psu","Turb_NTU")] <- NA
+
+
+df_TuleESA <- rbind.data.frame(df_TuleESA_B.2[,c("Site","datetimestamp","Depth_ft","TempC","DO_mgL","SPC","Saln_psu","Turb_NTU","Chla_RFU","Chla_ugL","Baro_psi","Pressure_psi")],
+                            df_TuleESA_P.2[,c("Site","datetimestamp","Depth_ft","TempC","DO_mgL","SPC","Saln_psu","Turb_NTU","Chla_RFU","Chla_ugL","Baro_psi","Pressure_psi")],
+                            df_TuleESA_Ch[,c("Site","datetimestamp","Depth_ft","TempC","DO_mgL","SPC","Saln_psu","Turb_NTU","Chla_RFU","Chla_ugL","Baro_psi","Pressure_psi")])
+
+df_TuleESA$datetimestamp <- gsub("3/16/22","3/16/2022", df_TuleESA$datetimestamp,fixed = TRUE)
+df_TuleESA$dts <- as.POSIXct(strptime(df_TuleESA$datetimestamp, format = "%m/%d/%Y %H:%M"))
+
+df_TuleESA.2 <- df_TuleESA[,c("Site","dts","Depth_ft","TempC","DO_mgL","SPC","Saln_psu","Turb_NTU","Chla_RFU","Chla_ugL","Baro_psi","Pressure_psi")]
+ggplot(df_TuleESA.2, aes(x = dts, y = TempC)) + geom_point(alpha = 0.5) + facet_grid(Site~.)
+
+### now add Tule Red data from DWR breach by MWQI
+df_TuleMWQI_B <- data.frame(read.csv("TRB_2021_MWQIdata.csv"))
+
+unique(df_TuleMWQI_B$qaqc_flag_id)
+df_TuleMWQI_B.2 <- df_TuleMWQI_B[which(df_TuleMWQI_B$qaqc_flag_id == "G"),]
+df_TuleMWQI_B.2$dts <- as.POSIXct(strptime(df_TuleMWQI_B.2$time, format = "%m/%d/%Y %H:%M"))
+
+
+df_TuleMWQI_B.3 <- df_TuleMWQI_B.2[which(df_TuleMWQI_B.2$dts >= as.POSIXct(strptime("2021-01-01 00:00", format = "%Y-%m-%d")) & 
+                       df_TuleMWQI_B.2$dts <= as.POSIXct(strptime("2021-12-31 23:45", format = "%Y-%m-%d"))),
+               c(6,5,2)]
+
+
+df_TuleMWQI <- reshape2::dcast(df_TuleMWQI_B.2, dts ~ analyte_name, value.var = "value")
+
+
+### now add Tule Red data from FRP-DWR
+df_TuleDWR_B <- data.frame(read.csv("DMC_CompileDataRaw4R_FRPDWR_TULEbreach.csv"))
+df_TuleDWR_P <- data.frame(read.csv("DMC_CompileDataRaw4R_FRPDWR_TULEpond.csv"))
+df_TuleDWR_B[,colnames(df_TuleDWR_P)[16:19]] <- NA
+df_TuleDWR_B$Site.Name <- "Tule Breach"
+df_TuleDWR_P$Site.Name <- "Tule Pond"
+
+df_TuleDWR <- rbind.data.frame(df_TuleDWR_B,df_TuleDWR_P)
+df_TuleDWR$datetime <- paste(df_TuleDWR$Date..MM.DD.YYYY.,df_TuleDWR$Time..HH.mm.ss.)
+df_TuleDWR$dts <- as.POSIXct(strptime(df_TuleDWR$datetime, format = "%m/%d/%Y %H:%M"))
+ggplot(df_TuleDWR, aes(x = dts, y = TempC)) + geom_point() + facet_grid(Site.Name~.)
+
+# rename columns and merge all temp, DO, saln, and turbidity
+colnames(df_TuleESA)
+colnames(df_TuleDWR)
+colnames(df_TuleMWQI)
+df_TuleESA.2$Depth_m <- NA
+df_TuleESA.2$Source <- "ESA"
+df_TuleESA_4merge <- df_TuleESA.2[,c("Site","Source","dts","Depth_m","Depth_ft","TempC","DO_mgL","SPC","Turb_NTU")]
+df_TuleDWR$Depth_ft <- NA
+df_TuleDWR$Source <- "DWR"
+df_TuleDWR_4merge <- df_TuleDWR[,c("Site.Name","Source","dts","Depth_m","Depth_ft","TempC","DO_mgL","SPC","Turb_FNU")]
+df_TuleMWQI[,c("Site")] <- "Tule Breach"
+df_TuleMWQI[,c("Depth_m")] <- NA
+df_TuleMWQI[,c("Depth_ft")] <- NA
+df_TuleMWQI$Source <- "MWQI"
+df_TuleMWQI_4merge <- df_TuleMWQI[,c("Site","Source","dts","Depth_m","Depth_ft","Water Temperature","Dissolved Oxygen","Specific Conductance","Turbidity")]
+colnames(df_TuleMWQI_4merge) <- c("Site","Source","dts","Depth_m","Depth_ft","TempC","DO_mgL","SPC","Turb_FNU")
+colnames(df_TuleESA_4merge) <- c("Site","Source","dts","Depth_m","Depth_ft","TempC","DO_mgL","SPC","Turb_FNU")
+colnames(df_TuleDWR_4merge) <- c("Site","Source","dts","Depth_m","Depth_ft","TempC","DO_mgL","SPC","Turb_FNU")
+
+df_TULEmerge <- rbind.data.frame(df_TuleESA_4merge, df_TuleDWR_4merge, df_TuleMWQI_4merge)
+
+ggplot(df_TULEmerge, aes(x = dts, y = TempC, color = Source)) + geom_point() + facet_grid(Site~.)
+
+save(df_TULEmerge, file = "TULE_LTMsondes_221208.RData")
+```
+
+get data from usgs for 2022 (this brings in data retrieved through USGS 'dataRetrieval' package)
+```{r}
+rm(list = ls())
+# First M13
+parameterQ <- read.csv("USGS_parameters.csv")
+siteAll <- data.frame(read.csv("C:/Users/DCox/OneDrive - California Department of Fish and Wildlife/Documents/FRP/Monitoring/Data/Long Term Water Quality/Datasets/LTWQM_ExternalProgramData/USGS/USGS_M13_siteAll.csv"))
+
+col2get <- data.frame(colnames(siteAll),NA)
+col2get[,2] <- stringr::str_match(col2get[,1], "_\\d+")
+col2get$parm_cd <- substr(col2get[,2],2,nchar(col2get[,2]))
+colnames(col2get) <- c("colsNames","num1","parm_cd")
+col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
+
+
+df_M13 <- siteAll[,c(3,14,which(colnames(siteAll) %in% col2get2[c(3,5,8,11,13,15,17),2]))] # 14 here is Dissolved Oxygen (pm code 00300)
+colnames(df_M13) <- c("datetime","do","temp","gageFt","spc","ph","fdom","fchl","turb")
+df_M13$dts <- as.POSIXct(strptime(df_M13$datetime, format = "%Y-%m-%d %H:%M"))
+
+#save(df_M13, file = "USGS_M13_siteAll.RData")
+
+rm(list = ls())
+# Now TOED
+parameterQ <- read.csv("USGS_parameters.csv")
+siteAll <- data.frame(read.csv("C:/Users/DCox/OneDrive - California Department of Fish and Wildlife/Documents/FRP/Monitoring/Data/Long Term Water Quality/Datasets/LTWQM_ExternalProgramData/USGS/USGS_TOED_siteAll.csv"))
+
+col2get <- data.frame(colnames(siteAll),NA)
+col2get[,2] <- stringr::str_match(col2get[,1], "_\\d+")
+col2get$parm_cd <- substr(col2get[,2],2,nchar(col2get[,2]))
+colnames(col2get) <- c("colsNames","num1","parm_cd")
+col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
+
+
+df_TOED <- siteAll[,c(3,12,which(colnames(siteAll) %in% col2get2[c(2,6,7,10,14,15,20),2]))] # 12 here is Dissolved Oxygen (pm code 00300)
+colnames(df_TOED) <- c("datetime","do","temp","gageFt","spc","ph","fdom","fchl","turb")
+df_TOED$dts <- as.POSIXct(strptime(df_TOED$datetime, format = "%Y-%m-%d %H:%M"))
+
+#save(df_TOED, file = "USGS_TOED_siteAll.RData")
+
+
+rm(list = ls())
+# Now GRZB
+parameterQ <- read.csv("USGS_parameters.csv")
+siteAll <- data.frame(read.csv("C:/Users/DCox/OneDrive - California Department of Fish and Wildlife/Documents/FRP/Monitoring/Data/Long Term Water Quality/Datasets/LTWQM_ExternalProgramData/USGS/USGS_GRZB_siteAll.csv"))
+
+col2get <- data.frame(colnames(siteAll),NA)
+col2get[,2] <- stringr::str_match(col2get[,1], "_\\d+")
+col2get$parm_cd <- substr(col2get[,2],2,nchar(col2get[,2]))
+colnames(col2get) <- c("colsNames","num1","parm_cd")
+col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
+
+
+df_GRZB <- siteAll[,c(3,8,which(colnames(siteAll) %in% col2get2[c(2,3,6,10,11,14),2]))] # 8 here is Dissolved Oxygen (pm code 00300)
+colnames(df_GRZB) <- c("datetime","do","temp","spc","ph","fdom","fchl","turb")#,"gageFt"
+df_GRZB$dts <- as.POSIXct(strptime(df_GRZB$datetime, format = "%Y-%m-%d %H:%M"))
+df_GRZB$gageFt <- NA
+df_GRZB.2 <- df_GRZB[,c(1:3,10,4:9)]
+
+save(df_GRZB.2, file = "USGS_GRZB_siteAll.RData")
+```
+
+
+
+Make windows for looking at chunks of time
+```{r}
+library(plyr)
+rm(list = ls())
+
+load("LTM_CATCH_04.RData")
+dfSeasons <- data.frame(mo = c(seq(1,12,1)),
+                        season = c(rep("winter",2),
+                                   rep("spring",3),
+                                   rep("summer",3),
+                                   rep("fall",3),
+                                   "winter"))
+
+load("FRP_LTMsonde_221207.RData")
+unique(df$Site)
+#df$dts[which(is.na(df$dts)==TRUE)] <- as.POSIXct(strptime(paste(df$Date[which(is.na(df$dts)==TRUE)],
+                                                                #df$Time[which(is.na(df$dts)==TRUE)]),format = "%m/%d/%Y %H:%M:%s"))
+df$dts2 <- as.POSIXct(strptime(paste(df$Date, df$Time),format = "%m/%d/%Y %H:%M:%S", tz = "GMT"))
+
+
+load("TULE_LTMsondes_221208.RData")
+colnames(df)
+colnames(df_TULEmerge)
+df$Source <- "CDFW"
+df$Depth_ft <- NA
+df.2 <- df[,c("Site","Source","dts","Depthm","Depth_ft","TempC","DOmgL","SPC","Turb")]
+colnames(df.2) <- colnames(df_TULEmerge)
+
+dfFRP <- rbind.data.frame(df.2,df_TULEmerge)
+dfFRP$sitetype <- "Restoration"
+
+load("ExtLTM_CompleteMerge.RData")
+unique(dfAll$site)
+df_SDI <- dfAll[which(dfAll$site %in% c("SDI_USGS") 
+                      & dfAll$dts >= as.POSIXct(strptime("2019-01-01 00:00", format = "%Y-%m-%d %H:%M")) 
+                      & dfAll$dts < as.POSIXct(strptime("2021-04-28 00:00", format = "%Y-%m-%d %H:%M"))),]
+colnames(df_SDI)
+df_SDI$Source <- "USGS"
+df_SDI$sitetype <- "Adj. Waterbody"
+df_SDI$Depth_ft <- NA
+df_SDI$Depth_m <- NA
+df_SDI.2 <- df_SDI[,c("site","Source","dts","Depth_m","Depth_ft","temp","do","sc","turb","sitetype")]
+colnames(df_SDI.2) <- colnames(dfFRP)
+
+load("USGS_M13_siteAll.RData")
+load("USGS_TOED_siteAll.RData")
+load("USGS_GRZB_siteAll.RData")
+df_M13$site <- "M13_USGS"
+df_GRZB.2$site <- "GRZB_USGS"
+df_TOED$site <- "TOED_USGS"
+df_SDI.2
+df_USGS <- rbind.data.frame(df_M13,df_GRZB.2,df_TOED)
+df_USGS$Source <- "USGS"
+df_USGS$sitetype <- "Adj. Waterbody"
+df_USGS$Depth_m <- NA
+df_USGS.2 <- df_USGS[,c("site","Source","dts","Depth_m","gageFt","temp","do","spc","turb","sitetype")]
+colnames(df_USGS.2) <- colnames(dfFRP)
+
+dfcombined <- rbind.data.frame(dfFRP,df_SDI.2,df_USGS.2)
+
+#dfDeck$slope1 <- dfDeck$Depthm - data.table::shift(dfDeck$Depthm, fill = data.table::first(dfDeck$Depthm))
+#dfDeck$EorF <- ifelse(dfDeck$slope1 < 0, "Ebb", "Flood")
+dfcombined$threshTemp <- ifelse(dfcombined$TempC > 20, "Suboptimal", "Optimal")
+dfcombined$threshTurb <- ifelse(dfcombined$Turb_FNU > 80 | dfcombined$Turb_FNU < 12, "Suboptimal", "Optimal")
+
+
+dfcombined$mo <- lubridate::month(dfcombined$dts)
+dfcombined$date <- lubridate::date(dfcombined$dts)
+
+dfcombined.1 <- dfcombined[-which(dfcombined$SPC < 100 & dfcombined$Depth_m < 0.1),]
+dfcombined.2 <- merge(dfcombined.1,dfSeasons, by = "mo")
+
+save(dfcombined.2, file = "AllLTM4Analysis_221208.RData")
+```
+
+This chunk removes windows of time for variables that had bad Fouling and Drift Error Ratings (found in "C:\Users\DCox\OneDrive - California Department of Fish and Wildlife\Documents\FRP\Monitoring\Data\Long Term Water Quality\DriftCalculations_NewFormat")
+```{r}
+library(ggplot2)
+
+rm(list = ls())
+load("AllLTM4Analysis_221208.RData")
+
+dfcombined.2$yr <- lubridate::year(dfcombined.2$dts)
+dfcombined.2$doy <- lubridate::yday(dfcombined.2$dts)
+dfcombined.2$project <- NA
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Decker Breach","Decker Pool","M13_USGS","SDI_USGS"))] <- "Decker"
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Tule Breach","Tule Channel","Tule Pond","GRZB_USGS"))] <- "Tule"
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Yolo Flyway Farm", "TOED_USGS"))] <- "Flyway"
+dfcombined.qc1 <- dfcombined.2[which(dfcombined.2$yr > 2020),]
+#ggplot(dfcombined.qc1, aes(x = date, y = Turb_FNU, color = sitetype)) + geom_point(alpha = 0.5)  + facet_grid(project ~.) #+ ylim(c(0,1000))
+
+
+
+#dfSaln.Deck <- dfcombined.qc1[which(dfcombined.qc1$Site=="Yolo Flyway Farm"
+#                                    & dfcombined.qc1$SPC <400),]
+
+unique(dfcombined.qc1$Site)
+
+rm_Data <- data.frame(Site = NA, variable = NA, StartDate = NA, EndDate = NA)
+#rm_Data[1,] <- c("Decker Pool","Turb_FNU","2021-03-18 08:00","2021-04-14 08:00") # poor post-deployment lab calibration (drift error)... There is no data for this time period anyway (botched deployment)
+#rm_Data[nrow(rm_Data)+1,] <- c("Decker Pool","Turb_FNU","2021-05-21 10:15","2021-06-16 08:00") # there is no reason to suspect this data's validity. The calibration check may have been performed with an air bubble on sensor tip
+#rm_Data[nrow(rm_Data)+1,] <- c("Yolo Flyway Farm","Turb_FNU","2021-09-10 08:45","2021-10-15 10:45") # the fouling error does not seem to be an issue in the data
+#rm_Data[nrow(rm_Data)+1,] <- c("Yolo Flyway Farm","Turb_FNU","2022-03-29 14:00","2022-05-04 09:45")
+rm_Data[1,] <- c("Decker Pool","All","2021-07-30 10:18:04",NA) # SPC suggests that sonde was out of water
+rm_Data[nrow(rm_Data)+1,] <- c("Decker Pool","All","2021-07-30 10:33:04",NA) # SPC suggests that sonde was out of water
+rm_Data[nrow(rm_Data)+1,] <- c("Decker Pool","All","2021-11-29 05:52:47",NA)
+rm_Data[nrow(rm_Data)+1,] <- c("Decker Pool","All","2021-11-29 06:22:47",NA)
+rm_Data[nrow(rm_Data)+1,] <- c("Decker Pool","All","2021-07-03 21:09:18",NA)
+rm_Data[nrow(rm_Data)+1,] <- c("Decker Pool","All","2021-07-03 21:24:18",NA)
+rm_Data[nrow(rm_Data)+1,] <- c("Decker Pool","All","2021-11-30 12:37:47",NA)
+rm_Data[nrow(rm_Data)+1,] <- c("Decker Pool","All","2021-11-30 12:22:47",NA)
+rm_Data[nrow(rm_Data)+1,] <- c("Yolo Flyway Farm","All","2021-09-10 08:42:16",NA)
+rm_Data[nrow(rm_Data)+1,] <- c("Yolo Flyway Farm","All","2021-10-12 04:27:16","2021-10-12 07:42:16")
+rm_Data[nrow(rm_Data)+1,] <- c("Yolo Flyway Farm","All","2022-04-09 19:23:14","2022-04-09 20:23:14")
+rm_Data[nrow(rm_Data)+1,] <- c("GZB_USGS","All","2021-11-07 01:00:00","2021-11-07 01:45:00")
+rm_Data[nrow(rm_Data)+1,] <- c("M13_USGS","All","2021-11-07 01:00:00","2021-11-07 01:45:00")
+rm_Data[nrow(rm_Data)+1,] <- c("TOED_USGS","All","2021-11-07 01:00:00","2021-11-07 01:45:00")
+
+
+rm_Data$StartDate <- as.POSIXct(strptime(rm_Data$StartDate, format = "%Y-%m-%d %H:%M:%S"))
+rm_Data$EndDate <- as.POSIXct(strptime(rm_Data$EndDate, format = "%Y-%m-%d %H:%M:%S"))
+
+#dfcombined.qc1$Turb_FNU.2 <- dfcombined.qc1$Turb_FNU
+
+#for(i in 1:nrow(rm_Data)){
+#  dfcombined.qc1$Turb_FNU.2[which(dfcombined.qc1$dts >= rm_Data$StartDate[i] 
+#                                  & dfcombined.qc1$dts <= rm_Data$EndDate[i]
+#                                 & dfcombined.qc1$Site == rm_Data$Site[i])] <- NA
+#}
+
+for(i in 1:nrow(rm_Data)){
+  if(is.na(rm_Data$EndDate[i])==TRUE){
+    dfcombined.qc1[which(dfcombined.qc1$Site == rm_Data$Site[i]
+                         & dfcombined.qc1$dts == rm_Data$StartDate[i]),] <- NA
+  } else {
+    dfcombined.qc1[which(dfcombined.qc1$Site == rm_Data$Site[i] 
+                         & (dfcombined.qc1$dts >= rm_Data$StartDate[i]
+                            & dfcombined.qc1$dts <= rm_Data$EndDate[i])),] <- NA
+  }
+  
+}
+ggplot(dfcombined.qc1, aes(x = date, y = Turb_FNU, color = sitetype)) + geom_point(alpha = 0.5) + ylim(c(0,200))  + facet_grid(Site ~., scales = "free_y") #
+#ggplot(dfcombined.qc1, aes(x = date, y = Depth_m, color = sitetype)) + geom_point(alpha = 0.5)   + facet_grid(Site ~., scales = "free_y") #+ ylim(c(0,200))
+ggplot(dfcombined.qc1[which(dfcombined.qc1$Site %in% c("Yolo Flyway Farm", "TOED_USGS") 
+                            & dfcombined.qc1$dts >= as.POSIXct(strptime("2022-03-15", format = "%Y-%m-%d"))
+                            & dfcombined.qc1$dts <= as.POSIXct(strptime("2022-05-15", format = "%Y-%m-%d"))),], 
+       aes(x = dts, y = Turb_FNU, color = sitetype)) + 
+  geom_line(alpha = 0.5) #+
+  #geom_line(aes(x = dts, y = Depth_m*20), colour = "blue") #
+  #ylim(c(0,75))  #+ facet_grid(Site ~., scales = "free_y") #
+
+
+save(dfcombined.2, dfcombined.qc1, file = "AllLTM4AnalysisQC_221222.RData")
+```
+
+
+```{r}
+library(plyr)
+library(ggplot2)
+library(scales)
+library(gridExtra)
+
+rm(list = ls())
+load("LTM_CATCH_04.RData")
+load("AllLTM4AnalysisQC_221222.RData")
+'%ni%' <- Negate('%in%')
+
+dfcombined.2 <- dfcombined.qc1[which(is.na(dfcombined.qc1$dts)==FALSE),]
+dfcombined.2$dts2 <- lubridate::round_date(dfcombined.2$dts, "15 minutes")
+dfcombined.2$date2 <- lubridate::date(dfcombined.2$dts2)
+dfcombined.2$TempC.20 <- dfcombined.2$TempC - 20
+#ggplot(dfcombined.2, aes(x = dts, y = TempC.20, color = sitetype))  + geom_point() + geom_hline(yintercept = 0)+ facet_grid(Site ~.)
+
+# The line below was used to remove duplicate data from Decker and Tule so that only one observation per sonde was taken for Decker and only one site was used for Tule
+dfcombined.2 <- dfcombined.2[-which(dfcombined.2$Depth_m <0),]
+dfcombined.3 <- dfcombined.2[-which((dfcombined.2$Site == "Decker Breach"
+                                    & dfcombined.2$yr %in% c(2019,2020,2021)
+                                    & dfcombined.2$dts2 %in% dfcombined.2$dts2[dfcombined.2$Site == "Decker Pool"])
+                                    | (dfcombined.2$Site == "TOED_USGS"
+                                       & dfcombined.2$dts2 %ni% dfcombined.2$dts2[dfcombined.2$Site == "Yolo Flyway Farm"])
+                                    | (dfcombined.2$Site %in% c("SDI_USGS","M13_USGS")
+                                       & dfcombined.2$dts2 %ni% dfcombined.2$dts2[dfcombined.2$Site == "Decker Pool"])
+                                    | (dfcombined.2$Site %in% c("Tule Pond","Tule Channel"))),]
+
+dfwideDECK <- reshape2::dcast(dfcombined.3[which(dfcombined.3$project == "Decker"),], dts2 ~ Site, value.var = "TempC", fun.aggregate = sum)
+dfwideDECK$Restoration <- ifelse(dfwideDECK$`Decker Breach`==0, dfwideDECK$`Decker Pool`,dfwideDECK$`Decker Breach`)
+dfwideDECK$Adjacent <- ifelse(dfwideDECK$M13_USGS==0, dfwideDECK$SDI_USGS,dfwideDECK$M13_USGS)
+dfwideDECK$Difference <- dfwideDECK$Restoration - dfwideDECK$Adjacent
+dfwideDECK.2 <- dfwideDECK[-which(dfwideDECK$Adjacent == 0 | is.na(dfwideDECK$Adjacent)==TRUE),c("dts2","Restoration","Adjacent","Difference")]
+dfwideDECK.2$project <- "Decker"
+dfwideDECK.3 <- merge(dfwideDECK.2, dfcombined.3[which(dfcombined.3$Site %in% c("Decker Pool","Decker Breach")),c("dts2","Depth_m")], by = "dts2")
+
+dfwideFLYW <- reshape2::dcast(dfcombined.3[which(dfcombined.3$project == "Flyway"),], dts2 ~ Site, value.var = "TempC", fun.aggregate = sum)
+dfwideFLYW$Restoration <- dfwideFLYW$`Yolo Flyway Farm`
+dfwideFLYW$Adjacent <- dfwideFLYW$TOED_USGS
+dfwideFLYW$Difference <- dfwideFLYW$Restoration - dfwideFLYW$Adjacent
+dfwideFLYW.2 <- dfwideFLYW[-which(dfwideFLYW$Adjacent == 0 | is.na(dfwideFLYW$Adjacent) == TRUE),c("dts2","Restoration","Adjacent","Difference")]
+dfwideFLYW.2$project <- "Flyway"
+dfwideFLYW.3 <- merge(dfwideFLYW.2, dfcombined.3[which(dfcombined.3$Site == "Yolo Flyway Farm"),c("dts2","Depth_m")], by = "dts2")
+
+dfwideAll <- rbind.data.frame(dfwideDECK.2,dfwideFLYW.2)
+ggplot(dfwideAll, aes(dts2, Difference)) + geom_point() + facet_grid(project ~., scales = "free_y")
+
+dfwideAll$hr <- lubridate::hour(dfwideAll$dts2)
+dfwideAll$DoY <- lubridate::yday(dfwideAll$dts2)
+dfwideAll$ToD <- "Early"
+for(i in 1:nrow(dfwideAll)){
+  if(dfwideAll$hr[i] >= 8 & dfwideAll$hr[i] <= 15){
+    dfwideAll$ToD[i] = "Mid"
+  }
+  if(dfwideAll$hr[i] >= 16 & dfwideAll$hr[i] <= 24){
+    dfwideAll$ToD[i] = "Late"
+  }
+}
+
+library(mgcv)
+bD.1 <- bam(Difference ~ s(DoY, k =5, bs = "cc"), data = dfwideAll[which(dfwideAll$project == "Decker" & dfwideAll$ToD == "Early"),])
+plot(bD.1)
+
+dfwideDECK.4 <- dfwideAll[which(dfwideAll$project == "Decker"),]
+bD.2 <- bam(Restoration ~ te(DoY, hr, k = c(5,5), bs = c("cc","cc")), data = dfwideDECK.4)
+bD.2.1 <- bam(Restoration ~ te(DoY, hr, k = c(14,8), bs = c("cc","cc")), data = dfwideDECK.4)
+anova(bD.2,bD.2.1)
+plot(bD.2.1)
+gam.check(bD.2.1)
+dfwideDECK.4$resAnom <- residuals(bD.2, type = "response")
+dfwideDECK.4$resAnom.1 <- residuals(bD.2.1, type = "response")
+
+bD.3 <- bam(Difference ~ te(DoY, hr, resAnom, k = c(14,7,6), bs = c("cc","cc","tp")), data = dfwideDECK.4)
+bD.3.1 <- bam(Difference ~ te(DoY, hr, resAnom.1, k = c(14,7,6), bs = c("cc","cc","tp")), data = dfwideDECK.4)
+plot(bD.3)
+gam.check(bD.3.1)
+anova(bD.3,bD.3.1)
+range(dfwideDECK.4$resAnom)
+
+dfpred.D <- expand.grid(hr = seq(0,23,1),
+                      DoY = seq(1,365,1),
+                      resAnom = seq(-3,3,3))
+dfpred.D$predvalues = predict(bD.3, newdata = dfpred.D)
+
+plo_deck <- ggplot(dfpred.D, aes(x = DoY, y = hr, z = predvalues, fill = predvalues)) + 
+  geom_tile() + 
+  geom_contour(binwidth = 1) + 
+  geom_text_contour(label.placer = label_placer_flattest(), binwidth = 1) +
+  scale_fill_gradientn(colours = c( "blue","white", "red")) +
+  ylab("Decker Island\nHour") +
+  xlab("Day of Year") +
+  facet_grid(.~resAnom) +
+  theme_classic2()+
+  theme(strip.text = element_blank()) 
+
+
+bF.1 <- bam(Difference ~ s(DoY, k =5, bs = "cc"), data = dfwideAll[which(dfwideAll$project == "Flyway" & dfwideAll$ToD == "Early"),])
+plot(bF.1)
+
+dfwideFLYW.4 <- dfwideAll[which(dfwideAll$project == "Flyway"),]
+bF.2 <- bam(Restoration ~ te(DoY, hr, k = c(5,5), bs = c("cc","cc")), data = dfwideFLYW.4)
+plot(bF.2)
+gam.check(bF.2)
+dfwideFLYW.4$resAnom <- residuals(bF.2, type = "response")
+
+bF.3 <- bam(Difference ~ te(DoY,hr, resAnom, k = c(14,5,5), bs = c("cc","cc","tp")), data = dfwideFLYW.4)
+plot(bF.3)
+gam.check(bF.3)
+
+range(dfwideFLYW.4$resAnom)
+
+dfpred.F <- expand.grid(hr = seq(0,23,1),
+                      DoY = seq(1,365,1),
+                      resAnom = seq(-3,3,3))
+dfpred.F$predvalues = predict(bF.3, newdata = dfpred.F)
+
+
+plo_flyw <- ggplot(dfpred.F, aes(x = DoY, y = hr, z = predvalues, fill = predvalues)) + 
+  geom_tile() + 
+  geom_contour(binwidth = 1) + 
+  geom_text_contour(label.placer = label_placer_flattest(), binwidth = 0.5) +
+  scale_fill_gradientn(colours = c( "blue","white", "red")) +
+  ylab("Yolo Flyway Farms\nHour")+
+  facet_grid(.~ resAnom) +
+  theme_classic2()
+
+grid.arrange(plo_flyw, plo_deck)
+
+ggarrange(plo_flyw + rremove("xlab"), plo_deck, 
+          ncol = 1, nrow = 2,align = "h")
+
+dfcombined.4 <- dfcombined.3[-which((dfcombined.3$Site == "Yolo Flyway Farm"
+                                     & dfcombined.3$dts2 %ni% dfcombined.3$dts2[which(dfcombined.3$project == "Flyway" &
+                                                                                  dfcombined.3$sitetype == "Adj. Waterbody")])
+                                    | (dfcombined.3$Site %in% c("Decker Breach","Decker Pool")
+                                     & dfcombined.3$dts2 %ni% dfcombined.3$dts2[which(dfcombined.3$project == "Decker" &
+                                                                                  dfcombined.3$sitetype == "Adj. Waterbody")])),]
+dfcombined.3 <- dfcombined.4
+
+dfordered <- dplyr::arrange(dfcombined.3, project, sitetype, dts2)
+ggplot(dfordered, aes(x = date2, y = DO_mgL, color = sitetype)) + geom_point()  + facet_grid(project ~.) #+ ylim(c(0,200))
+
+summThresh <- ddply(dfcombined.3[which(is.na(dfcombined.3$TempC)==FALSE),], c("project","sitetype","Site","season","date2"), summarise,
+                    nTemp = length(TempC),
+                    oTemp = length(threshTemp[which(threshTemp == "Optimal")]),
+                    sTemp = length(threshTemp[which(threshTemp == "Suboptimal")]),
+                    mean20 = mean(TempC.20, na.rm = TRUE),
+                    meanTemp = mean(TempC, na.rm = TRUE))
+
+summThresh$nTempCheck <- ifelse(sum(summThresh$oTemp,summThresh$sTemp) == summThresh$nTemp, TRUE, FALSE)
+summThresh$p_oTemp <- summThresh$oTemp/summThresh$nTemp
+summThresh$project2 <- factor(summThresh$project, levels = c("Flyway","Decker","Tule"))
+summThresh$sitetype2 <- factor(summThresh$sitetype, levels = c("Restoration","Adj. Waterbody"))
+
+sum(summThresh$nTemp[which(summThresh$Site == "Yolo Flyway Farm")])
+sum(summThresh$nTemp[which(summThresh$Site == "TOED_USGS")])
+sum(summThresh$nTemp[which(summThresh$project == "Decker")])
+sum(summThresh$nTemp[which(summThresh$project == "Decker" & summThresh$sitetype == "Restoration")])
+sum(summThresh$nTemp[which(summThresh$project== "Decker" & summThresh$sitetype == "Adj. Waterbody")])
+
+ggplot(summThresh, aes(x = date, y = p_oTemp, color = sitetype2)) + geom_point() + facet_grid(project2 ~.)
+ggplot(summThresh[-which(summThresh$project == "Tule"),], aes(x = date2, y = meanTemp, color = sitetype2)) + 
+  geom_point() + 
+  ylab("Mean Temperature (C)") +
+  theme(axis.title.x = element_blank(), 
+        axis.title.y = element_text(face = "bold", size = 12),
+        axis.text = element_text(face = "bold", size = 12),
+        strip.text = element_text(face = "bold"),
+        legend.title = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(face = "bold", size = 12)) +
+  #geom_vline(xintercept = as.Date(summIntFish$DateStart[which(summIntFish$year >=2019 & 
+  #                                                              summIntFish$specie == "Delta_Smelt")])) +
+  facet_grid(project2 ~.)
+sum(summThresh$nTemp[which(summThresh$project == "Decker" & summThresh$sitetype == "Restoration")])
+sum(summThresh$nTemp[which(summThresh$project== "Decker" & summThresh$sitetype == "Adj. Waterbody")])
+
+dfcombined.4 <- merge(dfcombined.3,summThresh[,c("date","Site","meanTemp")], by = c("date","Site"), all.x = FALSE)
+
+dfordered <- dplyr::arrange(dfcombined.4,Site, dts)
+xProj <- unique(dfordered$project)
+xYear <- sort(unique(dfordered$yr))
+list_Proj <- list()
+for(i in 1:length(xProj)){
+  list_Year <- list()
+  for(j in 1:length(xYear)){
+    df <- dfordered[which(dfordered$project == xProj[i] & dfordered$yr == xYear[j]),]
+    df_DateRange <- data.frame(xProj = xProj[i],
+                               xYear = xYear[j],
+                               xRange = c("raw24","raw20","mean24","mean20"),
+                               dateStart = c(range(df$date[which(df$TempC >=24)])[1],
+                                             range(df$date[which(df$TempC >=20)])[1],
+                                             range(df$date[which(df$meanTemp >=24)])[1],
+                                             range(df$date[which(df$meanTemp >=20)])[1]),
+                               dateEnd = c(range(df$date[which(df$TempC >=24)])[2],
+                                           range(df$date[which(df$TempC >=20)])[2],
+                                           range(df$date[which(df$meanTemp >=24)])[2],
+                                           range(df$date[which(df$meanTemp >=20)])[2]))
+    list_Year[[j]] <- df_DateRange
+  }
+  df_xYear <- do.call(rbind.data.frame, list_Year)
+  list_Year <- NULL
+  list_Proj[[i]] <- df_xYear
+}
+df_xProj <- do.call(rbind.data.frame, list_Proj)
+df_xProj.2 <- df_xProj[-which(df_xProj$dateStart == Inf),]
+df_xProj.2$matchby <- "A"
+
+df_xInterval <- data.frame(tempL = seq(16,29, by = 1),
+                           tempH = seq(17,30, by = 1),
+                           matchby = "A",
+                           time_p = NA)
+df_xSite <- data.frame(project = c("Decker","Decker","Tule","Tule","Flyway","Flyway"),
+                       sitetype = c(rep(c("Restoration","Adj. Waterbody"),3)))
+
+df_xProj.3 <- merge(df_xProj.2, df_xSite, by.x = "xProj", by.y = "project")
+df_pTime <- merge(df_xProj.3, df_xInterval, by = "matchby", all = TRUE)
+
+df_pTime$nTotal <- NA
+df_pTime$nBelow <- NA
+for(i in 1:nrow(df_pTime)){
+  workingDF <- dfcombined.4[which(is.na(dfcombined.4$TempC)== FALSE &
+                                    dfcombined.4$project == df_pTime$xProj[i] & 
+                                    dfcombined.4$sitetype == df_pTime$sitetype[i] &
+                                    (dfcombined.4$date >= df_pTime$dateStart[i] & dfcombined.4$date <= df_pTime$dateEnd[i])),]
+  if(nrow(workingDF) >0){
+    workingDF$belowT = workingDF$TempC < df_pTime$tempH[i]
+    df_pTime$nTotal[i] = length(workingDF$belowT)
+    df_pTime$nBelow[i] = length(which(workingDF$belowT)== TRUE)
+    #summWorking <- ddply(workingDF, c("project","sitetype","yr"), summarise,
+    #                     nTotal = length(TempC),
+    #                     nBelow = length(which(TempC < df_pTime$tempH[i])==TRUE)
+    #                     )
+    #df_pTime$nTotal[i] = summWorking$nTotal[1]
+    #df_pTime$nBelow[i] = summWorking$nBelow[1]
+  }
+  workingDF <- NULL
+  #summWorking <- NULL
+}
+
+
+df_pTime$pAbove <- 1 -df_pTime$nBelow/df_pTime$nTotal
+df_pTime$pBelow <- df_pTime$nBelow/df_pTime$nTotal
+
+ggplot(df_pTime[which(df_pTime$xProj=="Flyway"),], aes(x = tempH, y = pAbove*100, color = sitetype)) + 
+  geom_line(linewidth = 1.5) + 
+  geom_vline(xintercept = 20) + geom_vline(xintercept = 24) +
+  ylab("Percent Duration of Exceedance") +
+  xlab("Temperature (C)") +
+  theme(axis.title = element_text(face = "bold", size = 12),
+        axis.text = element_text(face = "bold", size = 12),
+        strip.text = element_text(face = "bold"),
+        legend.title = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(face = "bold", size = 12)) +
+  facet_grid(xYear~xRange) 
+
+ggplot(df_pTime[which(df_pTime$xRange=="raw20" & df_pTime$xProj %in% c("Decker","Flyway")),], aes(x = tempH, y = pAbove*100, color = sitetype)) + 
+  geom_line(linewidth = 1.5) + 
+  geom_vline(xintercept = 20) + geom_vline(xintercept = 24) +
+  ylab("Percent Duration of Exceedance") +
+  xlab("Temperature (C)") +
+  theme(axis.title = element_text(face = "bold", size = 12),
+        axis.text = element_text(face = "bold", size = 12),
+        strip.text = element_text(face = "bold"),
+        legend.title = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(face = "bold", size = 12)) +
+  facet_grid(xYear~xProj) 
+
+################################################################################
+```
+
+This chunk looks at the juvenile window of smelt. Window sizes dependent on whether mean or raw values are used for start/stop dates.
+```{r}
+library(plyr)
+library(ggplot2)
+
+rm(list = ls())
+load("LTM_CATCH_04.RData")
+load("AllLTM4AnalysisQC_221222.RData")
+'%ni%' <- Negate('%in%')
+
+dfcombined.2 <- dfcombined.qc1[which(is.na(dfcombined.qc1$dts)==FALSE),]
+
+dfcombined.2$TempC.20 <- dfcombined.2$TempC - 20
+#ggplot(dfcombined.2, aes(x = dts, y = TempC.20, color = sitetype))  + geom_point() + geom_hline(yintercept = 0)+ facet_grid(Site ~.)
+
+# The line below was used to remove duplicate data from Decker and Tule so that only one observation per sonde was taken for Decker and only one site was used for Tule
+dfcombined.3 <- dfcombined.2[-which((dfcombined.2$Site == "Decker Breach"
+                                    & dfcombined.2$yr %in% c(2019,2020,2021)
+                                    & dfcombined.2$date %in% dfcombined.2$date[dfcombined.2$Site == "Decker Pool"])
+                                    | (dfcombined.2$Site == "TOED_USGS"
+                                       & dfcombined.2$date %ni% dfcombined.2$date[dfcombined.2$Site == "Yolo Flyway Farm"])
+                                    | (dfcombined.2$Site %in% c("SDI_USGS","M13_USGS")
+                                       & dfcombined.2$date %ni% dfcombined.2$date[dfcombined.2$Site == "Decker Pool"])
+                                    | (dfcombined.2$Site %in% c("Tule Pond","Tule Channel"))),]
+
+dfordered <- dplyr::arrange(dfcombined.3, project, sitetype, dts)
+ggplot(dfordered, aes(x = date, y = DO_mgL, color = sitetype)) + geom_point()  + facet_grid(project ~.) #+ ylim(c(0,200))
+
+summThresh <- ddply(dfcombined.3[which(is.na(dfcombined.3$TempC)==FALSE),], c("project","sitetype","Site","season","date"), summarise,
+                    nTemp = length(TempC),
+                    oTemp = length(threshTemp[which(threshTemp == "Optimal")]),
+                    sTemp = length(threshTemp[which(threshTemp == "Suboptimal")]),
+                    mean20 = mean(TempC.20, na.rm = TRUE),
+                    meanTemp = mean(TempC, na.rm = TRUE))
+
+summThresh$nTempCheck <- ifelse(sum(summThresh$oTemp,summThresh$sTemp) == summThresh$nTemp, TRUE, FALSE)
+summThresh$p_oTemp <- summThresh$oTemp/summThresh$nTemp
+summThresh$project2 <- factor(summThresh$project, levels = c("Flyway","Decker","Tule"))
+summThresh$sitetype2 <- factor(summThresh$sitetype, levels = c("Restoration","Adj. Waterbody"))
+
+ggplot(summThresh, aes(x = date, y = p_oTemp, color = sitetype2)) + geom_point() + facet_grid(project2 ~.)
+ggplot(summThresh[-which(summThresh$project == "Tule"),], aes(x = date, y = meanTemp, color = sitetype2)) + 
+  geom_point() + 
+  ylab("Mean Temperature (C)") +
+  theme(axis.title.x = element_blank(), 
+        axis.title.y = element_text(face = "bold", size = 12),
+        axis.text = element_text(face = "bold", size = 12),
+        strip.text = element_text(face = "bold"),
+        legend.title = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(face = "bold", size = 12)) +
+  #geom_vline(xintercept = as.Date(summIntFish$DateStart[which(summIntFish$year >=2019 & 
+  #                                                              summIntFish$specie == "Delta_Smelt")])) +
+  facet_grid(project2 ~.)
+
+dfcombined.4 <- merge(dfcombined.3,summThresh[,c("date","Site","meanTemp")], by = c("date","Site"), all.x = FALSE)
+
+dfordered <- dplyr::arrange(dfcombined.4,Site, dts)
+xProj <- unique(dfordered$project)
+xYear <- sort(unique(dfordered$yr))
+list_Proj <- list()
+for(i in 1:length(xProj)){
+  list_Year <- list()
+  for(j in 1:length(xYear)){
+    df <- dfordered[which(dfordered$project == xProj[i] & dfordered$yr == xYear[j]),]
+    df_DateRange <- data.frame(xProj = xProj[i],
+                               xYear = xYear[j],
+                               xRange = c("raw24","raw20","mean24","mean20"),
+                               dateStart = c(range(df$date[which(df$TempC >=24)])[1],
+                                             range(df$date[which(df$TempC >=20)])[1],
+                                             range(df$date[which(df$meanTemp >=24)])[1],
+                                             range(df$date[which(df$meanTemp >=20)])[1]),
+                               dateEnd = c(range(df$date[which(df$TempC >=24)])[2],
+                                           range(df$date[which(df$TempC >=20)])[2],
+                                           range(df$date[which(df$meanTemp >=24)])[2],
+                                           range(df$date[which(df$meanTemp >=20)])[2]))
+    list_Year[[j]] <- df_DateRange
+  }
+  df_xYear <- do.call(rbind.data.frame, list_Year)
+  list_Year <- NULL
+  list_Proj[[i]] <- df_xYear
+}
+df_xProj <- do.call(rbind.data.frame, list_Proj)
+df_xProj.2 <- df_xProj[-which(df_xProj$dateStart == Inf),]
+df_xProj.2$matchby <- "A"
+
+df_xInterval <- data.frame(tempL = seq(16,29, by = 1),
+                           tempH = seq(17,30, by = 1),
+                           matchby = "A",
+                           time_p = NA)
+df_xSite <- data.frame(project = c("Decker","Decker","Tule","Tule","Flyway","Flyway"),
+                       sitetype = c(rep(c("Restoration","Adj. Waterbody"),3)))
+
+df_xProj.3 <- merge(df_xProj.2, df_xSite, by.x = "xProj", by.y = "project")
+df_pTime <- merge(df_xProj.3, df_xInterval, by = "matchby", all = TRUE)
+
+df_pTime$nTotal <- NA
+df_pTime$nBelow <- NA
+for(i in 1:nrow(df_pTime)){
+  workingDF <- dfcombined.4[which(is.na(dfcombined.4$TempC)== FALSE &
+                                    dfcombined.4$project == df_pTime$xProj[i] & 
+                                    dfcombined.4$sitetype == df_pTime$sitetype[i] &
+                                    (dfcombined.4$date >= df_pTime$dateStart[i] & dfcombined.4$date <= df_pTime$dateEnd[i])),]
+  if(nrow(workingDF) >0){
+    workingDF$belowT = workingDF$TempC < df_pTime$tempH[i]
+    df_pTime$nTotal[i] = length(workingDF$belowT)
+    df_pTime$nBelow[i] = length(which(workingDF$belowT)== TRUE)
+    #summWorking <- ddply(workingDF, c("project","sitetype","yr"), summarise,
+    #                     nTotal = length(TempC),
+    #                     nBelow = length(which(TempC < df_pTime$tempH[i])==TRUE)
+    #                     )
+    #df_pTime$nTotal[i] = summWorking$nTotal[1]
+    #df_pTime$nBelow[i] = summWorking$nBelow[1]
+  }
+  workingDF <- NULL
+  #summWorking <- NULL
+}
+
+
+df_pTime$pAbove <- 1 -df_pTime$nBelow/df_pTime$nTotal
+df_pTime$pBelow <- df_pTime$nBelow/df_pTime$nTotal
+
+ggplot(df_pTime[which(df_pTime$xProj=="Flyway"),], aes(x = tempH, y = pAbove*100, color = sitetype)) + 
+  geom_line(linewidth = 1.5) + 
+  geom_vline(xintercept = 20) + geom_vline(xintercept = 24) +
+  ylab("Percent Duration of Exceedance") +
+  xlab("Temperature (C)") +
+  theme(axis.title = element_text(face = "bold", size = 12),
+        axis.text = element_text(face = "bold", size = 12),
+        strip.text = element_text(face = "bold"),
+        legend.title = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(face = "bold", size = 12)) +
+  facet_grid(xYear~xRange) 
+
+ggplot(df_pTime[which(df_pTime$xRange=="raw20" & df_pTime$xProj %in% c("Decker","Flyway")),], aes(x = tempH, y = pAbove*100, color = sitetype)) + 
+  geom_line(linewidth = 1.5) + 
+  geom_vline(xintercept = 20) + geom_vline(xintercept = 24) +
+  ylab("Percent Duration of Exceedance") +
+  xlab("Temperature (C)") +
+  theme(axis.title = element_text(face = "bold", size = 12),
+        axis.text = element_text(face = "bold", size = 12),
+        strip.text = element_text(face = "bold"),
+        legend.title = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(face = "bold", size = 12)) +
+  facet_grid(xYear~xProj) 
+
+################################################################################
+# For Turbidity
+summThreshTurb <- ddply(dfcombined.3[which(is.na(dfcombined.3$Turb_FNU)==FALSE),], c("project","sitetype","Site","season","date"), summarise,
+                    nTurb = length(Turb_FNU),
+                    oTurb = length(threshTurb[which(threshTurb == "Optimal")]),
+                    sTurb = length(threshTurb[which(threshTurb == "Suboptimal")]),
+                    meanTurb = mean(Turb_FNU, na.rm = TRUE)
+                    )
+summThreshTurb$nTurbCheck <- ifelse(sum(summThreshTurb$oTurb,summThreshTurb$sTurb) == summThreshTurb$nTurb, TRUE, FALSE)
+summThreshTurb$p_oTurb <- summThreshTurb$oTurb/summThreshTurb$nTurb
+summThreshTurb$project2 <- factor(summThreshTurb$project, levels = c("Flyway","Decker","Tule"))
+summThreshTurb$sitetype2 <- factor(summThreshTurb$sitetype, levels = c("Restoration","Adj. Waterbody"))
+
+dfcombined.4Turb <- merge(dfcombined.3,summThreshTurb[,c("date","Site","meanTurb")], by = c("date","Site"), all.x = FALSE)
+
+df_xInterval <- data.frame(turbH = seq(0,100, by = 10),
+                           matchby = "A",
+                           time_p = NA)
+df_xSite <- data.frame(project = c("Decker","Decker","Tule","Tule","Flyway","Flyway"),
+                       sitetype = c(rep(c("Restoration","Adj. Waterbody"),3)))
+
+df_xProj.3 <- merge(df_xProj.2, df_xSite, by.x = "xProj", by.y = "project")
+df_pTime <- merge(df_xProj.3, df_xInterval, by = "matchby", all = TRUE)
+
+df_pTime$nTotal <- NA
+df_pTime$nBelow <- NA
+for(i in 1:nrow(df_pTime)){
+  workingDF <- dfcombined.4Turb[which(is.na(dfcombined.4Turb$Turb_FNU)== FALSE &
+                                    dfcombined.4Turb$project == df_pTime$xProj[i] & 
+                                    dfcombined.4Turb$sitetype == df_pTime$sitetype[i] &
+                                    (dfcombined.4Turb$date >= df_pTime$dateStart[i] & dfcombined.4Turb$date <= df_pTime$dateEnd[i])),]
+  if(nrow(workingDF) >0){
+    workingDF$belowT = workingDF$Turb_FNU < df_pTime$turbH[i]
+    df_pTime$nTotal[i] = length(workingDF$belowT)
+    df_pTime$nBelow[i] = length(which(workingDF$belowT)== TRUE)
+    #summWorking <- ddply(workingDF, c("project","sitetype","yr"), summarise,
+    #                     nTotal = length(TempC),
+    #                     nBelow = length(which(TempC < df_pTime$tempH[i])==TRUE)
+    #                     )
+    #df_pTime$nTotal[i] = summWorking$nTotal[1]
+    #df_pTime$nBelow[i] = summWorking$nBelow[1]
+  }
+  workingDF <- NULL
+  #summWorking <- NULL
+}
+
+
+df_pTime$pAbove <- 1 -df_pTime$nBelow/df_pTime$nTotal
+df_pTime$pBelow <- df_pTime$nBelow/df_pTime$nTotal
+
+ggplot(df_pTime[which(df_pTime$xProj=="Flyway"),], aes(x = turbH, y = pAbove*100, color = sitetype)) + 
+  geom_line(linewidth = 1.5) + 
+  geom_vline(xintercept = 12) + geom_vline(xintercept = 80) +
+  ylab("Percent Duration of Exceedance") +
+  xlab("Turbidity (FNU)") +
+  theme(axis.title = element_text(face = "bold", size = 12),
+        axis.text = element_text(face = "bold", size = 12),
+        strip.text = element_text(face = "bold"),
+        legend.title = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(face = "bold", size = 12)) +
+  facet_grid(xYear~xRange) 
+
+ggplot(df_pTime[which(df_pTime$xRange=="raw20" & df_pTime$xProj %in% c("Decker","Flyway")),], aes(x = turbH, y = pAbove*100, color = sitetype)) + 
+  geom_line(linewidth = 1.5) + 
+  geom_vline(xintercept = 12) + geom_vline(xintercept = 80) +
+  ylab("Percent Duration of Exceedance") +
+  xlab("Turbidity (FNU)") +
+  theme(axis.title = element_text(face = "bold", size = 12),
+        axis.text = element_text(face = "bold", size = 12),
+        strip.text = element_text(face = "bold"),
+        legend.title = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(face = "bold", size = 12)) +
+  facet_grid(xYear~xProj) 
+################################################################################
+# For Dissolved oxygen
+dfcombined.3$threshDO <- ifelse(dfcombined.3$DO_mgL < 5, "Suboptimal", "Optimal")
+summThresh.DO <- ddply(dfcombined.3[which(is.na(dfcombined.3$DO_mgL)==FALSE),], c("project","sitetype","Site","season","date"), summarise,
+                    nDO = length(DO_mgL),
+                    oDO = length(threshDO[which(threshDO == "Optimal")]),
+                    sDO = length(threshTurb[which(threshDO == "Suboptimal")]),
+                    meanDO = mean(DO_mgL, na.rm = TRUE)
+                    )
+summThresh.DO$nDOCheck <- ifelse(sum(summThresh.DO$oDO,summThresh.DO$sDO) == summThresh.DO$nDO, TRUE, FALSE)
+summThresh.DO$p_oTurb <- summThresh.DO$oDO/summThresh.DO$nDO
+summThresh.DO$project2 <- factor(summThresh.DO$project, levels = c("Flyway","Decker","Tule"))
+summThresh.DO$sitetype2 <- factor(summThresh.DO$sitetype, levels = c("Restoration","Adj. Waterbody"))
+
+dfcombined.4DO <- merge(dfcombined.3,summThresh.DO[,c("date","Site","meanDO")], by = c("date","Site"), all.x = FALSE)
+
+df_xInterval <- data.frame(DO.H = seq(0,12, by = 1),
+                           matchby = "A",
+                           time_p = NA)
+df_xSite <- data.frame(project = c("Decker","Decker","Tule","Tule","Flyway","Flyway"),
+                       sitetype = c(rep(c("Restoration","Adj. Waterbody"),3)))
+
+df_xProj.3 <- merge(df_xProj.2, df_xSite, by.x = "xProj", by.y = "project")
+df_pTime <- merge(df_xProj.3, df_xInterval, by = "matchby", all = TRUE)
+
+df_pTime$nTotal <- NA
+df_pTime$nBelow <- NA
+for(i in 1:nrow(df_pTime)){
+  workingDF <- dfcombined.4DO[which(is.na(dfcombined.4DO$DO_mgL)== FALSE &
+                                    dfcombined.4DO$project == df_pTime$xProj[i] & 
+                                    dfcombined.4DO$sitetype == df_pTime$sitetype[i] &
+                                    (dfcombined.4DO$date >= df_pTime$dateStart[i] & dfcombined.4DO$date <= df_pTime$dateEnd[i])),]
+  if(nrow(workingDF) >0){
+    workingDF$belowT = workingDF$DO_mgL < df_pTime$DO.H[i]
+    df_pTime$nTotal[i] = length(workingDF$belowT)
+    df_pTime$nBelow[i] = length(which(workingDF$belowT)== TRUE)
+    #summWorking <- ddply(workingDF, c("project","sitetype","yr"), summarise,
+    #                     nTotal = length(TempC),
+    #                     nBelow = length(which(TempC < df_pTime$tempH[i])==TRUE)
+    #                     )
+    #df_pTime$nTotal[i] = summWorking$nTotal[1]
+    #df_pTime$nBelow[i] = summWorking$nBelow[1]
+  }
+  workingDF <- NULL
+  #summWorking <- NULL
+}
+
+
+df_pTime$pAbove <- 1 -df_pTime$nBelow/df_pTime$nTotal
+df_pTime$pBelow <- df_pTime$nBelow/df_pTime$nTotal
+
+ggplot(df_pTime[which(df_pTime$xProj=="Flyway"),], aes(x = DO.H, y = pAbove*100, color = sitetype)) + 
+  geom_line(linewidth = 1.5) + 
+  geom_vline(xintercept = 5) + #geom_vline(xintercept = 80) +
+  ylab("Percent Duration of Exceedance") +
+  xlab("Dissolved Oxygen (mg/L)") +
+  theme(axis.title = element_text(face = "bold", size = 12),
+        axis.text = element_text(face = "bold", size = 12),
+        strip.text = element_text(face = "bold"),
+        legend.title = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(face = "bold", size = 12)) +
+  facet_grid(xYear~xRange) 
+
+ggplot(df_pTime[which(df_pTime$xRange=="raw20" & df_pTime$xProj %in% c("Decker","Flyway")),], aes(x = DO.H, y = pAbove*100, color = sitetype)) + 
+  geom_line(linewidth = 1.5) + 
+  geom_vline(xintercept = 5) + #geom_vline(xintercept = 80) +
+  ylab("Percent Duration of Exceedance") +
+  xlab("Dissolved Oxygen (mg/L)") +
+  theme(axis.title = element_text(face = "bold", size = 12),
+        axis.text = element_text(face = "bold", size = 12),
+        strip.text = element_text(face = "bold"),
+        legend.title = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(face = "bold", size = 12)) +
+  facet_grid(xYear~xProj) 
+
+# OptOrNot ~ sitetype*project*year + (1|project/sitetype) ; using only 2021 and 2022 dateranges
+
+# Modelling Temperature
+df_xMod <- df_xProj[which(df_xProj$xYear > 2020 & 
+                            df_xProj$xProj %in% c("Decker","Flyway") &
+                            df_xProj$xRange %in% c("raw20","raw24")),]
+xRange <- unique(df_xMod$xRange)
+list_workingMod <- list()
+for(i in 1:nrow(df_xMod)){
+  df_workingMod <- dfcombined.4[which(is.na(dfcombined.4$TempC)== FALSE &
+                                        (dfcombined.4$project == df_xMod$xProj[i] &
+                                           (dfcombined.4$date >= df_xMod$dateStart[i] & 
+                                              dfcombined.4$date <=df_xMod$dateEnd[i]))),]
+  df_workingMod$xMod <- df_xMod$xRange[i]
+  list_workingMod[[i]] <- df_workingMod
+  df_workingMod <- NULL
+}
+names(list_workingMod) <- c(paste(df_xMod$xProj,df_xMod$xYear,df_xMod$xRange,sep = " "))
+
+
+dfMod_raw20.1 <- do.call(rbind.data.frame, list_workingMod[c(2,4,6,8)])
+dfMod_raw24.1 <- do.call(rbind.data.frame, list_workingMod[c(1,3,5,7)])
+dfMod_raw20.1$threshTemp2 <- ifelse(dfMod_raw20.1$threshTemp == "Optimal",1,0)
+dfMod_raw20.1$yr2 <- factor(dfMod_raw20.1$yr, levels = c("2021","2022"))
+dfMod_raw20.1$sitetype2 <- factor(dfMod_raw20.1$sitetype, levels = c("Adj. Waterbody","Restoration"))
+dfMod_raw20.1$project2 <- factor(dfMod_raw20.1$project, levels = c("Flyway","Decker"))
+
+hist(dfMod_raw20.1$TempC)
+p1 <- hist(dfMod_raw20.1$TempC[which(dfMod_raw20.1$sitetype == "Restoration")])
+p2 <- hist(dfMod_raw20.1$TempC[which(dfMod_raw20.1$sitetype == "Adj. Waterbody")])
+plot( p2, col=rgb(0,0,1,1/4))  # first histogram
+plot( p1, col=rgb(1,0,0,1/4), add=T)  # second
+var(dfMod_raw20.1$TempC[which(dfMod_raw20.1$sitetype == "Restoration")])
+var(dfMod_raw20.1$TempC[which(dfMod_raw20.1$sitetype == "Adj. Waterbody")])
+
+library(TMB)
+library(glmmTMB)
+TMB_raw20.1 <- glmmTMB(threshTemp2 ~ sitetype2*project2*yr2 + (1|yr2), family=binomial, data=dfMod_raw20.1)
+TMB_raw20.1 <- glmmTMB(threshTemp2 ~ sitetype2*yr2 + (1|yr2), family=binomial, data=dfMod_raw20.1[which(dfMod_raw20.1$project2 == "Decker"),])
+summary(TMB_raw20.1)
+qq.line = function(x) {
+    # following four lines from base R's qqline()
+    y <- quantile(x[!is.na(x)], c(0.25, 0.75))
+    x <- qnorm(c(0.25, 0.75))
+    slope <- diff(y)/diff(x)
+    int <- y[1L] - slope * x[1L]
+    return(c(int = int, slope = slope))
+}
+QQline = qq.line(resid(TMB_raw20.1, type = "pearson"))
+ggplot(data = NULL, aes(sample = resid(TMB_raw20.1, type = "pearson"))) +
+    stat_qq() + geom_abline(intercept = QQline[1], slope = QQline[2])
+exp(fixef(TMB_raw20.1)$cond)
+
+library(effects)
+plot(allEffects(TMB_raw20.1), type = "response")
+library(sjPlot)
+plot_model(TMB_raw20.1, type = "eff", show.ci = TRUE, terms = c("sitetype2","yr2"))
+
+lme4::VarCorr(TMB_raw20.1)
+total.SD = sqrt(2.297e-05^2)
+library(emmeans)
+em <- emmeans(TMB_raw20.1, c("sitetype2","yr2"), type = "response", bias.adj = TRUE, sigma = total.SD)
+pairs(em)
+plot(em)
+summary(em)
+
+summThresh$yr <- lubridate::year(summThresh$date)
+summThresh$yr2 <- factor(summThresh$yr, levels = c("2021","2022"))
+summThresh.2 <- ddply(summThresh, c("sitetype2","project2","yr2"), summarise,
+                          meanProp = mean(p_oTemp))
+
+library(Hmisc)
+probs = 1/(1+exp(-fitted(TMB_raw20.1)))
+probs = binomial()$linkinv(fitted(TMB_raw20.1))
+somers2(probs, as.numeric(dfMod_raw20.1$threshTemp2))
+plot(TMB_raw20.1$fit, pch = 20, col = "black", lty = "dotted")
+
+library(lme4)
+TMB_raw20.1.glmer <- glmer(threshTemp2 ~ sitetype2*project2 + (1|yr2), family=binomial, data=dfMod_raw20.1)
+lme4::VarCorr(TMB_raw20.1.glmer)
+total.SD = 0.084657
+library(emmeans)
+em <- emmeans(TMB_raw20.1.glmer, c("sitetype2","project2"), type = "response")#, bias.adj = TRUE, sigma = total.SD)
+pairs(em)
+plot(em)
+summary(em)
+
+library(GLMMadaptive)
+adap_raw20.1 <- mixed_model(fixed = threshTemp2 ~ sitetype2*project2*yr2, random = ~1|yr2, family = binomial(), data = dfMod_raw20.1)
+nDF <- with(dfMod_raw20.1, expand.grid(project2 = levels(project2),
+                            sitetype2 = levels(sitetype2),
+                            yr2 = levels(yr2)))
+
+plot_data <- effectPlotData(adap_raw20.1, nDF)
+##########################
+
+list_workingSumm <- list()
+for(i in 1:nrow(df_xMod)){
+  df_workingSumm <- summThresh[which((summThresh$project == df_xMod$xProj[i] &
+                                        (summThresh$date >= df_xMod$dateStart[i] & 
+                                           summThresh$date <=df_xMod$dateEnd[i]))),]
+  df_workingSumm$xMod <- df_xMod$xRange[i]
+  df_workingSumm$yr <- lubridate::year(df_workingSumm$date)
+  list_workingSumm[[i]] <- df_workingSumm
+  df_workingSumm <- NULL
+}
+names(list_workingSumm) <- c(paste(df_xMod$xProj,df_xMod$xYear,df_xMod$xRange,sep = " "))
+
+
+dfMod_summ20.1 <- do.call(rbind.data.frame, list_workingSumm[c(2,4,6,8)])
+dfMod_summ24.1 <- do.call(rbind.data.frame, list_workingSumm[c(1,3,5,7)])
+#dfMod_raw20.1$threshTemp2 <- ifelse(dfMod_raw20.1$threshTemp == "Optimal",1,0)
+dfMod_summ20.1$yr2 <- factor(dfMod_summ20.1$yr, levels = c("2021","2022"))
+dfMod_summ20.1$project2 <- factor(dfMod_summ20.1$project, levels = c("Decker","Flyway"))
+dfMod_summ20.1$sitetype2 <- factor(dfMod_summ20.1$sitetype, levels = c("Restoration","Adj. Waterbody"))
+
+hist(dfMod_summ20.1$meanTemp)
+p1 <- hist(dfMod_summ20.1$meanTemp[which(dfMod_summ20.1$sitetype == "Restoration" & dfMod_summ20.1$project == "Decker")], breaks = 9)
+p2 <- hist(dfMod_summ20.1$meanTemp[which(dfMod_summ20.1$sitetype == "Adj. Waterbody"& dfMod_summ20.1$project == "Decker")], breaks = 9)
+plot( p2, col=rgb(0,0,1,1/4))  # first histogram
+plot( p1, col=rgb(1,0,0,1/4), add=T)  # second
+var(dfMod_summ20.1$meanTemp[which(dfMod_summ20.1$sitetype == "Restoration" & dfMod_summ20.1$project == "Decker")])
+var(dfMod_summ20.1$meanTemp[which(dfMod_summ20.1$sitetype == "Adj. Waterbody" & dfMod_summ20.1$project == "Decker")])
+
+
+library(TMB)
+library(glmmTMB)
+TMB_summ20.1 <- glmmTMB(oTemp/nTemp ~ sitetype2*project2*yr2 + (1|project2), weights=nTemp, family=binomial, data=dfMod_summ20.1)
+summary(TMB_summ20.1)
+
+qq.line = function(x) {
+    # following four lines from base R's qqline()
+    y <- quantile(x[!is.na(x)], c(0.25, 0.75))
+    x <- qnorm(c(0.25, 0.75))
+    slope <- diff(y)/diff(x)
+    int <- y[1L] - slope * x[1L]
+    return(c(int = int, slope = slope))
+}
+QQline = qq.line(resid(TMB_summ20.1, type = "pearson"))
+ggplot(data = NULL, aes(sample = resid(TMB_summ20.1, type = "pearson"))) +
+    stat_qq() + geom_abline(intercept = QQline[1], slope = QQline[2])
+exp(fixef(TMB_summ20.1)$cond)
+
+
+dat.sim <- simulate(TMB_summ20.1, n = 250)
+par(mfrow = c(5, 4), mar = c(3, 3, 1, 1))
+resid <- NULL
+for (i in 1:nrow(dat.sim)) {
+    e = ecdf(data.matrix(dat.sim[i, ] + runif(250, -0.5, 0.5)))
+    plot(e, main = i, las = 1)
+    resid[i] <- e(dfMod_summ20.1$p_oTemp[i] + runif(250, -0.5, 0.5))
+}
+resid
+par(mfrow = c(1, 1))
+plot(resid ~ fitted(TMB_summ20.1))
+
+dat.resid <- sum(resid(TMB_summ20.1, type = "pearson")^2)
+1 - pchisq(dat.resid, df.residual(TMB_summ20.1))
+dat.resid/df.residual(TMB_summ20.1)
+
+library(effects)
+plot(allEffects(TMB_summ20.1), type = "response")
+library(sjPlot)
+plot_model(TMB_summ20.1, type = "eff", show.ci = TRUE, terms = c("project2","sitetype2","yr2"))
+
+library(lme4)
+TMB_summ20.1.glmer <- glmer(oTemp/nTemp ~ sitetype2 + (1|project2), weights=nTemp, family=binomial, data=dfMod_summ20.1)
+lme4::VarCorr(TMB_summ20.1.glmer)
+total.SD = 0.15864
+library(emmeans)
+em <- emmeans(TMB_summ20.1.glmer, c("sitetype2"), type = "response")#, bias.adj = TRUE, sigma = total.SD)
+pairs(em)
+plot(em)
+summary(em)
+
+library(GLMMadaptive)
+adap_summ20.1 <- mixed_model(fixed = p_oTemp ~ sitetype2*project2*yr2, random = ~1|project2, family = zi.binomial(), zi_fixed = ~1, zi_random = ~1|project2, data = dfMod_summ20.1)
+
+nDF <- with(dfMod_summ20.1, expand.grid(project2 = levels(project2),
+                            sitetype2 = levels(sitetype2),
+                            yr2 = levels(yr2)))
+
+plot_data <- effectPlotData(adap_raw20.1, nDF)
+
+library("lattice")
+xyplot(pred + low + upp ~ time | sex, data = plot_data,
+       type = "l", lty = c(1, 2, 2), col = c(2, 1, 1), lwd = 2,
+       xlab = "Follow-up time", ylab = "log odds")
+
+expit <- function (x) exp(x) / (1 + exp(x))
+xyplot(expit(pred) + expit(low) + expit(upp) ~ time | sex, data = plot_data,
+       type = "l", lty = c(1, 2, 2), col = c(2, 1, 1), lwd = 2,
+       xlab = "Follow-up time", ylab = "Subject-Specific Probabilities")
+#################################################################################
+# Modelling Turbidity
+df_xMod <- df_xProj[which(df_xProj$xYear > 2020 & 
+                            df_xProj$xProj %in% c("Decker","Flyway") &
+                            df_xProj$xRange %in% c("raw20","raw24")),]
+xRange <- unique(df_xMod$xRange)
+list_workingMod <- list()
+for(i in 1:nrow(df_xMod)){
+  df_workingMod <- dfcombined.4Turb[which(is.na(dfcombined.4Turb$Turb_FNU)== FALSE &
+                                        (dfcombined.4Turb$project == df_xMod$xProj[i] &
+                                           (dfcombined.4Turb$date >= df_xMod$dateStart[i] & 
+                                              dfcombined.4Turb$date <=df_xMod$dateEnd[i]))),]
+  df_workingMod$xMod <- df_xMod$xRange[i]
+  list_workingMod[[i]] <- df_workingMod
+  df_workingMod <- NULL
+}
+names(list_workingMod) <- c(paste(df_xMod$xProj,df_xMod$xYear,df_xMod$xRange,sep = " "))
+
+
+dfMod_raw20.1 <- do.call(rbind.data.frame, list_workingMod[c(2,4,6,8)])
+dfMod_raw24.1 <- do.call(rbind.data.frame, list_workingMod[c(1,3,5,7)])
+dfMod_raw20.1$threshTurb2 <- ifelse(dfMod_raw20.1$threshTurb == "Optimal",1,0)
+dfMod_raw20.1$yr2 <- factor(dfMod_raw20.1$yr, levels = c("2021","2022"))
+dfMod_raw20.1$sitetype2 <- factor(dfMod_raw20.1$sitetype, levels = c("Adj. Waterbody","Restoration"))
+dfMod_raw20.1$project2 <- factor(dfMod_raw20.1$project, levels = c("Flyway","Decker"))
+
+hist(dfMod_raw20.1$Turb_FNU)
+p1 <- hist(dfMod_raw20.1$Turb_FNU[which(dfMod_raw20.1$sitetype == "Restoration")])
+p2 <- hist(dfMod_raw20.1$Turb_FNU[which(dfMod_raw20.1$sitetype == "Adj. Waterbody")])
+plot( p2, col=rgb(0,0,1,1/4))  # first histogram
+plot( p1, col=rgb(1,0,0,1/4), add=T)  # second
+var(dfMod_raw20.1$Turb_FNU[which(dfMod_raw20.1$sitetype == "Restoration")])
+var(dfMod_raw20.1$Turb_FNU[which(dfMod_raw20.1$sitetype == "Adj. Waterbody")])
+
+library(TMB)
+library(glmmTMB)
+TMB_raw20.1 <- glmmTMB(threshTurb2 ~ sitetype2*project2*yr2 + (1|project2), family=binomial, data=dfMod_raw20.1)
+summary(TMB_raw20.1)
+qq.line = function(x) {
+    # following four lines from base R's qqline()
+    y <- quantile(x[!is.na(x)], c(0.25, 0.75))
+    x <- qnorm(c(0.25, 0.75))
+    slope <- diff(y)/diff(x)
+    int <- y[1L] - slope * x[1L]
+    return(c(int = int, slope = slope))
+}
+QQline = qq.line(resid(TMB_raw20.1, type = "pearson"))
+ggplot(data = NULL, aes(sample = resid(TMB_raw20.1, type = "pearson"))) +
+    stat_qq() + geom_abline(intercept = QQline[1], slope = QQline[2])
+exp(fixef(TMB_raw20.1)$cond)
+
+library(effects)
+plot(allEffects(TMB_raw20.1), type = "response")
+library(sjPlot)
+plot_model(TMB_raw20.1, type = "eff", show.ci = TRUE, terms = c("project2","sitetype2","yr2"))
+library(emmeans)
+emmeans(TMB_raw20.1, c("project2","sitetype2","yr2"), type = "response")
+
+summThreshTurb$yr <- lubridate::year(summThreshTurb$date)
+summThreshTurb$yr2 <- factor(summThreshTurb$yr, levels = c("2021","2022"))
+summThreshTurb.2 <- ddply(summThreshTurb, c("project2","sitetype2","yr2"), summarise,
+                          meanProp = mean(p_oTurb))
+
+library(Hmisc)
+probs = 1/(1+exp(-fitted(TMB_raw20.1)))
+probs = binomial()$linkinv(fitted(TMB_raw20.1))
+somers2(probs, as.numeric(dfMod_raw20.1$threshTurb2))
+plot(TMB_raw20.1, pch = 20, col = "black", lty = "dotted")
+##########################
+
+list_workingSumm <- list()
+for(i in 1:nrow(df_xMod)){
+  df_workingSumm <- summThreshTurb[which((summThreshTurb$project == df_xMod$xProj[i] &
+                                        (summThreshTurb$date >= df_xMod$dateStart[i] & 
+                                           summThreshTurb$date <=df_xMod$dateEnd[i]))),]
+  df_workingSumm$xMod <- df_xMod$xRange[i]
+  df_workingSumm$yr <- lubridate::year(df_workingSumm$date)
+  list_workingSumm[[i]] <- df_workingSumm
+  df_workingSumm <- NULL
+}
+names(list_workingSumm) <- c(paste(df_xMod$xProj,df_xMod$xYear,df_xMod$xRange,sep = " "))
+
+
+dfMod_summ20.1 <- do.call(rbind.data.frame, list_workingSumm[c(2,4,6,8)])
+dfMod_summ24.1 <- do.call(rbind.data.frame, list_workingSumm[c(1,3,5,7)])
+#dfMod_raw20.1$threshTemp2 <- ifelse(dfMod_raw20.1$threshTemp == "Optimal",1,0)
+dfMod_summ20.1$yr2 <- factor(dfMod_summ20.1$yr, levels = c("2021","2022"))
+dfMod_summ20.1$project2 <- factor(dfMod_summ20.1$project, levels = c("Decker","Flyway"))
+dfMod_summ20.1$sitetype2 <- factor(dfMod_summ20.1$sitetype, levels = c("Adj. Waterbody","Restoration"))
+
+hist(dfMod_summ20.1$meanTurb)
+p1 <- hist(dfMod_summ20.1$meanTurb[which(dfMod_summ20.1$sitetype == "Restoration" & dfMod_summ20.1$project == "Decker")], breaks = 9)
+p2 <- hist(dfMod_summ20.1$meanTurb[which(dfMod_summ20.1$sitetype == "Adj. Waterbody"& dfMod_summ20.1$project == "Decker")], breaks = 9)
+plot( p2, col=rgb(0,0,1,1/4))  # first histogram
+plot( p1, col=rgb(1,0,0,1/4), add=T)  # second
+var(dfMod_summ20.1$meanTurb[which(dfMod_summ20.1$sitetype == "Restoration" & dfMod_summ20.1$project == "Decker")])
+var(dfMod_summ20.1$meanTurb[which(dfMod_summ20.1$sitetype == "Adj. Waterbody" & dfMod_summ20.1$project == "Decker")])
+
+hist(dfMod_summ20.1$p_oTurb[which(dfMod_summ20.1$sitetype == "Restoration" & dfMod_summ20.1$project == "Flyway")])
+hist(dfMod_summ20.1$p_oTurb[which(dfMod_summ20.1$sitetype == "Adj. Waterbody" & dfMod_summ20.1$project == "Flyway")])
+
+
+#library(TMB)
+library(glmmTMB)
+TMB_summ20.1 <- glmmTMB(oTurb/nTurb ~ sitetype2*project2*yr2 + (1|project2), weights=nTurb, family=binomial, data=dfMod_summ20.1)
+summary(TMB_summ20.1)
+
+qq.line = function(x) {
+    # following four lines from base R's qqline()
+    y <- quantile(x[!is.na(x)], c(0.25, 0.75))
+    x <- qnorm(c(0.25, 0.75))
+    slope <- diff(y)/diff(x)
+    int <- y[1L] - slope * x[1L]
+    return(c(int = int, slope = slope))
+}
+QQline = qq.line(resid(TMB_summ20.1, type = "pearson"))
+ggplot(data = NULL, aes(sample = resid(TMB_summ20.1, type = "pearson"))) +
+    stat_qq() + geom_abline(intercept = QQline[1], slope = QQline[2])
+exp(fixef(TMB_summ20.1)$cond)
+
+library(effects)
+plot(allEffects(TMB_summ20.1), type = "response")
+library(sjPlot)
+plot_model(TMB_summ20.1, type = "eff", show.ci = TRUE, terms = c("project2","sitetype2","yr2"))
+
+library(Hmisc)
+probs = 1/(1+exp(-fitted(TMB_raw20.1)))
+probs = binomial()$linkinv(fitted(TMB_raw20.1))
+somers2(probs, as.numeric(dfMod_raw20.1$threshTurb2))
+
+library(effects)
+xlevels = as.list(with(dfMod_summ20.1, data.frame(x = c("Adj. Waterbody","Restoration"))))
+newdata = as.data.frame(Effect("sitetype2", TMB_summ20.1, xlevels = xlevels))
+ggplot(data = newdata, aes(y = fit, x = sitetype2)) + geom_point(data = dfMod_summ20.1,
+    aes(y = p_oTurb)) + geom_ribbon(aes(ymin = lower, ymax = upper),
+    fill = "blue", alpha = 0.3) + geom_line() + scale_y_continuous("Percentage cover") +
+    theme_classic()
+
+anova(TMB_summ20.1, test = "Chisq")
+library(ROCR)
+p <- predict(model, newdata=subset(test,select=c(2,3,4,5,6,7,8)), type="response")
+pr <- prediction(p, test$Survived)
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+plot(prf)
+
+auc <- performance(pr, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+#################################################################################
+# Modelling Dissolved Oxygen
+dfcombined.3$threshDO <- ifelse(dfcombined.3$DO_mgL < 5, "Suboptimal", "Optimal")
+df_xMod <- df_xProj[which(df_xProj$xYear > 2020 & 
+                            df_xProj$xProj %in% c("Decker","Flyway") &
+                            df_xProj$xRange %in% c("raw20","raw24")),]
+xRange <- unique(df_xMod$xRange)
+list_workingMod <- list()
+for(i in 1:nrow(df_xMod)){
+  df_workingMod <- dfcombined.4DO[which(is.na(dfcombined.4DO$DO_mgL)== FALSE &
+                                        (dfcombined.4DO$project == df_xMod$xProj[i] &
+                                           (dfcombined.4DO$date >= df_xMod$dateStart[i] & 
+                                              dfcombined.4DO$date <=df_xMod$dateEnd[i]))),]
+  df_workingMod$xMod <- df_xMod$xRange[i]
+  list_workingMod[[i]] <- df_workingMod
+  df_workingMod <- NULL
+}
+names(list_workingMod) <- c(paste(df_xMod$xProj,df_xMod$xYear,df_xMod$xRange,sep = " "))
+
+
+dfMod_raw20.1 <- do.call(rbind.data.frame, list_workingMod[c(2,4,6,8)])
+dfMod_raw24.1 <- do.call(rbind.data.frame, list_workingMod[c(1,3,5,7)])
+dfMod_raw20.1$threshDO2 <- ifelse(dfMod_raw20.1$threshDO == "Optimal",1,0)
+dfMod_raw20.1$yr2 <- factor(dfMod_raw20.1$yr, levels = c("2021","2022"))
+dfMod_raw20.1$sitetype2 <- factor(dfMod_raw20.1$sitetype, levels = c("Adj. Waterbody","Restoration"))
+dfMod_raw20.1$project2 <- factor(dfMod_raw20.1$project, levels = c("Flyway","Decker"))
+
+hist(dfMod_raw20.1$DO_mgL)
+p1 <- hist(dfMod_raw20.1$DO_mgL[which(dfMod_raw20.1$sitetype == "Restoration")])
+p2 <- hist(dfMod_raw20.1$DO_mgL[which(dfMod_raw20.1$sitetype == "Adj. Waterbody")])
+plot( p1, col=rgb(0,0,1,1/4))  # first histogram
+plot( p2, col=rgb(1,0,0,1/4), add=T)  # second
+var(dfMod_raw20.1$DO_mgL[which(dfMod_raw20.1$sitetype == "Restoration")])
+var(dfMod_raw20.1$DO_mgL[which(dfMod_raw20.1$sitetype == "Adj. Waterbody")])
+
+
+library(glmmTMB)
+TMB_raw20.1 <- glmmTMB(threshDO2 ~ sitetype2 + (1|project2), family=binomial, data=dfMod_raw20.1)
+summary(TMB_raw20.1)
+qq.line = function(x) {
+    # following four lines from base R's qqline()
+    y <- quantile(x[!is.na(x)], c(0.25, 0.75))
+    x <- qnorm(c(0.25, 0.75))
+    slope <- diff(y)/diff(x)
+    int <- y[1L] - slope * x[1L]
+    return(c(int = int, slope = slope))
+}
+QQline = qq.line(resid(TMB_raw20.1, type = "pearson"))
+ggplot(data = NULL, aes(sample = resid(TMB_raw20.1, type = "pearson"))) +
+    stat_qq() + geom_abline(intercept = QQline[1], slope = QQline[2])
+exp(fixef(TMB_raw20.1)$cond)
+
+
+
+##########################
+
+list_workingSumm <- list()
+for(i in 1:nrow(df_xMod)){
+  df_workingSumm <- summThresh.DO[which((summThresh.DO$project == df_xMod$xProj[i] &
+                                        (summThresh.DO$date >= df_xMod$dateStart[i] & 
+                                           summThresh.DO$date <=df_xMod$dateEnd[i]))),]
+  df_workingSumm$xMod <- df_xMod$xRange[i]
+  df_workingSumm$yr <- lubridate::year(df_workingSumm$date)
+  list_workingSumm[[i]] <- df_workingSumm
+  df_workingSumm <- NULL
+}
+names(list_workingSumm) <- c(paste(df_xMod$xProj,df_xMod$xYear,df_xMod$xRange,sep = " "))
+
+
+dfMod_summ20.1 <- do.call(rbind.data.frame, list_workingSumm[c(2,4,6,8)])
+dfMod_summ24.1 <- do.call(rbind.data.frame, list_workingSumm[c(1,3,5,7)])
+#dfMod_raw20.1$threshTemp2 <- ifelse(dfMod_raw20.1$threshTemp == "Optimal",1,0)
+dfMod_summ20.1$yr2 <- factor(dfMod_summ20.1$yr, levels = c("2021","2022"))
+dfMod_summ20.1$project2 <- factor(dfMod_summ20.1$project, levels = c("Decker","Flyway"))
+dfMod_summ20.1$sitetype2 <- factor(dfMod_summ20.1$sitetype, levels = c("Adj. Waterbody","Restoration"))
+
+hist(dfMod_summ20.1$meanDO)
+p1 <- hist(dfMod_summ20.1$meanDO[which(dfMod_summ20.1$sitetype == "Restoration" & dfMod_summ20.1$project == "Decker")], breaks = 9)
+p2 <- hist(dfMod_summ20.1$meanDO[which(dfMod_summ20.1$sitetype == "Adj. Waterbody"& dfMod_summ20.1$project == "Decker")], breaks = 9)
+plot( p1, col=rgb(0,0,1,1/4))  # first histogram
+plot( p2, col=rgb(1,0,0,1/4), add=T)  # second
+var(dfMod_summ20.1$meanDO[which(dfMod_summ20.1$sitetype == "Restoration" & dfMod_summ20.1$project == "Decker")])
+var(dfMod_summ20.1$meanDO[which(dfMod_summ20.1$sitetype == "Adj. Waterbody" & dfMod_summ20.1$project == "Decker")])
+
+hist(dfMod_summ20.1$p_)
+#library(TMB)
+library(glmmTMB)
+TMB_summ20.1 <- glmmTMB(oDO/nDO ~ sitetype2*project2+ (1|project2), weights=nDO, family=binomial, data=dfMod_summ20.1)
+summary(TMB_summ20.1)
+
+qq.line = function(x) {
+    # following four lines from base R's qqline()
+    y <- quantile(x[!is.na(x)], c(0.25, 0.75))
+    x <- qnorm(c(0.25, 0.75))
+    slope <- diff(y)/diff(x)
+    int <- y[1L] - slope * x[1L]
+    return(c(int = int, slope = slope))
+}
+QQline = qq.line(resid(TMB_summ20.1, type = "pearson"))
+ggplot(data = NULL, aes(sample = resid(TMB_summ20.1, type = "pearson"))) +
+    stat_qq() + geom_abline(intercept = QQline[1], slope = QQline[2])
+exp(fixef(TMB_summ20.1)$cond)
+
+# The line below was used to remove duplicate data from Decker and Tule so that only one observation per sonde was taken for Decker and only one site was used for Tule
+#ggplot(df[which(df$Site %in% c("Tule Breach","Tule Pond","Tule Channel")),], aes(x = dts, y = TempC, color = Site)) + geom_point()
+
+library(ggbeeswarm)
+pWQviolin <- ggplot(data = dfcombined.2[which(dfX3$variable %in% xWQ),], aes(x = type2, y = as.numeric(value), fill = type)) + # as.Date() needed for jitter to work
+  geom_hline(aes(yintercept = as.numeric(thresh1)),linetype = "dashed")+
+  geom_hline(aes(yintercept = as.numeric(thresh2)))+
+  geom_violin()+
+  geom_dotplot(binaxis= "y",
+               stackdir = "center",
+               dotsize = 1.5) +
+  scale_fill_manual(values = mycol) +
+  facet_grid(var3 ~ mo2, scales= "free", space = "free_x", switch = "y")+
+  theme(axis.title = element_blank(),
+        strip.text = element_text(face = "bold"),
+        legend.title = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(face = "bold")) +
+  theme( axis.title.y = element_blank(), # remove the default y-axis title, "wt"
+         strip.background = element_rect(fill = 'transparent'), # replace the strip backgrounds with transparent
+         strip.placement = 'outside', # put the facet strips on the outside
+         strip.text.y = element_text(angle=180),
+         axis.text.x = element_text(face = "bold", angle = 90, vjust = 0.5, hjust = 1))
+```
+
+
+This chunk looks at the juvenile window of Chinook Salmon. Window sizes dependent on whether mean or raw values are used for start/stop dates.
+```{r}
+library(plyr)
+library(ggplot2)
+
+rm(list = ls())
+load("LTM_CATCH_04.RData")
+load("AllLTM4Analysis_221208.RData")
+
+
+dfcombined.2$threshTemp <- ifelse(dfcombined.2$TempC > 19, "Suboptimal", "Optimal")
+
+dfcombined.2$yr <- lubridate::year(dfcombined.2$dts)
+dfcombined.2$doy <- lubridate::yday(dfcombined.2$dts)
+dfcombined.2$project <- NA
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Decker Breach","Decker Pool","M13_USGS","SDI_USGS"))] <- "Decker"
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Tule Breach","Tule Channel","Tule Pond","GRZB_USGS"))] <- "Tule"
+dfcombined.2$project[which(dfcombined.2$Site %in% c("Yolo Flyway Farm", "TOED_USGS"))] <- "Flyway"
+dfcombined.2$TempC.20 <- dfcombined.2$TempC - 20
+#ggplot(dfcombined.2, aes(x = dts, y = TempC.20, color = sitetype))  + geom_point() + geom_hline(yintercept = 0)+ facet_grid(Site ~.)
+
+# The line below was used to remove duplicate data from Decker and Tule so that only one observation per sonde was taken for Decker and only one site was used for Tule
+dfcombined.3 <- dfcombined.2[-which((dfcombined.2$Site == "Decker Breach"
+                                    & dfcombined.2$yr %in% c(2019,2020,2021)
+                                    & dfcombined.2$date %in% dfcombined.2$date[dfcombined.2$Site == "Decker Pool"])
+                                    | (dfcombined.2$Site %in% c("Tule Pond","Tule Channel"))),]
+
+summThresh <- ddply(dfcombined.3, c("project","sitetype","Site","season","date"), summarise,
+                    nTemp = length(TempC),
+                    oTemp = length(threshTemp[which(threshTemp == "Optimal")]),
+                    sTemp = length(threshTemp[which(threshTemp == "Suboptimal")]),
+                    nTurb = length(Turb_FNU),
+                    oTurb = length(threshTurb[which(threshTurb == "Optimal")]),
+                    sTurb = length(threshTurb[which(threshTurb == "Suboptimal")]),
+                    mean20 = mean(TempC.20, na.rm = TRUE),
+                    meanTemp = mean(TempC, na.rm = TRUE))
+
+summThresh$nTempCheck <- ifelse(sum(summThresh$oTemp,summThresh$sTemp) == summThresh$nTemp, TRUE, FALSE)
+summThresh$nTurbCheck <- ifelse(sum(summThresh$oTurb,summThresh$sTurb) == summThresh$nTurb, TRUE, FALSE)
+summThresh$p_oTemp <- summThresh$oTemp/summThresh$nTemp
+summThresh$p_oTurb <- summThresh$oTurb/summThresh$nTurb
+
+
+summThresh$project2 <- factor(summThresh$project, levels = c("Flyway","Decker","Tule"))
+
+ggplot(summThresh, aes(x = date, y = p_oTemp, color = sitetype)) + geom_point() + facet_grid(project2 ~.)
+ggplot(summThresh, aes(x = date, y = mean20, color = sitetype)) + geom_point() + facet_grid(project2 ~.)
+
+dfcombined.4 <- merge(dfcombined.3,summThresh[,c("date","Site","meanTemp")], by = c("date","Site"), all.x = FALSE)
+
+dfordered <- dplyr::arrange(dfcombined.4,Site, dts)
+xProj <- unique(dfordered$project)
+xYear <- sort(unique(dfordered$yr))
+list_Proj <- list()
+for(i in 1:length(xProj)){
+  list_Year <- list()
+  for(j in 1:length(xYear)){
+    df <- dfordered[which(dfordered$project == xProj[i] & dfordered$yr == xYear[j]),]
+    df_DateRange <- data.frame(xProj = xProj[i],
+                               xYear = xYear[j],
+                               xRange = c("early","mid","late","full"),
+                               dateStart = as.Date(c(paste0(xYear[j]-1,"-11-01"), # from SFEI 2020. Identifying suitable rearing habitat for Chinook Salmon in the Sacramento-San Joaquin Delta. Publication #972
+                                                     paste0(xYear[j],"-01-12"),
+                                                     paste0(xYear[j],"-03-24"),
+                                                     paste0(xYear[j]-1,"-11-01"))),
+                               dateEnd = as.Date(c(paste0(xYear[j],"-01-11"),
+                                                     paste0(xYear[j],"-03-23"),
+                                                     paste0(xYear[j],"-05-31"),
+                                                     paste0(xYear[j],"-05-31"))))
+    list_Year[[j]] <- df_DateRange
+  }
+  df_xYear <- do.call(rbind.data.frame, list_Year)
+  list_Year <- NULL
+  list_Proj[[i]] <- df_xYear
+}
+df_xProj <- do.call(rbind.data.frame, list_Proj)
+df_xProj.2 <- df_xProj[which(is.na(df_xProj$dateStart) == FALSE),]
+df_xProj.2$matchby <- "A"
+
+df_xInterval <- data.frame(tempL = seq(8,22, by = 1),
+                           tempH = seq(9,23, by = 1),
+                           matchby = "A",
+                           time_p = NA)
+df_xSite <- data.frame(project = c("Decker","Decker","Tule","Tule","Flyway","Flyway"),
+                       sitetype = c(rep(c("Restoration","Adj. Waterbody"),3)))
+
+df_xProj.3 <- merge(df_xProj.2, df_xSite, by.x = "xProj", by.y = "project")
+df_pTime <- merge(df_xProj.3, df_xInterval, by = "matchby", all = TRUE)
+
+df_pTime$nTotal <- NA
+df_pTime$nBelow <- NA
+for(i in 1:nrow(df_pTime)){
+  workingDF <- dfcombined.4[which(is.na(dfcombined.4$TempC)== FALSE &
+                                    dfcombined.4$project == df_pTime$xProj[i] & 
+                                    dfcombined.4$sitetype == df_pTime$sitetype[i] &
+                                    (dfcombined.4$date >= df_pTime$dateStart[i] & dfcombined.4$date <= df_pTime$dateEnd[i])),]
+  if(nrow(workingDF) >0){
+    workingDF$belowT = workingDF$TempC < df_pTime$tempH[i]
+    df_pTime$nTotal[i] = length(workingDF$belowT)
+    df_pTime$nBelow[i] = length(which(workingDF$belowT)== TRUE)
+    #summWorking <- ddply(workingDF, c("project","sitetype","yr"), summarise,
+    #                     nTotal = length(TempC),
+    #                     nBelow = length(which(TempC < df_pTime$tempH[i])==TRUE)
+    #                     )
+    #df_pTime$nTotal[i] = summWorking$nTotal[1]
+    #df_pTime$nBelow[i] = summWorking$nBelow[1]
+  }
+  workingDF <- NULL
+  #summWorking <- NULL
+}
+
+
+df_pTime$pAbove <- 1 -df_pTime$nBelow/df_pTime$nTotal
+df_pTime$pBelow <- df_pTime$nBelow/df_pTime$nTotal
+df_pTime$xRange2 <- factor(df_pTime$xRange, levels = c("early","mid","late","full"))
+df_pTime$sitetype2 <- factor(df_pTime$sitetype, levels = c("Restoration", "Adj. Waterbody"))
+
+ggplot(df_pTime[which(df_pTime$xProj=="Flyway"),], aes(x = tempH, y = pAbove, color = sitetype2)) + geom_line() + facet_grid(xYear~xRange2) + geom_vline(xintercept = 19) + geom_vline(xintercept = 24)
+
+# The line below was used to remove duplicate data from Decker and Tule so that only one observation per sonde was taken for Decker and only one site was used for Tule
+#ggplot(df[which(df$Site %in% c("Tule Breach","Tule Pond","Tule Channel")),], aes(x = dts, y = TempC, color = Site)) + geom_point()
+
+library(ggbeeswarm)
+pWQviolin <- ggplot(data = dfcombined.2[which(dfX3$variable %in% xWQ),], aes(x = type2, y = as.numeric(value), fill = type)) + # as.Date() needed for jitter to work
+  geom_hline(aes(yintercept = as.numeric(thresh1)),linetype = "dashed")+
+  geom_hline(aes(yintercept = as.numeric(thresh2)))+
+  geom_violin()+
+  geom_dotplot(binaxis= "y",
+               stackdir = "center",
+               dotsize = 1.5) +
+  scale_fill_manual(values = mycol) +
+  facet_grid(var3 ~ mo2, scales= "free", space = "free_x", switch = "y")+
+  theme(axis.title = element_blank(),
+        strip.text = element_text(face = "bold"),
+        legend.title = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(face = "bold")) +
+  theme( axis.title.y = element_blank(), # remove the default y-axis title, "wt"
+         strip.background = element_rect(fill = 'transparent'), # replace the strip backgrounds with transparent
+         strip.placement = 'outside', # put the facet strips on the outside
+         strip.text.y = element_text(angle=180),
+         axis.text.x = element_text(face = "bold", angle = 90, vjust = 0.5, hjust = 1))
+```
+
+
+
+
+OLD!!! (has ANOVA and other lm and glm) This chunk looks at the juvenile window of smelt. Window sizes dependent on whether mean or raw values are used for start/stop dates.
+```{r}
+library(plyr)
+library(ggplot2)
+
+rm(list = ls())
+load("LTM_CATCH_04.RData")
+load("AllLTM4AnalysisQC_221222.RData")
+'%ni%' <- Negate('%in%')
+
+dfcombined.2 <- dfcombined.qc1[which(is.na(dfcombined.qc1$dts)==FALSE),]
+
+dfcombined.2$TempC.20 <- dfcombined.2$TempC - 20
+#ggplot(dfcombined.2, aes(x = dts, y = TempC.20, color = sitetype))  + geom_point() + geom_hline(yintercept = 0)+ facet_grid(Site ~.)
+
+# The line below was used to remove duplicate data from Decker and Tule so that only one observation per sonde was taken for Decker and only one site was used for Tule
+dfcombined.3 <- dfcombined.2[-which((dfcombined.2$Site == "Decker Breach"
+                                    & dfcombined.2$yr %in% c(2019,2020,2021)
+                                    & dfcombined.2$date %in% dfcombined.2$date[dfcombined.2$Site == "Decker Pool"])
+                                    | (dfcombined.2$Site == "TOED_USGS"
+                                       & dfcombined.2$date %ni% dfcombined.2$date[dfcombined.2$Site == "Yolo Flyway Farm"])
+                                    | (dfcombined.2$Site %in% c("SDI_USGS","M13_USGS")
+                                       & dfcombined.2$date %ni% dfcombined.2$date[dfcombined.2$Site == "Decker Pool"])
+                                    | (dfcombined.2$Site %in% c("Tule Pond","Tule Channel"))),]
+
+dfordered <- dplyr::arrange(dfcombined.3,Site, dts)
+#ggplot(dfordered, aes(x = date, y = Turb_FNU, color = sitetype)) + geom_point() + ylim(c(0,200)) + facet_grid(project ~.)
+
+summThresh <- ddply(dfcombined.3[which(is.na(dfcombined.3$TempC)==FALSE),], c("project","sitetype","Site","season","date"), summarise,
+                    nTemp = length(TempC),
+                    oTemp = length(threshTemp[which(threshTemp == "Optimal")]),
+                    sTemp = length(threshTemp[which(threshTemp == "Suboptimal")]),
+                    nTurb = length(Turb_FNU),
+                    oTurb = length(threshTurb[which(threshTurb == "Optimal")]),
+                    sTurb = length(threshTurb[which(threshTurb == "Suboptimal")]),
+                    mean20 = mean(TempC.20, na.rm = TRUE),
+                    meanTemp = mean(TempC, na.rm = TRUE))
+
+summThresh$nTempCheck <- ifelse(sum(summThresh$oTemp,summThresh$sTemp) == summThresh$nTemp, TRUE, FALSE)
+summThresh$nTurbCheck <- ifelse(sum(summThresh$oTurb,summThresh$sTurb) == summThresh$nTurb, TRUE, FALSE)
+summThresh$p_oTemp <- summThresh$oTemp/summThresh$nTemp
+summThresh$p_oTurb <- summThresh$oTurb/summThresh$nTurb
+
+
+summThresh$project2 <- factor(summThresh$project, levels = c("Flyway","Decker","Tule"))
+summThresh$sitetype2 <- factor(summThresh$sitetype, levels = c("Restoration","Adj. Waterbody"))
+
+ggplot(summThresh, aes(x = date, y = p_oTemp, color = sitetype2)) + geom_point() + facet_grid(project2 ~.)
+ggplot(summThresh, aes(x = date, y = meanTemp, color = sitetype2)) + 
+  geom_point() + 
+  ylab("Mean Temperature (C)") +
+  theme(axis.title.x = element_blank(), 
+        axis.title.y = element_text(face = "bold", size = 12),
+        axis.text = element_text(face = "bold", size = 12),
+        strip.text = element_text(face = "bold"),
+        legend.title = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(face = "bold", size = 12)) +
+  #geom_vline(xintercept = as.Date(summIntFish$DateStart[which(summIntFish$year >=2019 & 
+  #                                                              summIntFish$specie == "Delta_Smelt")])) +
+  facet_grid(project2 ~.)
+
+dfcombined.4 <- merge(dfcombined.3,summThresh[,c("date","Site","meanTemp")], by = c("date","Site"), all.x = FALSE)
+
+dfordered <- dplyr::arrange(dfcombined.4,Site, dts)
+xProj <- unique(dfordered$project)
+xYear <- sort(unique(dfordered$yr))
+list_Proj <- list()
+for(i in 1:length(xProj)){
+  list_Year <- list()
+  for(j in 1:length(xYear)){
+    df <- dfordered[which(dfordered$project == xProj[i] & dfordered$yr == xYear[j]),]
+    df_DateRange <- data.frame(xProj = xProj[i],
+                               xYear = xYear[j],
+                               xRange = c("raw24","raw20","mean24","mean20"),
+                               dateStart = c(range(df$date[which(df$TempC >=24)])[1],
+                                             range(df$date[which(df$TempC >=20)])[1],
+                                             range(df$date[which(df$meanTemp >=24)])[1],
+                                             range(df$date[which(df$meanTemp >=20)])[1]),
+                               dateEnd = c(range(df$date[which(df$TempC >=24)])[2],
+                                           range(df$date[which(df$TempC >=20)])[2],
+                                           range(df$date[which(df$meanTemp >=24)])[2],
+                                           range(df$date[which(df$meanTemp >=20)])[2]))
+    list_Year[[j]] <- df_DateRange
+  }
+  df_xYear <- do.call(rbind.data.frame, list_Year)
+  list_Year <- NULL
+  list_Proj[[i]] <- df_xYear
+}
+df_xProj <- do.call(rbind.data.frame, list_Proj)
+df_xProj.2 <- df_xProj[-which(df_xProj$dateStart == Inf),]
+df_xProj.2$matchby <- "A"
+
+df_xInterval <- data.frame(tempL = seq(16,29, by = 1),
+                           tempH = seq(17,30, by = 1),
+                           matchby = "A",
+                           time_p = NA)
+df_xSite <- data.frame(project = c("Decker","Decker","Tule","Tule","Flyway","Flyway"),
+                       sitetype = c(rep(c("Restoration","Adj. Waterbody"),3)))
+
+df_xProj.3 <- merge(df_xProj.2, df_xSite, by.x = "xProj", by.y = "project")
+df_pTime <- merge(df_xProj.3, df_xInterval, by = "matchby", all = TRUE)
+
+df_pTime$nTotal <- NA
+df_pTime$nBelow <- NA
+for(i in 1:nrow(df_pTime)){
+  workingDF <- dfcombined.4[which(is.na(dfcombined.4$TempC)== FALSE &
+                                    dfcombined.4$project == df_pTime$xProj[i] & 
+                                    dfcombined.4$sitetype == df_pTime$sitetype[i] &
+                                    (dfcombined.4$date >= df_pTime$dateStart[i] & dfcombined.4$date <= df_pTime$dateEnd[i])),]
+  if(nrow(workingDF) >0){
+    workingDF$belowT = workingDF$TempC < df_pTime$tempH[i]
+    df_pTime$nTotal[i] = length(workingDF$belowT)
+    df_pTime$nBelow[i] = length(which(workingDF$belowT)== TRUE)
+    #summWorking <- ddply(workingDF, c("project","sitetype","yr"), summarise,
+    #                     nTotal = length(TempC),
+    #                     nBelow = length(which(TempC < df_pTime$tempH[i])==TRUE)
+    #                     )
+    #df_pTime$nTotal[i] = summWorking$nTotal[1]
+    #df_pTime$nBelow[i] = summWorking$nBelow[1]
+  }
+  workingDF <- NULL
+  #summWorking <- NULL
+}
+
+
+df_pTime$pAbove <- 1 -df_pTime$nBelow/df_pTime$nTotal
+df_pTime$pBelow <- df_pTime$nBelow/df_pTime$nTotal
+
+ggplot(df_pTime[which(df_pTime$xProj=="Flyway"),], aes(x = tempH, y = pAbove*100, color = sitetype)) + 
+  geom_line(linewidth = 1.5) + 
+  geom_vline(xintercept = 20) + geom_vline(xintercept = 24) +
+  ylab("Percent Duration of Exceedance") +
+  xlab("Temperature (C)") +
+  theme(axis.title = element_text(face = "bold", size = 12),
+        axis.text = element_text(face = "bold", size = 12),
+        strip.text = element_text(face = "bold"),
+        legend.title = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(face = "bold", size = 12)) +
+  facet_grid(xYear~xRange) 
+
+################################################################################
+# For Turbidity
+summThreshTurb <- ddply(dfcombined.3[which(is.na(dfcombined.3$Turb_FNU)==FALSE),], c("project","sitetype","Site","season","date"), summarise,
+                    nTurb = length(Turb_FNU),
+                    oTurb = length(threshTurb[which(threshTurb == "Optimal")]),
+                    sTurb = length(threshTurb[which(threshTurb == "Suboptimal")]),
+                    meanTurb = mean(Turb_FNU, na.rm = TRUE)
+                    )
+summThreshTurb$nTurbCheck <- ifelse(sum(summThreshTurb$oTurb,summThreshTurb$sTurb) == summThreshTurb$nTurb, TRUE, FALSE)
+summThreshTurb$p_oTurb <- summThreshTurb$oTurb/summThreshTurb$nTurb
+summThreshTurb$project2 <- factor(summThreshTurb$project, levels = c("Flyway","Decker","Tule"))
+summThreshTurb$sitetype2 <- factor(summThreshTurb$sitetype, levels = c("Restoration","Adj. Waterbody"))
+
+dfcombined.4Turb <- merge(dfcombined.3,summThreshTurb[,c("date","Site","meanTurb")], by = c("date","Site"), all.x = FALSE)
+
+df_xInterval <- data.frame(turbH = seq(0,100, by = 10),
+                           matchby = "A",
+                           time_p = NA)
+df_xSite <- data.frame(project = c("Decker","Decker","Tule","Tule","Flyway","Flyway"),
+                       sitetype = c(rep(c("Restoration","Adj. Waterbody"),3)))
+
+df_xProj.3 <- merge(df_xProj.2, df_xSite, by.x = "xProj", by.y = "project")
+df_pTime <- merge(df_xProj.3, df_xInterval, by = "matchby", all = TRUE)
+
+df_pTime$nTotal <- NA
+df_pTime$nBelow <- NA
+for(i in 1:nrow(df_pTime)){
+  workingDF <- dfcombined.4Turb[which(is.na(dfcombined.4Turb$Turb_FNU)== FALSE &
+                                    dfcombined.4Turb$project == df_pTime$xProj[i] & 
+                                    dfcombined.4Turb$sitetype == df_pTime$sitetype[i] &
+                                    (dfcombined.4Turb$date >= df_pTime$dateStart[i] & dfcombined.4Turb$date <= df_pTime$dateEnd[i])),]
+  if(nrow(workingDF) >0){
+    workingDF$belowT = workingDF$Turb_FNU < df_pTime$turbH[i]
+    df_pTime$nTotal[i] = length(workingDF$belowT)
+    df_pTime$nBelow[i] = length(which(workingDF$belowT)== TRUE)
+    #summWorking <- ddply(workingDF, c("project","sitetype","yr"), summarise,
+    #                     nTotal = length(TempC),
+    #                     nBelow = length(which(TempC < df_pTime$tempH[i])==TRUE)
+    #                     )
+    #df_pTime$nTotal[i] = summWorking$nTotal[1]
+    #df_pTime$nBelow[i] = summWorking$nBelow[1]
+  }
+  workingDF <- NULL
+  #summWorking <- NULL
+}
+
+
+df_pTime$pAbove <- 1 -df_pTime$nBelow/df_pTime$nTotal
+df_pTime$pBelow <- df_pTime$nBelow/df_pTime$nTotal
+
+ggplot(df_pTime[which(df_pTime$xProj=="Flyway"),], aes(x = turbH, y = pAbove*100, color = sitetype)) + 
+  geom_line(linewidth = 1.5) + 
+  geom_vline(xintercept = 12) + geom_vline(xintercept = 80) +
+  ylab("Percent Duration of Exceedance") +
+  xlab("Turbidity (FNU)") +
+  theme(axis.title = element_text(face = "bold", size = 12),
+        axis.text = element_text(face = "bold", size = 12),
+        strip.text = element_text(face = "bold"),
+        legend.title = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(face = "bold", size = 12)) +
+  facet_grid(xYear~xRange) 
+
+################################################################################
+# For Dissolved oxygen
+dfcombined.3$threshDO <- ifelse(dfcombined.3$DO_mgL < 5, "Suboptimal", "Optimal")
+summThresh.DO <- ddply(dfcombined.3[which(is.na(dfcombined.3$DO_mgL)==FALSE),], c("project","sitetype","Site","season","date"), summarise,
+                    nDO = length(DO_mgL),
+                    oDO = length(threshDO[which(threshDO == "Optimal")]),
+                    sDO = length(threshTurb[which(threshDO == "Suboptimal")]),
+                    meanDO = mean(DO_mgL, na.rm = TRUE)
+                    )
+summThresh.DO$nDOCheck <- ifelse(sum(summThresh.DO$oDO,summThresh.DO$sDO) == summThresh.DO$nDO, TRUE, FALSE)
+summThresh.DO$p_oTurb <- summThresh.DO$oDO/summThresh.DO$nDO
+summThresh.DO$project2 <- factor(summThresh.DO$project, levels = c("Flyway","Decker","Tule"))
+summThresh.DO$sitetype2 <- factor(summThresh.DO$sitetype, levels = c("Restoration","Adj. Waterbody"))
+
+dfcombined.4DO <- merge(dfcombined.3,summThresh.DO[,c("date","Site","meanDO")], by = c("date","Site"), all.x = FALSE)
+
+df_xInterval <- data.frame(DO.H = seq(0,12, by = 1),
+                           matchby = "A",
+                           time_p = NA)
+df_xSite <- data.frame(project = c("Decker","Decker","Tule","Tule","Flyway","Flyway"),
+                       sitetype = c(rep(c("Restoration","Adj. Waterbody"),3)))
+
+df_xProj.3 <- merge(df_xProj.2, df_xSite, by.x = "xProj", by.y = "project")
+df_pTime <- merge(df_xProj.3, df_xInterval, by = "matchby", all = TRUE)
+
+df_pTime$nTotal <- NA
+df_pTime$nBelow <- NA
+for(i in 1:nrow(df_pTime)){
+  workingDF <- dfcombined.4DO[which(is.na(dfcombined.4DO$DO_mgL)== FALSE &
+                                    dfcombined.4DO$project == df_pTime$xProj[i] & 
+                                    dfcombined.4DO$sitetype == df_pTime$sitetype[i] &
+                                    (dfcombined.4DO$date >= df_pTime$dateStart[i] & dfcombined.4DO$date <= df_pTime$dateEnd[i])),]
+  if(nrow(workingDF) >0){
+    workingDF$belowT = workingDF$DO_mgL < df_pTime$DO.H[i]
+    df_pTime$nTotal[i] = length(workingDF$belowT)
+    df_pTime$nBelow[i] = length(which(workingDF$belowT)== TRUE)
+    #summWorking <- ddply(workingDF, c("project","sitetype","yr"), summarise,
+    #                     nTotal = length(TempC),
+    #                     nBelow = length(which(TempC < df_pTime$tempH[i])==TRUE)
+    #                     )
+    #df_pTime$nTotal[i] = summWorking$nTotal[1]
+    #df_pTime$nBelow[i] = summWorking$nBelow[1]
+  }
+  workingDF <- NULL
+  #summWorking <- NULL
+}
+
+
+df_pTime$pAbove <- 1 -df_pTime$nBelow/df_pTime$nTotal
+df_pTime$pBelow <- df_pTime$nBelow/df_pTime$nTotal
+
+ggplot(df_pTime[which(df_pTime$xProj=="Flyway"),], aes(x = DO.H, y = pAbove*100, color = sitetype)) + 
+  geom_line(linewidth = 1.5) + 
+  geom_vline(xintercept = 5) + #geom_vline(xintercept = 80) +
+  ylab("Percent Duration of Exceedance") +
+  xlab("Dissolved Oxygen (mg/L)") +
+  theme(axis.title = element_text(face = "bold", size = 12),
+        axis.text = element_text(face = "bold", size = 12),
+        strip.text = element_text(face = "bold"),
+        legend.title = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(face = "bold", size = 12)) +
+  facet_grid(xYear~xRange) 
+
+
+
+# OptOrNot ~ sitetype*project*year + (1|project/sitetype) ; using only 2021 and 2022 dateranges
+df_xMod <- df_xProj[which(df_xProj$xYear > 2020 & 
+                            df_xProj$xProj %in% c("Decker","Flyway") &
+                            df_xProj$xRange %in% c("raw20","raw24")),]
+xRange <- unique(df_xMod$xRange)
+list_workingMod <- list()
+for(i in 1:nrow(df_xMod)){
+  df_workingMod <- dfcombined.4[which(is.na(dfcombined.4$TempC)== FALSE &
+                                        (dfcombined.4$project == df_xMod$xProj[i] &
+                                           (dfcombined.4$date >= df_xMod$dateStart[i] & 
+                                              dfcombined.4$date <=df_xMod$dateEnd[i]))),]
+  df_workingMod$xMod <- df_xMod$xRange[i]
+  list_workingMod[[i]] <- df_workingMod
+  df_workingMod <- NULL
+}
+names(list_workingMod) <- c(paste(df_xMod$xProj,df_xMod$xYear,df_xMod$xRange,sep = " "))
+
+
+dfMod_raw20.1 <- do.call(rbind.data.frame, list_workingMod[c(2,4,6,8)])
+dfMod_raw24.1 <- do.call(rbind.data.frame, list_workingMod[c(1,3,5,7)])
+dfMod_raw20.1$threshTemp2 <- ifelse(dfMod_raw20.1$threshTemp == "Optimal",1,0)
+dfMod_raw20.1$yr2 <- factor(dfMod_raw20.1$yr, levels = c("2021","2022"))
+dfMod_raw20.1$sitetype2 <- factor(dfMod_raw20.1$sitetype, levels = c("Adj. Waterbody","Restoration"))
+dfMod_raw20.1$project2 <- factor(dfMod_raw20.1$project, levels = c("Flyway","Decker"))
+
+hist(dfMod_raw20.1$TempC)
+p1 <- hist(dfMod_raw20.1$TempC[which(dfMod_raw20.1$sitetype == "Restoration")])
+p2 <- hist(dfMod_raw20.1$TempC[which(dfMod_raw20.1$sitetype == "Adj. Waterbody")])
+plot( p2, col=rgb(0,0,1,1/4))  # first histogram
+plot( p1, col=rgb(1,0,0,1/4), add=T)  # second
+var(dfMod_raw20.1$TempC[which(dfMod_raw20.1$sitetype == "Restoration")])
+var(dfMod_raw20.1$TempC[which(dfMod_raw20.1$sitetype == "Adj. Waterbody")])
+modaov_raw20.1 <- aov(TempC ~ sitetype, data = dfMod_raw20.1)
+modaov_raw20.2 <- aov(TempC ~ sitetype + project, data = dfMod_raw20.1)
+modaov_raw20.3 <- aov(TempC ~ sitetype : project, data = dfMod_raw20.1)
+modaov_raw20.4 <- aov(TempC ~ sitetype * project, data = dfMod_raw20.1)
+modaov_raw20.5 <- aov(TempC ~ sitetype + yr2, data = dfMod_raw20.1)
+modaov_raw20.6 <- aov(TempC ~ sitetype * yr2, data = dfMod_raw20.1)
+modaov_raw20.7 <- aov(TempC ~ sitetype + project + yr2, data = dfMod_raw20.1)
+modaov_raw20.8 <- aov(TempC ~ sitetype + project + yr2, data = dfMod_raw20.1)
+modaov_raw20.9 <- aov(TempC ~ sitetype : project + yr2, data = dfMod_raw20.1)
+modaov_raw20.10 <- aov(TempC ~ sitetype : project : yr2, data = dfMod_raw20.1)
+modaov_raw20.11 <- aov(TempC ~ sitetype * project : yr2, data = dfMod_raw20.1)
+modaov_raw20.12 <- aov(TempC ~ sitetype : project * yr2, data = dfMod_raw20.1)
+anova(modaov_raw20.1,modaov_raw20.2,modaov_raw20.3,modaov_raw20.4,modaov_raw20.5,modaov_raw20.6,modaov_raw20.7,modaov_raw20.8,modaov_raw20.9,modaov_raw20.10,modaov_raw20.11,modaov_raw20.12)
+summary(modaov_raw20.10)
+AIC(modaov_raw20.10)
+plot(modaov_raw20.10)
+
+library(lme4)
+mod_raw20.1 <- glmer(threshTemp2~ sitetype2*project2 + yr2 + (1|project2), data = dfMod_raw20.1, family = "binomial") # This is the way.... maybe. boundary is singular
+summary(mod_raw20.1)
+plot(mod_raw20.1)
+
+library(glmmADMB)
+#mod_ADMBsumm20.1 <- glmmadmb(threshTemp2 ~ sitetype2, random = ~ (1|project2/sitetype2), data = dfMod_raw20.1, family = "binomial", extra.args="-ndi 1000000", debug = TRUE)
+
+library(glmmTMB)
+TMB_raw20.1 <- glmmTMB(threshTemp2 ~ sitetype2 + (1|project2), family=binomial, data=dfMod_raw20.1)
+summary(TMB_raw20.1)
+qq.line = function(x) {
+    # following four lines from base R's qqline()
+    y <- quantile(x[!is.na(x)], c(0.25, 0.75))
+    x <- qnorm(c(0.25, 0.75))
+    slope <- diff(y)/diff(x)
+    int <- y[1L] - slope * x[1L]
+    return(c(int = int, slope = slope))
+}
+QQline = qq.line(resid(TMB_raw20.1, type = "pearson"))
+ggplot(data = NULL, aes(sample = resid(TMB_raw20.1, type = "pearson"))) +
+    stat_qq() + geom_abline(intercept = QQline[1], slope = QQline[2])
+exp(fixef(TMB_raw20.1)$cond)
+
+
+library(MASS)
+mod_raw20.2 <- glm.nb(threshTemp2 ~ sitetype*project, data = dfMod_raw20.1)
+summary(mod_raw20.2)
+plot(mod_raw20.2)
+
+##########################
+
+list_workingSumm <- list()
+for(i in 1:nrow(df_xMod)){
+  df_workingSumm <- summThresh[which((summThresh$project == df_xMod$xProj[i] &
+                                        (summThresh$date >= df_xMod$dateStart[i] & 
+                                           summThresh$date <=df_xMod$dateEnd[i]))),]
+  df_workingSumm$xMod <- df_xMod$xRange[i]
+  df_workingSumm$yr <- lubridate::year(df_workingSumm$date)
+  list_workingSumm[[i]] <- df_workingSumm
+  df_workingSumm <- NULL
+}
+names(list_workingSumm) <- c(paste(df_xMod$xProj,df_xMod$xYear,df_xMod$xRange,sep = " "))
+
+
+dfMod_summ20.1 <- do.call(rbind.data.frame, list_workingSumm[c(2,4,6,8)])
+dfMod_summ24.1 <- do.call(rbind.data.frame, list_workingSumm[c(1,3,5,7)])
+#dfMod_raw20.1$threshTemp2 <- ifelse(dfMod_raw20.1$threshTemp == "Optimal",1,0)
+dfMod_summ20.1$yr2 <- factor(dfMod_summ20.1$yr, levels = c("2021","2022"))
+dfMod_summ20.1$project2 <- factor(dfMod_summ20.1$project, levels = c("Decker","Flyway"))
+dfMod_summ20.1$sitetype2 <- factor(dfMod_summ20.1$sitetype, levels = c("Adj. Waterbody","Restoration"))
+
+hist(dfMod_summ20.1$meanTemp)
+p1 <- hist(dfMod_summ20.1$meanTemp[which(dfMod_summ20.1$sitetype == "Restoration" & dfMod_summ20.1$project == "Decker")], breaks = 9)
+p2 <- hist(dfMod_summ20.1$meanTemp[which(dfMod_summ20.1$sitetype == "Adj. Waterbody"& dfMod_summ20.1$project == "Decker")], breaks = 9)
+plot( p2, col=rgb(0,0,1,1/4))  # first histogram
+plot( p1, col=rgb(1,0,0,1/4), add=T)  # second
+var(dfMod_summ20.1$meanTemp[which(dfMod_summ20.1$sitetype == "Restoration" & dfMod_summ20.1$project == "Decker")])
+var(dfMod_summ20.1$meanTemp[which(dfMod_summ20.1$sitetype == "Adj. Waterbody" & dfMod_summ20.1$project == "Decker")])
+modaov_summ20.1 <- aov(meanTemp ~ sitetype2, data = dfMod_summ20.1)
+modaov_summ20.2 <- aov(meanTemp ~ sitetype2 + project2, data = dfMod_summ20.1)
+modaov_summ20.3 <- aov(meanTemp ~ sitetype2 : project2, data = dfMod_summ20.1)
+modaov_summ20.4 <- aov(meanTemp ~ sitetype2 * project2, data = dfMod_summ20.1)
+modaov_summ20.5 <- aov(meanTemp ~ sitetype2 + yr2, data = dfMod_summ20.1)
+modaov_summ20.6 <- aov(meanTemp ~ sitetype2 * yr2, data = dfMod_summ20.1)
+modaov_summ20.7 <- aov(meanTemp ~ sitetype2 + project2 + yr2, data = dfMod_summ20.1)
+modaov_summ20.8 <- aov(meanTemp ~ sitetype2 + project2 + yr2, data = dfMod_summ20.1)
+modaov_summ20.9 <- aov(meanTemp ~ sitetype2 : project2 + yr2, data = dfMod_summ20.1)
+modaov_summ20.10 <- aov(meanTemp ~ sitetype2 : project2 : yr2, data = dfMod_summ20.1)
+modaov_summ20.11 <- aov(meanTemp ~ sitetype2 * project2 : yr2, data = dfMod_summ20.1)
+modaov_summ20.12 <- aov(meanTemp ~ sitetype2 : project2 * yr2, data = dfMod_summ20.1)
+modaov_summ20.13 <- aov(meanTemp ~ sitetype2 * project2 + yr2, data = dfMod_summ20.1)
+modaov_summ20.13 <- aov(meanTemp ~project2/sitetype2 + yr2, data = dfMod_summ20.1)
+
+anova(modaov_summ20.1,modaov_summ20.2,modaov_summ20.3,modaov_summ20.4,modaov_summ20.5,modaov_summ20.6,modaov_summ20.7,modaov_summ20.8,modaov_summ20.9,modaov_summ20.10,modaov_summ20.11,modaov_summ20.12)
+summary(modaov_summ20.2)
+
+anova(modaov_summ20.4,modaov_summ20.9)
+summary(modaov_summ20.10)
+AIC(modaov_summ20.4)
+plot(modaov_summ20.4)
+hist(residuals(modaov_summ20.10))
+
+
+library(lme4)
+hist(dfMod_summ20.1$p_oTemp)
+p1 <- hist(dfMod_summ20.1$p_oTemp[which(dfMod_summ20.1$sitetype == "Restoration" & dfMod_summ20.1$project == "Decker")], breaks = 10)
+p2 <- hist(dfMod_summ20.1$p_oTemp[which(dfMod_summ20.1$sitetype == "Adj. Waterbody"& dfMod_summ20.1$project == "Decker")], breaks = 10)
+plot( p2, col=rgb(0,0,1,1/4))  # first histogram
+plot( p1, col=rgb(1,0,0,1/4), add=T)  # second
+mod_summ20.1 <- glmer(oTemp/nTemp ~ sitetype2 + (1|project2:sitetype2), weights = nTemp, data = dfMod_summ20.1, family = "binomial")
+summary(mod_summ20.1)
+plot(residuals(mod_summ20.1))
+hist(residuals(mod_summ20.1))
+plot(mod_summ20.1)
+coefficients(mod_summ20.1)[[1]]
+exp(coefficients(mod_summ20.1)[[1]])
+
+
+library(TMB)
+library(glmmTMB)
+TMB_summ20.1 <- glmmTMB(oTemp/nTemp ~ sitetype2+ (1|project2), weights=nTemp, family=binomial, data=dfMod_summ20.1)
+summary(TMB_summ20.1)
+
+qq.line = function(x) {
+    # following four lines from base R's qqline()
+    y <- quantile(x[!is.na(x)], c(0.25, 0.75))
+    x <- qnorm(c(0.25, 0.75))
+    slope <- diff(y)/diff(x)
+    int <- y[1L] - slope * x[1L]
+    return(c(int = int, slope = slope))
+}
+QQline = qq.line(resid(TMB_summ20.1, type = "pearson"))
+ggplot(data = NULL, aes(sample = resid(TMB_summ20.1, type = "pearson"))) +
+    stat_qq() + geom_abline(intercept = QQline[1], slope = QQline[2])
+exp(fixef(TMB_summ20.1)$cond)
+
+library(MASS)
+mod_summ20.2 <- glm.nb(oTemp/nTemp ~ sitetype2*project2, weights = nTemp, data = dfMod_summ20.1)
+
+library(betareg)
+dfMod_summ20.1$p_oTemp2 <- dfMod_summ20.1$p_oTemp
+dfMod_summ20.1$p_oTemp2 <- ifelse(dfMod_summ20.1$p_oTemp == 0, 0.001, dfMod_summ20.1$p_oTemp)
+dfMod_summ20.1$p_oTemp2 <- ifelse(dfMod_summ20.1$p_oTemp == 1, 0.999, dfMod_summ20.1$p_oTemp2)
+mod_summ20.3 <- betareg(p_oTemp2 ~ sitetype2, weights = nTemp, data = dfMod_summ20.1)
+summary(mod_summ20.3)
+# The line below was used to remove duplicate data from Decker and Tule so that only one observation per sonde was taken for Decker and only one site was used for Tule
+#ggplot(df[which(df$Site %in% c("Tule Breach","Tule Pond","Tule Channel")),], aes(x = dts, y = TempC, color = Site)) + geom_point()
+
+library(ggbeeswarm)
+pWQviolin <- ggplot(data = dfcombined.2[which(dfX3$variable %in% xWQ),], aes(x = type2, y = as.numeric(value), fill = type)) + # as.Date() needed for jitter to work
+  geom_hline(aes(yintercept = as.numeric(thresh1)),linetype = "dashed")+
+  geom_hline(aes(yintercept = as.numeric(thresh2)))+
+  geom_violin()+
+  geom_dotplot(binaxis= "y",
+               stackdir = "center",
+               dotsize = 1.5) +
+  scale_fill_manual(values = mycol) +
+  facet_grid(var3 ~ mo2, scales= "free", space = "free_x", switch = "y")+
+  theme(axis.title = element_blank(),
+        strip.text = element_text(face = "bold"),
+        legend.title = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(face = "bold")) +
+  theme( axis.title.y = element_blank(), # remove the default y-axis title, "wt"
+         strip.background = element_rect(fill = 'transparent'), # replace the strip backgrounds with transparent
+         strip.placement = 'outside', # put the facet strips on the outside
+         strip.text.y = element_text(angle=180),
+         axis.text.x = element_text(face = "bold", angle = 90, vjust = 0.5, hjust = 1))
+```
+
+
+Time-series Decomposition For Decker
+Saving figures to "C:\Users\DCox\OneDrive - California Department of Fish and Wildlife\Documents\FRP\Monitoring\Reports\2021SiteReports"
+```{r}
+library(SWMPr)
+library(ggplot2)
+library(reshape2)
+library(viridis)
+library(plyr)
+library(scales)
+library(gridExtra)
+library(suncalc)
+library(dataRetrieval)
+rm(list = ls())
+
+
+load("FRP_LTMsonde_220526.RData")
+load("ExtLTM_CompleteMerge.RData") ###DMC220601: this is a huge file with all data from every nearby sonde
+siteNumber <- "11455485"
+parameterCd <- "00065" # Discharge
+startDate <- "2021-04-29"
+endDate <- "2021-12-31"
+#dailyDataAvailable <- whatNWISdata(
+#  siteNumber = siteNumber,
+#  service = "iv"
+#)
+parameterQ <- read.csv("USGS_parameters.csv")
+#dailyDataAvailable$parameter <- NA
+#dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
+#siteINFO <- readNWISsite(siteNumber)
+#siteAll <- readNWISdata(sites = "11455485", service = "iv", startDate = "2021-04-29T00:00", endDate ="2021-12-31T12:00",tz = "America/Los_Angeles")
+load("USGS_M13_siteAll.RData")
+siteAll2 <- df_M13
+#siteAll <- data.frame(read.csv("USGS_M13_siteAll.csv"))
+
+#col2get <- data.frame(colnames(siteAll),NA)
+#col2get[,2] <- stringr::str_match(col2get[,1], "_\\d+")
+#col2get$parm_cd <- substr(col2get[,2],2,nchar(col2get[,2]))
+#colnames(col2get) <- c("colsNames","num1","parm_cd")
+#col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
+
+
+#siteAll2 <- siteAll[,c(3,14,which(colnames(siteAll) %in% col2get2[c(3,5,8,11,13,15,17),2]))]
+#colnames(siteAll2) <- c("datetime","do","temp","gageFt","spc","ph","fdom","fchl","turb")
+#siteAll2$dts <- as.POSIXct(strptime(siteAll2$datetime, format = "%Y-%m-%d %H:%M"))
+
+
+unique(df$Site)
+unique(dfAll$site)
+
+df <- df[which(df$dts >= as.POSIXct(strptime("2021-08-01 00:00", format = "%Y-%m-%d")) & 
+                 df$dts <= as.POSIXct(strptime("2021-09-10 23:45", format = "%Y-%m-%d")) &
+                 df$Site == "Decker Pool" ),]
+
+df$Turb[which(df$Turb > 1000)] <- NA ###DMC220713: Turbidity sensor is only rated up to 1000 so any values above it must be discarded. The high calibration standard used is ~100 so any values above that are suspect
+df[which(df$TempC == 0), 6:15] <- NA
+
+df[which(df$dts == "2021-07-30 10:18:04" | df$dts == "2021-07-30 10:33:04"),c(6:14)] <- NA
+df$Depthm[which(df$dts == "2021-07-03 21:24:18")] <- NA
+
+df$ChlRFU[which(df$ChlRFU > 100)] <- NA ###DMC220713: Chl sensor is only rated up to 100 RFU so any values above it must be discarded.
+df$PCRFU[which(df$PCRFU > 100 | df$PCRFU < 0)] <- NA ###DMC220713: Phycocyanin sensor is only rated up to 100 RFU so any values above it must be discarded. Any values below 0 must be discarded too
+df$fDOMRFU[which(df$fDOMRFU < 0)] <- NA ###DMC220713: FDOM sensor is only rated up to 100 RFU so any values above it must be discarded. Any values below 0 must be discarded too
+
+
+unique(dfAll$site)
+#dfAll <- dfAll[which(dfAll$site %in% c("M13_USGS") & # "SacSherman_CDEC", "SDI_USGS","Emmaton_CDEC" ###DMC220713: these stations did not have data
+#                       dfAll$dts >= as.POSIXct(strptime("2021-08-01 00:00", format = "%Y-%m-%d")) & 
+#                       dfAll$dts <= as.POSIXct(strptime("2021-09-10 23:45", format = "%Y-%m-%d"))),]
+
+dfAll <- siteAll2[which(siteAll2$dts >= as.POSIXct(strptime("2021-08-01 00:00", format = "%Y-%m-%d")) &
+                          siteAll2$dts <= as.POSIXct(strptime("2021-09-10 23:45", format = "%Y-%m-%d"))),]
+
+dat <- df[,c("Site","dts","TempC","SPC","Turb","DOmgL","ChlRFU","PCRFU","fDOMRFU","Depthm")]
+dat[,11] <- as.numeric(NA)
+colnames(dat)[11] <- c("fdomConc")
+
+dfAll <- dfAll[,-c(1,6)]
+dfAll$Site <- "M13"
+dfAll[,10:11] <- as.numeric(NA)
+dfAll <- dfAll[,c(9,8,2,4,7,1,6,10,11,3,5)]
+colnames(dfAll) <- colnames(dat)
+
+
+dfAll$ChlRFU[which(dfAll$ChlRFU > 400)] <- NA ###DMC220713: Chl sensor is only rated up to 400 ug/L so any values above it must be discarded.
+
+dat3 <- rbind.data.frame(dat,dfAll)
+colnames(dat3)[1:2] <- c("Station.Code","datetimestamp")
+
+dat3$Date <- substr(as.character(dat3$datetimestamp),0,10)
+dat3$Time <- substr(as.character(dat3$datetimestamp),12,19)
+
+?decompose
+summTime <- ddply(dat3, c("Station.Code","Date"), summarise,
+               nTime = length(unique(Time))) # 96 measurements per day... pTime = sum(frac/4656)*96
+
+dfDeck <- dat3[which(dat3$Station.Code == "Decker Pool" & 
+                       dat3$datetimestamp >= as.POSIXct(strptime("2021-07-31 00:00", format = "%Y-%m-%d")) & 
+                       dat3$datetimestamp <= as.POSIXct(strptime("2021-09-09 23:45", format = "%Y-%m-%d"))),]
+dfM13 <- dat3[which(dat3$Station.Code == "M13" & 
+                      dat3$datetimestamp <= as.POSIXct(strptime("2021-09-09 23:45", format = "%Y-%m-%d"))),]
+dfM13 <- dfM13[-nrow(dfM13),]
+
+# change NA to values
+dfDeck[which(dfDeck$datetimestamp == as.POSIXct(strptime("2021-08-24 22:18:04",format = "%Y-%m-%d %H:%M:%S"))),"Turb"] <- round(6.21+(6.72-6.21)*.5,2)
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"Depthm"] <- c(6.91,6.69,6.47,6.25)
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"Turb"] <- c(13.2,13.1,12.9,12.8)
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"DOmgL"] <- c(8.1,8.1,8.2,8.2)
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"ChlRFU"] <- c(2.63,2.58,2.52,2.47)
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"TempC"] <- 20
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"fdomConc"] <- 29.0
+
+library(forecast)
+ggAcf(dfDeck$TempC)
+fit <- auto.arima(dfDeck[,"TempC"], xreg = dfM13[,"TempC"])
+summary(fit)
+checkresiduals(fit)
+cbind("Regression Errors" = residuals(fit, type="regression"),
+      "ARIMA errors" = residuals(fit, type="innovation")) %>%
+  autoplot(facets=TRUE)
+#dfDeck$jd <- JD(dfDeck$datetimestamp)
+#test <- sunvector(dfDeck$jd, 38.5, -122, -8)
+#test2 <- sunpos(test)
+#dfDeck$zenith <- test2[,2]
+
+library(wql)
+dfDeck$pss <- ec2pss(dfDeck$SPC/1000,dfDeck$TempC) # the variable sc is in microsiemens/cm and must be changed to millisiemens/cm, hence the conversion
+dfDeck$calcO2sat <- oxySol(dfDeck$TempC,dfDeck$pss)
+dfDeck$satDiff <- (dfDeck$DOmgL/dfDeck$calcO2sat)*100
+dfM13$pss <- ec2pss(dfM13$SPC/1000,dfM13$TempC) # the variable sc is in microsiemens/cm and must be changed to millisiemens/cm, hence the conversion
+dfM13$calcO2sat <- oxySol(dfM13$TempC,dfM13$pss)
+dfM13$satDiff <- (dfM13$DOmgL/dfM13$calcO2sat)*100
+
+dfDeck$slope1 <- dfDeck$Depthm - data.table::shift(dfDeck$Depthm, fill = data.table::first(dfDeck$Depthm))
+dfDeck$EorF <- ifelse(dfDeck$slope1 < 0, "Ebb", "Flood")
+dfDeck$threshTemp <- ifelse(dfDeck$TempC > 20, "Suboptimal", "Optimal")
+dfDeck$threshTurb <- ifelse(dfDeck$Turb > 80 | dfDeck$Turb < 12, "Suboptimal", "Optimal")
+dfDeck$threshDOsat <- ifelse(dfDeck$satDiff < 50, "Suboptimal", "Optimal")
+dfDeck$EorF[1] <- "Ebb"
+dfDeck$DiurnalT <- c(1:10,rep(seq(1:100),37),1:34)
+
+summDeck <- ddply(dfDeck, c("Date","threshTemp","EorF"), summarise,
+               nTime = length(unique(Time)),
+               lTime = nTime*15,
+               mTemp = mean(TempC),
+               mTurb = mean(Turb),
+               mFDOM = mean(fDOMRFU),
+               mChla = mean(ChlRFU))
+plo_temp <- ggplot(summDeck, aes(x = Date,y = mTurb, color = EorF)) +
+  geom_point()
+plo_temp
+plo_thresh <- ggplot(summDeck, aes(x = Date,y = lTime/60, color = threshTemp)) +
+  geom_point(aes(shape = EorF))
+plo_thresh
+
+dfM13$slope1 <- dfM13$Depthm - data.table::shift(dfM13$Depthm, fill = data.table::first(dfM13$Depthm))
+dfM13$EorF <- ifelse(dfM13$slope1 < 0, "Ebb", "Flood")
+dfM13$threshTemp <- ifelse(dfM13$TempC > 20, "Suboptimal", "Optimal")
+dfM13$threshTurb <- ifelse(dfM13$Turb > 80 | dfM13$Turb < 12, "Suboptimal", "Optimal")
+dfM13$threshDOsat <- ifelse(dfM13$satDiff < 50, "Suboptimal", "Optimal")
+summM13 <- ddply(dfM13, c("Date","threshTemp","EorF"), summarise,
+               nTime = length(unique(Time)),
+               lTime = nTime*15,
+               mTemp = mean(TempC),
+               mTurb = mean(Turb),
+               mFDOM = mean(fdomConc),
+               mChla = mean(ChlRFU))
+plo_temp <- ggplot(summM13, aes(x = Date,y = mTurb, color = EorF)) +
+  geom_point()
+plo_temp
+plo_thresh <- ggplot(summM13, aes(x = Date,y = lTime/60, color = threshTemp)) +
+  geom_point(aes(shape = EorF))
+plo_thresh
+
+
+summThreshDeck <- ddply(dfDeck, c("Station.Code","Date"), summarise,
+                    nTemp = length(TempC),
+                    oTemp = length(threshTemp[which(threshTemp == "Optimal")]),
+                    sTemp = length(threshTemp[which(threshTemp == "Suboptimal")]),
+                    nTurb = length(Turb),
+                    oTurb = length(threshTurb[which(threshTurb == "Optimal")]),
+                    sTurb = length(threshTurb[which(threshTurb == "Suboptimal")]))
+summThreshM13 <- ddply(dfM13, c("Station.Code","Date"), summarise,
+                    nTemp = length(TempC),
+                    oTemp = length(threshTemp[which(threshTemp == "Optimal")]),
+                    sTemp = length(threshTemp[which(threshTemp == "Suboptimal")]),
+                    nTurb = length(Turb),
+                    oTurb = length(threshTurb[which(threshTurb == "Optimal")]),
+                    sTurb = length(threshTurb[which(threshTurb == "Suboptimal")]))
+summThreshM13$yr <- 2022
+summThreshDeck$yr <- 2021
+# Regional Kendall Test
+library(EnvStats)
+both <- rbind.data.frame(summThreshDeck, summThreshM13)
+both$year <- lubridate::year(both$Date)
+kendallSeasonalTrendTest(oTemp ~ Station.Code + year, data = both)
+
+library(rkt)
+?rkt
+dfDeck$tempC.2 <- dfDeck$TempC -20
+dfM13$tempC.2 <- dfM13$TempC -20
+both <- rbind.data.frame(dfDeck[,-18],dfM13)
+both$frac <- c(rep(seq((1/39),1,(1/39)),1, each = 96))
+both$frac2 <- both$frac/10
+both$block <- c(rep(1,3744),rep(2,3744))
+both$yrfrac <- 2021+both$frac2
+both$date2 <- lubridate::date(both$datetimestamp)
+#rkt(both$yrfrac, y = both$tempC.2, block = both$block)
+
+
+dfDeck$day <- as.integer(factor(dfDeck$Date, levels = unique(dfDeck$Date)))
+dfDeck$frac <- as.integer(rep(c(1:96),39))
+
+dfM13$day <- as.integer(factor(dfM13$Date, levels = unique(dfM13$Date)))
+dfM13$frac <- as.integer(rep(c(1:96),39))
+
+deck_ts <- ts(data = dfDeck$TempC,#dfM13$Depthm,
+              start = c(dfDeck$day[1], dfDeck$frac[1]),#c(dfM13$day[1], dfM13$frac[1]),
+              frequency = 96)
+deck_st1 <- stlplus::stlplus(deck_ts, s.window = "periodic")
+plot(deck_st1)
+deck_mst1 <- forecast::mstl(deck_ts, lambda = NULL)
+plot(deck_mst1)
+
+sacr_ts <- ts(data = dfDeck$Depthm,#dfM13$ChlRFU,
+              start = c(dfDeck$day[1], dfDeck$frac[1]),#c(dfM13$day[1], dfM13$frac[1]),
+              frequency = 96)
+sacr_st1 <- stlplus::stlplus(sacr_ts, s.window = "periodic")
+plot(sacr_st1)
+sacr_mst1 <- forecast::mstl(sacr_ts, lambda = NULL)
+plot(sacr_mst1)
+sacr_mst1_auto <- forecast::mstl(sacr_ts, lambda = "auto")
+plot(sacr_mst1_auto)
+
+dfDeck$trend <- as.numeric(deck_mst1[,"Trend"])
+dfDeck$remainder <- as.numeric(deck_mst1[,"Remainder"])
+dfDeck$seas_adj <- dfDeck$trend + dfDeck$remainder
+dfM13$trend <- as.numeric(sacr_mst1[,2])
+dfM13$remainder <- as.numeric(sacr_mst1[,"Remainder"])
+dfM13$seas_adj <- dfM13$trend + dfM13$remainder
+
+
+
+
+both <- ggplot(dfDeck, aes(x = datetimestamp, y = TempC))+
+  geom_line(color = "blue") +
+  #geom_line(data = dfM13, aes(x = datetimestamp, y = TempC), color = "red")
+  #geom_line(data = dfDeck, aes(x = datetimestamp, y = DOmgL +15), color = "red") +
+  geom_line(data = dfDeck, aes(x = datetimestamp, y = Depthm*10+15), color = "red")
+both
+
+both2 <- ggplot(dfDeck[which(dfDeck$slope1 < 0),], aes(x = datetimestamp, y = TempC))+
+  geom_point(color = "blue") +
+  #geom_line(data = dfM13, aes(x = datetimestamp, y = TempC), color = "red")
+  #geom_line(data = dfDeck, aes(x = datetimestamp, y = DOmgL +15), color = "red") +
+  geom_point(data = dfDeck[which(dfDeck$slope1 > 0),], aes(x = datetimestamp, y = TempC), color = "red") + geom_line(data = dfM13, aes(x = datetimestamp, y= TempC), color = "green")
+both2
+################################################################################
+# Using 'WaveletComp' to get wave coherence as in Riml et al. 2019 and Schmidt et al. 2019
+tDeck <- data.frame(c(1:3744),deck_mst1[,c("Data")][1:3744])
+colnames(tDeck) <- c("timestep","data")
+tSacr <- data.frame(c(1:3744),sacr_mst1[,c("Data")][1:3744])
+colnames(tSacr) <- c("timestep","data")
+
+library(WaveletComp)
+my.data <- data.frame(y =tDeck[,2], x = tSacr[,2])
+
+my.w <- analyze.wavelet(my.data, "x",
+                        loess.span = 3/39,
+                        dt = 1/96, dj = 1/48,
+                        lowerPeriod = 1/24,
+                        make.pval = TRUE, n.sim = 10)
+wt.image(my.w, color.key = "interval", n.levels = 250,
+        legend.params = list(lab = "wavelet power levels"),
+        periodlab = "period (days)",
+        show.date = TRUE, date.format = "%F", timelab = "")
+
+
+my.wc <- analyze.coherency(my.data, my.pair = c("x","y"),
+                           loess.span = 0,
+                           dt = 1/96, dj = 1/48, # 96 observations per day so 1 day is time unit
+                           lowerPeriod = 1/12,
+                           make.pval = TRUE, n.sim = 10)
+wc.image(my.wc, n.levels = 250,
+         legend.params = list(lab = "cross-wavelet power levels"),
+         timelab = "", periodlab = "period (days)")
+
+wc.avg(my.wc, siglvl = 0.01, sigcol = "red", sigpch = 20,
+       periodlab = "period (days)")
+
+my.wc2 <- analyze.coherency(my.data, my.pair = c("x","y"),
+                            loess.span = 3/39, dt = 1/96, dj = 1/48,
+                            window.type.t = 5, window.type.s = 5,
+                            window.size.t = 5, window.size.s = 1/2,
+                            make.pval = TRUE, n.sim = 10)
+wc.image(my.wc2, which.image = "wc", color.key = "interval", n.levels = 250,
+         siglvl.contour = 0.1, siglvl.arrow = 0.05, which.arrow.sig = "wt",
+         legend.params = list(lab = "wavelet coherence levels"),
+         timelab = "")
+
+wc.sel.phases(my.wc2, sel.period = 1.041667, only.sig = TRUE, siglvl = 0.05, # look at graph above to find periods of interest, in this case toggle between 0.51736 and 1.0347
+              which.sig = "wt",
+              legend.coords = "topleft",
+              phaselim = c(-pi, +pi + 1),
+              main = "", sub = "", timelab = "")
+
+
+```
+
+
+
+Time-series Decomposition For Flyway
+Saving figures to "C:\Users\DCox\OneDrive - California Department of Fish and Wildlife\Documents\FRP\Monitoring\Reports\2021SiteReports"
+```{r}
+library(SWMPr)
+library(ggplot2)
+library(reshape2)
+library(viridis)
+library(plyr)
+library(scales)
+library(gridExtra)
+library(suncalc)
+library(dataRetrieval)
+rm(list = ls())
+
+
+load("FRP_LTMsonde_220526.RData")
+load("ExtLTM_CompleteMerge.RData") ###DMC220601: this is a huge file with all data from every nearby sonde
+
+unique(df$Site)
+unique(dfAll$site)
+
+df <- df[which(df$dts >= as.POSIXct(strptime("2021-01-01 00:00", format = "%Y-%m-%d")) & 
+                 df$dts <= as.POSIXct(strptime("2021-12-31 23:45", format = "%Y-%m-%d")) &
+                 df$Site == "Yolo Flyway Farm" ),]
+
+df$Turb[which(df$Turb > 1000)] <- NA ###DMC220713: Turbidity sensor is only rated up to 1000 so any values above it must be discarded. The high calibration standard used is ~100 so any values above that are suspect
+df[which(df$TempC == 0), 6:15] <- NA
+
+df[which(df$dts == "2021-07-30 10:18:04" | df$dts == "2021-07-30 10:33:04"),c(6:14)] <- NA
+df$Depthm[which(df$dts == "2021-07-03 21:24:18")] <- NA
+
+df$ChlRFU[which(df$ChlRFU > 100)] <- NA ###DMC220713: Chl sensor is only rated up to 100 RFU so any values above it must be discarded.
+df$PCRFU[which(df$PCRFU > 100 | df$PCRFU < 0)] <- NA ###DMC220713: Phycocyanin sensor is only rated up to 100 RFU so any values above it must be discarded. Any values below 0 must be discarded too
+df$fDOMRFU[which(df$fDOMRFU < 0)] <- NA ###DMC220713: FDOM sensor is only rated up to 100 RFU so any values above it must be discarded. Any values below 0 must be discarded too
+
+
+unique(dfAll$site)
+#dfAll <- dfAll[which(dfAll$site %in% c("M13_USGS") & # "SacSherman_CDEC", "SDI_USGS","Emmaton_CDEC" ###DMC220713: these stations did not have data
+#                       dfAll$dts >= as.POSIXct(strptime("2021-08-01 00:00", format = "%Y-%m-%d")) & 
+#                       dfAll$dts <= as.POSIXct(strptime("2021-09-10 23:45", format = "%Y-%m-%d"))),]
+
+dfAll <- dfAll[which(dfAll$site %in% c("TOE_USGS") & # "SacSherman_CDEC", "SDI_USGS","Emmaton_CDEC" ###DMC220713: these stations did not have data
+                       dfAll$dts >= as.POSIXct(strptime("2021-01-01 00:00", format = "%Y-%m-%d")) & 
+                       dfAll$dts <= as.POSIXct(strptime("2021-12-31 23:45", format = "%Y-%m-%d"))),]
+
+dat <- df[,c("Site","dts","TempC","SPC","Turb","DOmgL","ChlRFU","PCRFU","fDOMRFU","Depthm")]
+dat[,11] <- as.numeric(NA)
+colnames(dat)[11] <- c("fdomConc")
+
+dfAll <- dfAll[,-c(1,6)]
+dfAll$Site <- "M13"
+dfAll[,10:11] <- as.numeric(NA)
+dfAll <- dfAll[,c(9,8,2,4,7,1,6,10,11,3,5)]
+colnames(dfAll) <- colnames(dat)
+
+
+dfAll$ChlRFU[which(dfAll$ChlRFU > 400)] <- NA ###DMC220713: Chl sensor is only rated up to 400 ug/L so any values above it must be discarded.
+
+dat$dts <- as.POSIXct(strptime(as.character(dat$dts), format = "%Y-%m-%d %H:%M"))
+dfAll$dts <- as.POSIXct(strptime(as.character(dfAll$dts), format = "%Y-%m-%d %H:%M"))
+
+dat3 <- rbind.data.frame(dat,dfAll)
+colnames(dat3)[1:2] <- c("Station.Code","datetimestamp")
+
+dat3$Date <- substr(as.character(dat3$datetimestamp),0,10)
+dat3$Time <- substr(as.character(dat3$datetimestamp),12,19)
+
+?decompose
+summTime <- ddply(dat3, c("Station.Code","Date"), summarise,
+               nTime = length(unique(Time))) # 96 measurements per day... pTime = sum(frac/4656)*96
+
+dfDeck <- dat3[which(dat3$Station.Code == "Yolo Flyway Farm" #& 
+                       #dat3$datetimestamp >= as.POSIXct(strptime("2021-07-31 00:00", format = "%Y-%m-%d")) & 
+                       #dat3$datetimestamp <= as.POSIXct(strptime("2021-09-09 23:45", format = "%Y-%m-%d"))
+                     ),]
+dfM13 <- dat3[which(dat3$Station.Code == "M13" #& 
+                      #dat3$datetimestamp <= as.POSIXct(strptime("2021-09-09 23:45", format = "%Y-%m-%d"))
+                    ),]
+dfM13 <- dfM13[-nrow(dfM13),]
+
+# change NA to values
+dfDeck[which(dfDeck$datetimestamp == as.POSIXct(strptime("2021-08-24 22:18:04",format = "%Y-%m-%d %H:%M:%S"))),"Turb"] <- round(6.21+(6.72-6.21)*.5,2)
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"Depthm"] <- c(6.91,6.69,6.47,6.25)
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"Turb"] <- c(13.2,13.1,12.9,12.8)
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"DOmgL"] <- c(8.1,8.1,8.2,8.2)
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"ChlRFU"] <- c(2.63,2.58,2.52,2.47)
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"TempC"] <- 20
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"fdomConc"] <- 29.0
+
+
+#dfDeck$jd <- JD(dfDeck$datetimestamp)
+#test <- sunvector(dfDeck$jd, 38.5, -122, -8)
+#test2 <- sunpos(test)
+#dfDeck$zenith <- test2[,2]
+
+library(wql)
+dfDeck$pss <- ec2pss(dfDeck$SPC/1000,dfDeck$TempC) # the variable sc is in microsiemens/cm and must be changed to millisiemens/cm, hence the conversion
+dfDeck$calcO2sat <- oxySol(dfDeck$TempC,dfDeck$pss)
+dfDeck$satDiff <- (dfDeck$DOmgL/dfDeck$calcO2sat)*100
+dfM13$pss <- ec2pss(dfM13$SPC/1000,dfM13$TempC) # the variable sc is in microsiemens/cm and must be changed to millisiemens/cm, hence the conversion
+dfM13$calcO2sat <- oxySol(dfM13$TempC,dfM13$pss)
+dfM13$satDiff <- (dfM13$DOmgL/dfM13$calcO2sat)*100
+
+dfDeck$slope1 <- dfDeck$Depthm - data.table::shift(dfDeck$Depthm, fill = data.table::first(dfDeck$Depthm))
+dfDeck$EorF <- ifelse(dfDeck$slope1 < 0, "Ebb", "Flood")
+dfDeck$threshTemp <- ifelse(dfDeck$TempC > 20, "Above", "Below")
+dfDeck$threshTurb <- ifelse(dfDeck$Turb > 80 | dfDeck$Turb < 12, "Suboptimal", "Optimal")
+dfDeck$threshDOsat <- ifelse(dfDeck$satDiff < 50, "Suboptimal", "Optimal")
+dfDeck$EorF[1] <- "Ebb"
+#dfDeck$DiurnalT <- c(1:10,rep(seq(1:100),37),1:34)
+
+summDeck <- ddply(dfDeck, c("Date","threshTemp","EorF"), summarise,
+               nTime = length(unique(Time)),
+               lTime = nTime*15,
+               mTemp = mean(TempC),
+               mTurb = mean(Turb),
+               mFDOM = mean(fDOMRFU),
+               mChla = mean(ChlRFU))
+plo_temp <- ggplot(summDeck, aes(x = Date,y = mTurb, color = EorF)) +
+  geom_point()
+plo_temp
+plo_thresh <- ggplot(summDeck, aes(x = Date,y = lTime/60, color = threshTemp)) +
+  geom_point(aes(shape = EorF))
+plo_thresh
+
+dfM13$slope1 <- dfM13$Depthm - data.table::shift(dfM13$Depthm, fill = data.table::first(dfM13$Depthm))
+dfM13$EorF <- ifelse(dfM13$slope1 < 0, "Ebb", "Flood")
+dfM13$threshTemp <- ifelse(dfM13$TempC > 20, "Above", "Below")
+dfM13$threshTurb <- ifelse(dfM13$Turb > 80 | dfM13$Turb < 12, "Suboptimal", "Optimal")
+dfM13$threshDOsat <- ifelse(dfM13$satDiff < 50, "Suboptimal", "Optimal")
+summM13 <- ddply(dfM13, c("Date","threshTemp","EorF"), summarise,
+               nTime = length(unique(Time)),
+               lTime = nTime*15,
+               mTemp = mean(TempC),
+               mTurb = mean(Turb),
+               mFDOM = mean(fdomConc),
+               mChla = mean(ChlRFU))
+plo_temp <- ggplot(summM13, aes(x = Date,y = mTurb, color = EorF)) +
+  geom_point()
+plo_temp
+plo_thresh <- ggplot(summM13, aes(x = Date,y = lTime/60, color = threshTemp)) +
+  geom_point(aes(shape = EorF))
+plo_thresh
+
+
+
+dfDeck$day <- as.integer(factor(dfDeck$Date, levels = unique(dfDeck$Date)))
+dfDeck$frac <- as.integer(rep(c(1:96),39))
+
+dfM13$day <- as.integer(factor(dfM13$Date, levels = unique(dfM13$Date)))
+dfM13$frac <- as.integer(rep(c(1:96),39))
+
+deck_ts <- ts(data = dfDeck$TempC,#dfM13$Depthm,
+              start = c(dfDeck$day[1], dfDeck$frac[1]),#c(dfM13$day[1], dfM13$frac[1]),
+              frequency = 96)
+deck_st1 <- stlplus::stlplus(deck_ts, s.window = "periodic")
+plot(deck_st1)
+deck_mst1 <- forecast::mstl(deck_ts, lambda = NULL)
+plot(deck_mst1)
+
+sacr_ts <- ts(data = dfDeck$Depthm,#dfM13$ChlRFU,
+              start = c(dfDeck$day[1], dfDeck$frac[1]),#c(dfM13$day[1], dfM13$frac[1]),
+              frequency = 96)
+sacr_st1 <- stlplus::stlplus(sacr_ts, s.window = "periodic")
+plot(sacr_st1)
+sacr_mst1 <- forecast::mstl(sacr_ts, lambda = NULL)
+plot(sacr_mst1)
+sacr_mst1_auto <- forecast::mstl(sacr_ts, lambda = "auto")
+plot(sacr_mst1_auto)
+
+dfDeck$trend <- as.numeric(deck_mst1[,"Trend"])
+dfDeck$remainder <- as.numeric(deck_mst1[,"Remainder"])
+dfDeck$seas_adj <- dfDeck$trend + dfDeck$remainder
+dfM13$trend <- as.numeric(sacr_mst1[,2])
+dfM13$remainder <- as.numeric(sacr_mst1[,"Remainder"])
+dfM13$seas_adj <- dfM13$trend + dfM13$remainder
+
+
+both <- ggplot(dfDeck, aes(x = datetimestamp, y = TempC))+
+  geom_line(color = "blue") +
+  #geom_line(data = dfM13, aes(x = datetimestamp, y = TempC), color = "red")
+  #geom_line(data = dfDeck, aes(x = datetimestamp, y = DOmgL +15), color = "red") +
+  geom_line(data = dfDeck, aes(x = datetimestamp, y = Depthm*10+15), color = "red")
+both
+
+both2 <- ggplot(dfDeck[which(dfDeck$slope1 < 0),], aes(x = datetimestamp, y = TempC))+
+  geom_point(color = "blue") +
+  #geom_line(data = dfM13, aes(x = datetimestamp, y = TempC), color = "red")
+  #geom_line(data = dfDeck, aes(x = datetimestamp, y = DOmgL +15), color = "red") +
+  geom_point(data = dfDeck[which(dfDeck$slope1 > 0),], aes(x = datetimestamp, y = TempC), color = "red") + geom_line(data = dfM13, aes(x = datetimestamp, y= TempC), color = "green")
+both2
+################################################################################
+# Using 'WaveletComp' to get wave coherence as in Riml et al. 2019 and Schmidt et al. 2019
+tDeck <- data.frame(c(1:3744),deck_mst1[,c("Data")][1:3744])
+colnames(tDeck) <- c("timestep","data")
+tSacr <- data.frame(c(1:3744),sacr_mst1[,c("Data")][1:3744])
+colnames(tSacr) <- c("timestep","data")
+
+library(WaveletComp)
+my.data <- data.frame(y =tDeck[,2], x = tSacr[,2])
+
+my.w <- analyze.wavelet(my.data, "x",
+                        loess.span = 3/39,
+                        dt = 1/96, dj = 1/48,
+                        lowerPeriod = 1/24,
+                        make.pval = TRUE, n.sim = 10)
+wt.image(my.w, color.key = "interval", n.levels = 250,
+        legend.params = list(lab = "wavelet power levels"),
+        periodlab = "period (days)",
+        show.date = TRUE, date.format = "%F", timelab = "")
+
+
+my.wc <- analyze.coherency(my.data, my.pair = c("x","y"),
+                           loess.span = 0,
+                           dt = 1/96, dj = 1/48, # 96 observations per day so 1 day is time unit
+                           lowerPeriod = 1/12,
+                           make.pval = TRUE, n.sim = 10)
+wc.image(my.wc, n.levels = 250,
+         legend.params = list(lab = "cross-wavelet power levels"),
+         timelab = "", periodlab = "period (days)")
+
+wc.avg(my.wc, siglvl = 0.01, sigcol = "red", sigpch = 20,
+       periodlab = "period (days)")
+
+my.wc2 <- analyze.coherency(my.data, my.pair = c("x","y"),
+                            loess.span = 3/39, dt = 1/96, dj = 1/48,
+                            window.type.t = 5, window.type.s = 5,
+                            window.size.t = 5, window.size.s = 1/2,
+                            make.pval = TRUE, n.sim = 10)
+wc.image(my.wc2, which.image = "wc", color.key = "interval", n.levels = 250,
+         siglvl.contour = 0.1, siglvl.arrow = 0.05, which.arrow.sig = "wt",
+         legend.params = list(lab = "wavelet coherence levels"),
+         timelab = "")
+
+wc.sel.phases(my.wc2, sel.period = 1.041667, only.sig = TRUE, siglvl = 0.05, # look at graph above to find periods of interest, in this case toggle between 0.51736 and 1.0347
+              which.sig = "wt",
+              legend.coords = "topleft",
+              phaselim = c(-pi, +pi + 1),
+              main = "", sub = "", timelab = "")
+
+
+```
+
+Time-series Decomposition For Tule Red
+Saving figures to "C:\Users\DCox\OneDrive - California Department of Fish and Wildlife\Documents\FRP\Monitoring\Reports\2021SiteReports"
+```{r}
+library(SWMPr)
+library(ggplot2)
+library(reshape2)
+library(viridis)
+library(plyr)
+library(scales)
+library(gridExtra)
+library(suncalc)
+library(dataRetrieval)
+rm(list = ls())
+
+
+load("FRP_LTMsonde_220526.RData")
+load("ExtLTM_CompleteMerge.RData") ###DMC220601: this is a huge file with all data from every nearby sonde
+
+dfTR <- data.frame(read.csv("TRB_2021_data.csv"))
+
+unique(dfTR$qaqc_flag_id)
+dfTR2 <- dfTR[which(dfTR$qaqc_flag_id == "G"),]
+dfTR2$dts <- as.POSIXct(strptime(dfTR2$time, format = "%m/%d/%Y %H:%M"))
+
+
+dfTR3 <- dfTR2[which(dfTR2$dts >= as.POSIXct(strptime("2021-01-01 00:00", format = "%Y-%m-%d")) & 
+                       dfTR2$dts <= as.POSIXct(strptime("2021-12-31 23:45", format = "%Y-%m-%d"))),
+               c(6,5,2)]
+
+
+dfTR4 <- reshape2::dcast(dfTR2, dts ~ analyte_name, value.var = "value")
+colnames(dfTR4) <- c("dts","ChlRFU","DOmgL","pH","SPC","Turb","TempC")
+
+dfTR4$Site <- "TuleRed"
+
+xdtsTule <- range(dfTR4$dts)
+load("ExtLTM_CompleteMerge.RData") ###DMC220601: this is a huge file with all data from every nearby sonde
+
+unique(dfAll$site)
+dfAll <- dfAll[which(dfAll$site %in% c("Grizzly_USGS") & #,"Grizzly_CDEC", "GrizzlyL_CDEC" ###DMC: going to use only Grizzly_USGS
+                       dfAll$dts >= as.POSIXct(strptime(xdtsTule[1], format = "%Y-%m-%d")) & 
+                       dfAll$dts <= as.POSIXct(strptime(xdtsTule[2], format = "%Y-%m-%d"))),]
+
+dat <- dfTR4[,c("Site","dts","TempC","SPC","pH","Turb","DOmgL","ChlRFU")]
+
+
+#dfAll <- dfAll[,-5]
+dfAll <- dfAll[,c("site","dts","temp","sc","ph","turb","do","chl")]
+colnames(dfAll) <- colnames(dat)
+
+dat3 <- rbind.data.frame(dat,dfAll)
+colnames(dat3)[1:2] <- c("Station.Code","datetimestamp")
+
+dat3$Date <- substr(as.character(dat3$datetimestamp),0,10)
+dat3$Time <- substr(as.character(dat3$datetimestamp),12,19)
+
+?decompose
+summTime <- ddply(dat3, c("Station.Code","Date"), summarise,
+               nTime = length(unique(Time))) # 96 measurements per day... pTime = sum(frac/4656)*96
+
+dfDeck <- dat3[which(dat3$Station.Code == "TuleRed" #& 
+                       #dat3$datetimestamp >= as.POSIXct(strptime("2021-07-31 00:00", format = "%Y-%m-%d")) & 
+                       #dat3$datetimestamp <= as.POSIXct(strptime("2021-09-09 23:45", format = "%Y-%m-%d"))
+                     ),]
+dfM13 <- dat3[which(dat3$Station.Code == "Grizzly_USGS" #& 
+                      #dat3$datetimestamp <= as.POSIXct(strptime("2021-09-09 23:45", format = "%Y-%m-%d"))
+                    ),]
+dfM13 <- dfM13[-nrow(dfM13),]
+
+# change NA to values
+dfDeck[which(dfDeck$datetimestamp == as.POSIXct(strptime("2021-08-24 22:18:04",format = "%Y-%m-%d %H:%M:%S"))),"Turb"] <- round(6.21+(6.72-6.21)*.5,2)
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"Depthm"] <- c(6.91,6.69,6.47,6.25)
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"Turb"] <- c(13.2,13.1,12.9,12.8)
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"DOmgL"] <- c(8.1,8.1,8.2,8.2)
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"ChlRFU"] <- c(2.63,2.58,2.52,2.47)
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"TempC"] <- 20
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 06:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 07:30:00",format = "%Y-%m-%d %H:%M:%S"))),"fdomConc"] <- 29.0
+
+
+#dfDeck$jd <- JD(dfDeck$datetimestamp)
+#test <- sunvector(dfDeck$jd, 38.5, -122, -8)
+#test2 <- sunpos(test)
+#dfDeck$zenith <- test2[,2]
+
+library(wql)
+dfDeck$pss <- ec2pss(dfDeck$SPC/1000,dfDeck$TempC) # the variable sc is in microsiemens/cm and must be changed to millisiemens/cm, hence the conversion
+dfDeck$calcO2sat <- oxySol(dfDeck$TempC,dfDeck$pss)
+dfDeck$satDiff <- (dfDeck$DOmgL/dfDeck$calcO2sat)*100
+dfM13$pss <- ec2pss(dfM13$SPC/1000,dfM13$TempC) # the variable sc is in microsiemens/cm and must be changed to millisiemens/cm, hence the conversion
+dfM13$calcO2sat <- oxySol(dfM13$TempC,dfM13$pss)
+dfM13$satDiff <- (dfM13$DOmgL/dfM13$calcO2sat)*100
+
+#dfDeck$slope1 <- dfDeck$Depthm - data.table::shift(dfDeck$Depthm, fill = data.table::first(dfDeck$Depthm))
+#dfDeck$EorF <- ifelse(dfDeck$slope1 < 0, "Ebb", "Flood")
+dfDeck$threshTemp <- ifelse(dfDeck$TempC > 20, "Above", "Below")
+dfDeck$threshTurb <- ifelse(dfDeck$Turb > 80 | dfDeck$Turb < 12, "Suboptimal", "Optimal")
+#dfDeck$threshDOsat <- ifelse(dfDeck$satDiff < 50, "Suboptimal", "Optimal")
+#dfDeck$EorF[1] <- "Ebb"
+#dfDeck$DiurnalT <- c(1:10,rep(seq(1:100),37),1:34)
+
+summDeck <- ddply(dfDeck, c("Date","threshTemp"), summarise,
+               nTime = length(unique(Time)),
+               lTime = nTime*15,
+               mTemp = mean(TempC),
+               mTurb = mean(Turb),
+               #mFDOM = mean(fDOMRFU),
+               mChla = mean(ChlRFU))
+plo_temp <- ggplot(summDeck, aes(x = Date,y = mTurb, color = EorF)) +
+  geom_point()
+plo_temp
+plo_thresh <- ggplot(summDeck, aes(x = Date,y = lTime/60*(1/24), color = threshTemp)) +
+  geom_point()
+plo_thresh
+
+#dfM13$slope1 <- dfM13$Depthm - data.table::shift(dfM13$Depthm, fill = data.table::first(dfM13$Depthm))
+#dfM13$EorF <- ifelse(dfM13$slope1 < 0, "Ebb", "Flood")
+dfM13$threshTemp <- ifelse(dfM13$TempC > 20, "Above", "Below")
+dfM13$threshTurb <- ifelse(dfM13$Turb > 80 | dfM13$Turb < 12, "Suboptimal", "Optimal")
+#dfM13$threshDOsat <- ifelse(dfM13$satDiff < 50, "Suboptimal", "Optimal")
+summM13 <- ddply(dfM13, c("Date","threshTemp"), summarise,
+               nTime = length(unique(Time)),
+               lTime = nTime*15,
+               mTemp = mean(TempC),
+               mTurb = mean(Turb),
+               #mFDOM = mean(fdomConc),
+               mChla = mean(ChlRFU))
+#plo_temp <- ggplot(summM13, aes(x = Date,y = mTurb, color = EorF)) +
+#  geom_point()
+#plo_temp
+plo_thresh <- ggplot(summM13, aes(x = Date,y = lTime/60, color = threshTemp)) +
+  geom_point()
+plo_thresh
+
+
+
+dfDeck$day <- as.integer(factor(dfDeck$Date, levels = unique(dfDeck$Date)))
+dfDeck$frac <- as.integer(rep(c(1:96),39))
+
+dfM13$day <- as.integer(factor(dfM13$Date, levels = unique(dfM13$Date)))
+dfM13$frac <- as.integer(rep(c(1:96),39))
+
+deck_ts <- ts(data = dfDeck$TempC,#dfM13$Depthm,
+              start = c(dfDeck$day[1], dfDeck$frac[1]),#c(dfM13$day[1], dfM13$frac[1]),
+              frequency = 96)
+deck_st1 <- stlplus::stlplus(deck_ts, s.window = "periodic")
+plot(deck_st1)
+deck_mst1 <- forecast::mstl(deck_ts, lambda = NULL)
+plot(deck_mst1)
+
+sacr_ts <- ts(data = dfDeck$Depthm,#dfM13$ChlRFU,
+              start = c(dfDeck$day[1], dfDeck$frac[1]),#c(dfM13$day[1], dfM13$frac[1]),
+              frequency = 96)
+sacr_st1 <- stlplus::stlplus(sacr_ts, s.window = "periodic")
+plot(sacr_st1)
+sacr_mst1 <- forecast::mstl(sacr_ts, lambda = NULL)
+plot(sacr_mst1)
+sacr_mst1_auto <- forecast::mstl(sacr_ts, lambda = "auto")
+plot(sacr_mst1_auto)
+
+dfDeck$trend <- as.numeric(deck_mst1[,"Trend"])
+dfDeck$remainder <- as.numeric(deck_mst1[,"Remainder"])
+dfDeck$seas_adj <- dfDeck$trend + dfDeck$remainder
+dfM13$trend <- as.numeric(sacr_mst1[,2])
+dfM13$remainder <- as.numeric(sacr_mst1[,"Remainder"])
+dfM13$seas_adj <- dfM13$trend + dfM13$remainder
+
+
+both <- ggplot(dfDeck, aes(x = datetimestamp, y = TempC))+
+  geom_line(color = "blue") +
+  #geom_line(data = dfM13, aes(x = datetimestamp, y = TempC), color = "red")
+  #geom_line(data = dfDeck, aes(x = datetimestamp, y = DOmgL +15), color = "red") +
+  geom_line(data = dfDeck, aes(x = datetimestamp, y = Depthm*10+15), color = "red")
+both
+
+both2 <- ggplot(dfDeck[which(dfDeck$slope1 < 0),], aes(x = datetimestamp, y = TempC))+
+  geom_point(color = "blue") +
+  #geom_line(data = dfM13, aes(x = datetimestamp, y = TempC), color = "red")
+  #geom_line(data = dfDeck, aes(x = datetimestamp, y = DOmgL +15), color = "red") +
+  geom_point(data = dfDeck[which(dfDeck$slope1 > 0),], aes(x = datetimestamp, y = TempC), color = "red") + geom_line(data = dfM13, aes(x = datetimestamp, y= TempC), color = "green")
+both2
+################################################################################
+# Using 'WaveletComp' to get wave coherence as in Riml et al. 2019 and Schmidt et al. 2019
+tDeck <- data.frame(c(1:3744),deck_mst1[,c("Data")][1:3744])
+colnames(tDeck) <- c("timestep","data")
+tSacr <- data.frame(c(1:3744),sacr_mst1[,c("Data")][1:3744])
+colnames(tSacr) <- c("timestep","data")
+
+library(WaveletComp)
+my.data <- data.frame(y =tDeck[,2], x = tSacr[,2])
+
+my.w <- analyze.wavelet(my.data, "x",
+                        loess.span = 3/39,
+                        dt = 1/96, dj = 1/48,
+                        lowerPeriod = 1/24,
+                        make.pval = TRUE, n.sim = 10)
+wt.image(my.w, color.key = "interval", n.levels = 250,
+        legend.params = list(lab = "wavelet power levels"),
+        periodlab = "period (days)",
+        show.date = TRUE, date.format = "%F", timelab = "")
+
+
+my.wc <- analyze.coherency(my.data, my.pair = c("x","y"),
+                           loess.span = 0,
+                           dt = 1/96, dj = 1/48, # 96 observations per day so 1 day is time unit
+                           lowerPeriod = 1/12,
+                           make.pval = TRUE, n.sim = 10)
+wc.image(my.wc, n.levels = 250,
+         legend.params = list(lab = "cross-wavelet power levels"),
+         timelab = "", periodlab = "period (days)")
+
+wc.avg(my.wc, siglvl = 0.01, sigcol = "red", sigpch = 20,
+       periodlab = "period (days)")
+
+my.wc2 <- analyze.coherency(my.data, my.pair = c("x","y"),
+                            loess.span = 3/39, dt = 1/96, dj = 1/48,
+                            window.type.t = 5, window.type.s = 5,
+                            window.size.t = 5, window.size.s = 1/2,
+                            make.pval = TRUE, n.sim = 10)
+wc.image(my.wc2, which.image = "wc", color.key = "interval", n.levels = 250,
+         siglvl.contour = 0.1, siglvl.arrow = 0.05, which.arrow.sig = "wt",
+         legend.params = list(lab = "wavelet coherence levels"),
+         timelab = "")
+
+wc.sel.phases(my.wc2, sel.period = 1.041667, only.sig = TRUE, siglvl = 0.05, # look at graph above to find periods of interest, in this case toggle between 0.51736 and 1.0347
+              which.sig = "wt",
+              legend.coords = "topleft",
+              phaselim = c(-pi, +pi + 1),
+              main = "", sub = "", timelab = "")
+
+
+```
+
+
+Thermally unsuitable habitat
+```{r}
+library(SWMPr)
+library(ggplot2)
+library(reshape2)
+library(viridis)
+library(plyr)
+library(scales)
+library(gridExtra)
+library(suncalc)
+library(dataRetrieval)
+library(WtRegDO)
+library(doParallel)
+rm(list = ls())
+
+
+load("FRP_LTMsonde_220526.RData")
+load("ExtLTM_CompleteMerge.RData") ###DMC220601: this is a huge file with all data from every nearby sonde
+dfAll <- dfAll[-which(is.na(dfAll$dts)==TRUE),]
+dfAll <- dfAll[-which(is.na(dfAll$temp)==TRUE),]
+
+SAPDC <- df[which(df$dts >= as.POSIXct(strptime("2021-08-01 00:00", format = "%Y-%m-%d")) & 
+                 df$dts <= as.POSIXct(strptime("2021-09-10 23:45", format = "%Y-%m-%d")) &
+                 df$Site == "Decker Pool" ),
+            c(16,14,10,11,7)]
+SAPDC <- dfM13[,c(2,3,6,4,10)]
+#SAPDC <- dfDeck[,c("datetimestamp","TempC","DOmgL","SPC","Depthm")]
+SAPDC$DateTimeStamp <- as.POSIXct(strptime(as.character(SAPDC$dts), format = "%Y-%m-%d %H:%M", tz = "America/Los_Angeles"))
+SAPDC <- SAPDC[,-1]
+colnames(SAPDC) <- c("Temp","DO_obs","spc","Tide","DateTimeStamp")
+
+rownames(SAPDC) <- NULL
+which(duplicated(SAPDC) == TRUE)
+#SAPDC <- SAPDC[-c(6761),]#6754,6756,6758,6759,6757
+#SAPDC <- SAPDC[-which(SAPDC$Tide > 1000),]
+#SAPDC2 <- SAPDC[,c(5,2,4)]
+#SAPDC2$lim <- 0.1
+#SAPDC2$date <- as.Date(SAPDC2$date)
+#tidfit2 <- modfit(SAPDC2, resp_type = "mean")
+#fitplot(tidfit2, annuals = FALSE)
+
+# metadata for the location
+tz <- 'America/Los_Angeles'
+lat <- 38.087387
+long <- -121.715627
+# setup parallel backend
+ncores <- detectCores()  
+registerDoParallel(cores = ncores - 1)
+
+evalcor(SAPDC, tz, lat, long, progress = TRUE)
+
+# weighted regression, optimal window widths for SAPDC from the paper
+wtreg_res <- wtreg(SAPDC, parallel = TRUE, wins = list(3, 1, 0.6), progress = TRUE, 
+  tz = tz, lat = lat, long = long)
+
+do_DT <- ggplot(wtreg_res, aes(x = DateTimeStamp, y = DO_obs), color = "blue") +
+  geom_point() +
+  geom_point(aes(x = DateTimeStamp, y = DO_prd), color = "red") +
+  geom_point(aes(x = DateTimeStamp, y = DO_nrm), color = "green")
+do_DT
+
+# estimate ecosystem metabolism using observed DO time series
+metab_obs <- ecometab(wtreg_res, DO_var = 'DO_obs', tz = tz, 
+  lat = lat, long = long)
+
+# estimate ecosystem metabolism using detided DO time series
+metab_dtd <- ecometab(wtreg_res, DO_var = 'DO_nrm', tz = tz, 
+  lat = lat, long = long)
+
+df$TUH <- ifelse(df$TempC > 24,1,0)
+plo_tuh <- ggplot(df, aes(x = dts, y = TUH, color = Site))+
+  geom_point()
+#plo_tuh
+
+
+unique(dfAll$site[which(dfAll$TUH ==1)])
+dfAll$year <- lubridate::year(dfAll$dts)
+dfAll$year2 <- factor(dfAll$year, levels = c(2016:2021))
+
+dfAll$TUH <- ifelse(dfAll$temp > 24,1,0)
+dfAll$TuUH <- ifelse(dfAll$turb < 12 | dfAll$turb > 80, 1, 0)
+summTemp <- ddply(dfAll[-which(is.na(dfAll$temp)==TRUE),], c("site","year2"), summarise,
+                 N = length(temp),
+                 sumTUH = sum(TUH),
+                 aveTUH = sumTUH/N)
+summTurb <- ddply(dfAll[-which(is.na(dfAll$turb)==TRUE),], c("site","year2"), summarise,
+                 N = length(turb),
+                 sumTuUH = sum(TuUH),
+                 aveTuUH = sumTuUH/N)
+#plo_tuh2 <- ggplot(dfAll, aes(x = dts, y = TUH, color = site))+
+#  geom_point()
+#plo_tuh2
+plo_aveTUH <- ggplot(summTemp, aes(x = year2, y = sumTUH, color = site)) +
+  geom_point()
+plo_aveTUH
+plo_aveTuUH <- ggplot(summTurb, aes(x = year2, y = sumTuUH, color = site)) +
+  geom_point()
+plo_aveTuUH
+
+```
+
+Time-series Decomposition For Decker # this is the older chunk
+Saving figures to "C:\Users\DCox\OneDrive - California Department of Fish and Wildlife\Documents\FRP\Monitoring\Reports\2021SiteReports"
+```{r}
+library(SWMPr)
+library(ggplot2)
+library(reshape2)
+library(viridis)
+library(plyr)
+library(scales)
+library(gridExtra)
+library(suncalc)
+
+rm(list = ls())
+
+
+load("FRP_LTMsonde_220526.RData")
+load("ExtLTM_CompleteMerge.RData") ###DMC220601: this is a huge file with all data from every nearby sonde
+
+unique(df$Site)
+unique(dfAll$site)
+
+df <- df[which(df$dts >= as.POSIXct(strptime("2021-08-01 00:00", format = "%Y-%m-%d")) & 
+                 df$dts <= as.POSIXct(strptime("2021-09-10 23:45", format = "%Y-%m-%d")) &
+                 df$Site == "Decker Pool" ),]
+
+df$Turb[which(df$Turb > 1000)] <- NA ###DMC220713: Turbidity sensor is only rated up to 1000 so any values above it must be discarded. The high calibration standard used is ~100 so any values above that are suspect
+df[which(df$TempC == 0), 6:15] <- NA
+
+df[which(df$dts == "2021-07-30 10:18:04" | df$dts == "2021-07-30 10:33:04"),c(6:14)] <- NA
+df$Depthm[which(df$dts == "2021-07-03 21:24:18")] <- NA
+
+df$ChlRFU[which(df$ChlRFU > 100)] <- NA ###DMC220713: Chl sensor is only rated up to 100 RFU so any values above it must be discarded.
+df$PCRFU[which(df$PCRFU > 100 | df$PCRFU < 0)] <- NA ###DMC220713: Phycocyanin sensor is only rated up to 100 RFU so any values above it must be discarded. Any values below 0 must be discarded too
+df$fDOMRFU[which(df$fDOMRFU < 0)] <- NA ###DMC220713: FDOM sensor is only rated up to 100 RFU so any values above it must be discarded. Any values below 0 must be discarded too
+
+
+unique(dfAll$site)
+dfAll <- dfAll[which(dfAll$site %in% c("M13_USGS") & # "SacSherman_CDEC", "SDI_USGS","Emmaton_CDEC" ###DMC220713: these stations did not have data
+                       dfAll$dts >= as.POSIXct(strptime("2021-08-01 00:00", format = "%Y-%m-%d")) & 
+                       dfAll$dts <= as.POSIXct(strptime("2021-09-10 23:45", format = "%Y-%m-%d"))),]
+
+dat <- df[,c("Site","dts","TempC","SPC","Turb","DOmgL","ChlRFU","PCRFU","fDOMRFU","Depthm")]
+dat[,11:12] <- as.numeric(NA)
+colnames(dat)[11:12] <- c("fdomConc","velocity")
+
+dfAll <- dfAll[,-5]
+dfAll[,10:12] <- as.numeric(NA)
+dfAll <- dfAll[,c(1:7,10,8,11,12,9)]
+colnames(dfAll) <- colnames(dat)
+
+dfAll$ChlRFU <- as.numeric(dfAll$ChlRFU)
+dfAll$PCRFU <- as.numeric(dfAll$PCRFU)
+dfAll$fDOMRFU <- as.numeric(dfAll$fDOMRFU)
+
+dfAll$ChlRFU[which(dfAll$ChlRFU > 400)] <- NA ###DMC220713: Chl sensor is only rated up to 400 ug/L so any values above it must be discarded.
+
+dat3 <- rbind.data.frame(dat,dfAll)
+colnames(dat3)[1:2] <- c("Station.Code","datetimestamp")
+
+dat3$Date <- substr(as.character(dat3$datetimestamp),0,10)
+dat3$Time <- substr(as.character(dat3$datetimestamp),12,19)
+
+?decompose
+summTime <- ddply(dat3, c("Station.Code","Date"), summarise,
+               nTime = length(unique(Time))) # 96 measurements per day... pTime = sum(frac/4656)*96
+
+dfDeck <- dat3[which(dat3$Station.Code == "Decker Pool" & 
+                       dat3$datetimestamp >= as.POSIXct(strptime("2021-07-31 00:00", format = "%Y-%m-%d")) & 
+                       dat3$datetimestamp <= as.POSIXct(strptime("2021-09-09 23:45", format = "%Y-%m-%d"))),]
+dfM13 <- dat3[which(dat3$Station.Code == "M13_USGS" & 
+                      dat3$datetimestamp <= as.POSIXct(strptime("2021-09-09 23:45", format = "%Y-%m-%d"))),]
+dfM13 <- dfM13[-nrow(dfM13),]
+dfM13[which(dfM13$datetimestamp >= as.POSIXct(strptime("2021-08-24 05:45:00",format = "%Y-%m-%d %H:%M:%S")) &
+              dfM13$datetimestamp <= as.POSIXct(strptime("2021-08-24 06:30:00",format = "%Y-%m-%d %H:%M:%S"))),"TempC"] <- 20.0
+
+dfDeck$day <- as.integer(factor(dfDeck$Date, levels = unique(dfDeck$Date)))
+dfDeck$frac <- as.integer(rep(c(1:96),39))
+
+dfM13$day <- as.integer(factor(dfM13$Date, levels = unique(dfM13$Date)))
+dfM13$frac <- as.integer(rep(c(1:96),39))
+
+deck_ts <- ts(data = dfDeck$TempC,
+              start = c(dfDeck$day[1], dfDeck$frac[1]),
+              frequency = 96)
+deck_st1 <- stlplus::stlplus(deck_ts, s.window = "periodic")
+plot(deck_st1)
+deck_mst1 <- forecast::mstl(deck_ts, lambda = NULL)
+plot(deck_mst1)
+
+sacr_ts <- ts(data = dfDeck$Depthm,#dfM13$TempC,
+              start = c(dfDeck$day[1], dfDeck$frac[1]),#c(dfM13$day[1], dfM13$frac[1]),
+              frequency = 96)
+sacr_st1 <- stlplus::stlplus(sacr_ts, s.window = "periodic")
+plot(sacr_st1)
+sacr_mst1 <- forecast::mstl(sacr_ts, lambda = NULL)
+plot(sacr_mst1)
+sacr_mst1_auto <- forecast::mstl(sacr_ts, lambda = "auto")
+plot(sacr_mst1_auto)
+
+dfDeck$trend <- as.numeric(deck_mst1[,"Trend"])
+dfDeck$remainder <- as.numeric(deck_mst1[,"Remainder"])
+dfDeck$seas_adj <- dfDeck$trend + dfDeck$remainder
+dfM13$trend <- as.numeric(sacr_mst1[,2])
+dfM13$remainder <- as.numeric(sacr_mst1[,"Remainder"])
+dfM13$seas_adj <- dfM13$trend + dfM13$remainder
+
+#deck.mat <-c(matrix(data = dfDeck$TempC, ncol = length(dfDeck$TempC), nrow = 96, byrow = TRUE))
+#deck.ts <- ts(deck.mat, frequency = 96)
+#deck.decomp <- decompose(deck.ts)
+#autoplot(deck.decomp) + xlab("Year") + ggtitle("Classical Additive Decomposition of Decker Temperature")
+
+autoplot(deck_mst1) + xlab("Year") + ggtitle("STL Decomposition of Electrical Equipment Index")
+hist(deck_mst1[,"Remainder"])
+#hist(deck_st1$data[,"remainder"])
+
+#plot.frequency.spectrum <- function(X.k, xlimits=c(0,length(X.k))) {
+#  plot.data  <- cbind(0:(length(X.k)-1), Mod(X.k))
+
+  # TODO: why this scaling is necessary?
+#  plot.data[2:length(X.k),2] <- 2*plot.data[2:length(X.k),2] 
+#  
+#  plot(plot.data, t="h", lwd=2, main="", 
+#       xlab="Frequency (Hz)", ylab="Strength", 
+#       xlim=xlimits, ylim=c(0,max(Mod(plot.data[,2]))))
+#}
+#X.k <- fft(deck_mst1[,"Remainder"])
+#plot.frequency.spectrum(X.k,xlimits=c(0,acq.freq/2))
+
+################################################################################
+### for deck
+plot(deck_mst1[,"Remainder"])
+f.data <- GeneCycle::periodogram(deck_mst1[,"Remainder"])
+harmonics <- 1:96
+plot(f.data$freq[harmonics]*length(deck_mst1[,"Remainder"]), 
+     f.data$spec[harmonics]/sum(f.data$spec), 
+     xlab="Harmonics (Hz)", ylab="Amplitute Density", type="h")
+
+f.data2 <- data.frame(freq = as.numeric(f.data$freq),
+                      spec = as.numeric(f.data$spec))
+f.data2$period.hr <- (1/f.data2$freq)*15/60
+f.data2$freq.hr <- 1/f.data2$period.hr
+plot(f.data2$period.hr[which(f.data2$period.hr < 100)], f.data2$spec[which(f.data2$period.hr < 100)], type = "h")
+
+ccf(deck_mst1[,"Remainder"],sacr_mst1[,"Remainder"])
+
+library(psdr)
+Fs <- 1/(15*60) # 15 minutes times 60 seconds per 1 minute is 900 seconds, so frequency is 1 per 900 seconds or 0.001111 Hz
+results <- MakePowerSpectralDensity(Fs,deck_mst1[,"Remainder"])
+frequencies <- results[[1]]
+PSD <- results[[2]]
+p.data2 <- data.frame(frequencies, PSD)
+p.data2$logFreq.hr <- log(p.data2$frequencies*3600)
+p.data2$period.hr <- (1/p.data2$frequencies) * (1/60) * (1/60)
+plot(frequencies[-1], PSD[-1], type = "l")
+plot(p.data2$period.hr[which(p.data2$period.hr < 100)], p.data2$PSD[which(p.data2$period.hr < 100)], type = "h")
+################################################################################
+
+
+################################################################################
+### for sacr
+plot(sacr_mst1[,"Remainder"])
+f.data <- GeneCycle::periodogram(sacr_mst1[,"Remainder"])
+harmonics <- 1:96
+plot(f.data$freq[harmonics]*length(deck_mst1[,"Remainder"]), 
+     f.data$spec[harmonics]/sum(f.data$spec), 
+     xlab="Harmonics (Hz)", ylab="Amplitute Density", type="h")
+
+f.data2sacr <- data.frame(freq = as.numeric(f.data$freq),
+                      spec = as.numeric(f.data$spec))
+f.data2sacr$period.hr <- (1/f.data2sacr$freq)*15/60
+f.data2sacr$freq.hr <- 1/f.data2sacr$period.hr
+plot(f.data2sacr$period.hr[which(f.data2sacr$period.hr < 100)], f.data2sacr$spec[which(f.data2sacr$period.hr < 100)], type = "h")
+
+library(psdr)
+Fs <- 1/(15*60) # 15 minutes times 60 seconds per 1 minute is 900 seconds, so frequency is 1 per 900 seconds or 0.001111 Hz
+results <- MakePowerSpectralDensity(Fs,sacr_mst1[,"Remainder"])
+frequencies <- results[[1]]
+PSD <- results[[2]]
+p.data2sacr <- data.frame(frequencies, PSD)
+p.data2sacr$period.hr <- (1/p.data2sacr$frequencies) * (1/60) * (1/60)
+plot(frequencies[-1], PSD[-1], type = "l")
+plot(p.data2sacr$period.hr[which(p.data2sacr$period.hr < 100)], p.data2sacr$PSD[which(p.data2sacr$period.hr < 100)], type = "h")
+################################################################################
+
+p.data2$psd2 <- p.data2$PSD/sum(p.data2$PSD)
+p.data2sacr$psd2 <- p.data2sacr$PSD/sum(p.data2sacr$PSD)
+psd.comp <- ggplot(data = p.data2[which(p.data2$period.hr < 50 & p.data2$psd2 > 0.001),], aes(x = period.hr, y = log10(psd2))) +
+  geom_point(color = "blue") +
+  geom_point(data = p.data2sacr[which(p.data2sacr$period.hr < 50& p.data2sacr$psd2 > 0.001),], color = "red")
+
+psd.comp2 <- ggplot(data = p.data2, aes(x = log(frequencies*3600), y = log10(psd2))) +
+  geom_line(color = "blue") +
+  geom_line(data = p.data2sacr, color = "red")
+hist(dfDeck$TempC)
+
+# this follows format of Riml et al. 2019
+psd.comp3 <- ggplot(data = p.data2, aes(x = log10(period.hr/24), y = log10(psd2))) +
+  geom_line(color = "blue")+
+  geom_line(data = p.data2sacr, color = "red") +
+  geom_vline(xintercept = log10(0.5))+
+  geom_vline(xintercept = log10(1)) +
+  xlab("Period (days)") +
+  ylab("Power Spectral Density")
+psd.comp3
+
+#this follows format of Guayadol et al. 2014
+psd.comp4 <- ggplot(data = p.data2, aes(x = log10(frequencies), y = log10(psd2))) +
+  geom_line(color = "blue")+
+  geom_line(data = p.data2sacr, color = "red") +
+  geom_vline(xintercept = log10(1/(12*3600)))+ #-4.635484
+  geom_vline(xintercept = log10(1/(24*3600))) #-4.936514
+psd.comp4
+
+################################################################################
+# Using 'gsignal' to get PSD with Welch's method (default Hammer window)
+library(gsignal)
+pwDeck <- pwelch(deck_mst1[,"Remainder"][1:3744]+deck_mst1[,"Remainder"][1:3744], fs = Fs, detrend = "long-linear") # detrend is off since already detrended
+plot(pwDeck)
+pwSacr <- pwelch(sacr_mst1[,"Remainder"][1:3744], fs = Fs, detrend = "none") # detrend is off since already detrended
+plot(pwSacr)
+
+pwBoth <- pwelch(cbind(sacr_mst1[,"Remainder"][1:3744],deck_mst1[,"Remainder"][1:3744]), fs = Fs, detrend = "none") # detrend is off since already detrended
+plot(pwBoth, plot.type = "coherence")
+################################################################################
+#Using 'biwavelet' to get wave coherence as in Riml et al. 2019 and Schmidt et al. 2019
+library(biwavelet)
+tDeck <- data.frame(c(1:3744),deck_mst1[,c("Data")][1:3744])
+colnames(tDeck) <- c("timestep","data")
+tSacr <- data.frame(c(1:3744),sacr_mst1[,c("Data")][1:3744])
+colnames(tSacr) <- c("timestep","data")
+nrands <- 100
+
+wtc.AB = wtc(tDeck, tSacr, nrands = nrands)
+
+par(oma = c(0, 0, 0, 1), mar = c(5, 4, 5, 5) + 0.1)
+plot(wtc.AB, plot.phase = TRUE, lty.coi = 1, col.coi = "grey", lwd.coi = 2, 
+    lwd.sig = 2, arrow.lwd = 0.03, arrow.len = 0.12, ylab = "Scale", xlab = "Period", 
+    plot.cb = TRUE, main = "Wavelet Coherence: A vs B")
+
+# Adding grid lines
+n = length(tDeck[, 1])
+abline(v = seq(288, n, 288), h = 1:16, col = "brown", lty = 1, lwd = 1)
+
+# Defining x labels
+axis(side = 3, at = c(seq(0, n, 288)), labels = c(seq(0, n, 288)))
+
+bothTemp <- ggplot(dfDeck, aes(x = datetimestamp, y = TempC))+
+  geom_line(color = "blue") +
+  #geom_line(data = dfM13, aes(x = datetimestamp, y = TempC), color = "red")
+  geom_line(data = dfDeck, aes(x = datetimestamp, y = Depthm*8+16), color = "red")
+bothTemp
+
+################################################################################
+# Using 'WaveletComp' to get wave coherence as in Riml et al. 2019 and Schmidt et al. 2019
+library(WaveletComp)
+my.data <- data.frame(y =tDeck[,2], x = tSacr[,2])
+
+my.w <- analyze.wavelet(my.data, "x",
+                        loess.span = 0,
+                        dt = 1/96, dj = 1/96,
+                        lowerPeriod = 1/24,
+                        make.pval = TRUE, n.sim = 10)
+wt.image(my.w, color.key = "interval", n.levels = 250,
+        legend.params = list(lab = "wavelet power levels"),
+        periodlab = "period (days)",
+        show.date = TRUE, date.format = "%F", timelab = "")
+
+
+my.wc <- analyze.coherency(my.data, my.pair = c("x","y"),
+                           loess.span = 0,
+                           dt = 1/96, dj = 1/48, # 96 observations per day so 1 day is time unit
+                           lowerPeriod = 1/12,
+                           make.pval = TRUE, n.sim = 10)
+wc.image(my.wc, n.levels = 250,
+         legend.params = list(lab = "cross-wavelet power levels"),
+         timelab = "", periodlab = "period (days)")
+
+wc.avg(my.wc, siglvl = 0.01, sigcol = "red", sigpch = 20,
+       periodlab = "period (days)")
+
+my.wc2 <- analyze.coherency(my.data, my.pair = c("x","y"),
+                            loess.span = 3/39, dt = 1/96, dj = 1/48,
+                            window.type.t = 5, window.type.s = 5,
+                            window.size.t = 5, window.size.s = 1/2,
+                            make.pval = TRUE, n.sim = 10)
+wc.image(my.wc2, which.image = "wc", color.key = "interval", n.levels = 250,
+         siglvl.contour = 0.1, siglvl.arrow = 0.05, which.arrow.sig = "wt",
+         legend.params = list(lab = "wavelet coherence levels"),
+         timelab = "")
+
+wc.sel.phases(my.wc2, sel.period = 0.55, only.sig = TRUE, siglvl = 0.05, # look at graph above to find periods of interest, in this case toggle between 0.5 and 1
+              which.sig = "wt",
+              legend.coords = "topleft",
+              phaselim = c(-pi, +pi + 1),
+              main = "", sub = "", timelab = "")
+
+
+################################################################################
+#Below has the intervals for each frequency group fashioned after Guayadol et al. 2014
+p.data2$id <- order(p.data2$frequencies)
+AUC <- sum(diff(p.data2$frequencies[p.data2$id])*rollmean(p.data2$PSD[p.data2$id],2))
+
+library(MESS)
+i.Total <- auc(p.data2$frequencies,p.data2$PSD, type = 'spline')
+i.Week <- auc(p.data2$frequencies[which(p.data2$period.hr > 27)],
+    p.data2$PSD[which(p.data2$period.hr > 27)],
+    type = 'spline')
+i.Day <- auc(p.data2$frequencies[which(p.data2$period.hr > 21 & p.data2$period.hr < 27)],
+    p.data2$PSD[which(p.data2$period.hr > 21 & p.data2$period.hr < 27)],
+    type = 'spline')
+i.h2fDay <- auc(p.data2$frequencies[which(p.data2$period.hr > 14 & p.data2$period.hr < 21)],
+    p.data2$PSD[which(p.data2$period.hr > 14 & p.data2$period.hr < 21)],
+    type = 'spline')
+i.hDay <- auc(p.data2$frequencies[which(p.data2$period.hr > 10 & p.data2$period.hr < 14)],
+    p.data2$PSD[which(p.data2$period.hr > 10 & p.data2$period.hr < 14)],
+    type = 'spline')
+i.Hourly <- auc(p.data2$frequencies[which(p.data2$period.hr > 0.333 & p.data2$period.hr < 10)],
+    p.data2$PSD[which(p.data2$period.hr > 0.333 & p.data2$period.hr < 10)],
+    type = 'spline')
+
+i.Week/i.Total
+i.Day/i.Total
+i.h2fDay/i.Total
+i.hDay /i.Total
+i.Hourly/i.Total
+
+sum.d.Total <- sum(p.data2$PSD)
+sum.d.Week <- sum(p.data2$PSD[which(p.data2$period.hr > 27)])
+sum.d.Day <- sum(p.data2$PSD[which(p.data2$period.hr > 21 & p.data2$period.hr < 27)])
+sum.d.h2fDay <- sum(p.data2$PSD[which(p.data2$period.hr > 14 & p.data2$period.hr < 21)])
+sum.d.hDay <- sum(p.data2$PSD[which(p.data2$period.hr > 10 & p.data2$period.hr < 14)])
+sum.d.qDay <- sum(p.data2$PSD[which(p.data2$period.hr > 6 & p.data2$period.hr < 10)])
+sum.d.Hourly <- sum(p.data2$PSD[which(p.data2$period.hr > 0.333 & p.data2$period.hr < 6)])
+
+sum.s.Total <- sum(p.data2sacr$PSD)
+sum.s.Week <- sum(p.data2sacr$PSD[which(p.data2sacr$period.hr > 27)])
+sum.s.Day <- sum(p.data2sacr$PSD[which(p.data2sacr$period.hr > 21 & p.data2sacr$period.hr < 27)])
+sum.s.h2fDay <- sum(p.data2sacr$PSD[which(p.data2sacr$period.hr > 14 & p.data2sacr$period.hr < 21)])
+sum.s.hDay <- sum(p.data2sacr$PSD[which(p.data2sacr$period.hr > 10 & p.data2sacr$period.hr < 14)])
+sum.s.qDay <- sum(p.data2sacr$PSD[which(p.data2sacr$period.hr > 6 & p.data2sacr$period.hr < 10)])
+sum.s.Hourly <- sum(p.data2sacr$PSD[which(p.data2sacr$period.hr > 0.333 & p.data2sacr$period.hr < 6)])
+
+p.d.Week <- sum.d.Week/sum.d.Total
+p.d.Day <- sum.d.Day/sum.d.Total
+p.d.h2fDay <- sum.d.h2fDay/sum.d.Total
+p.d.hDay <- sum.d.hDay/sum.d.Total
+p.d.qDay <- sum.d.qDay/sum.d.Total
+p.d.Hourly <- sum.d.Hourly/sum.d.Total
+
+p.s.Week <- sum.s.Week/sum.s.Total
+p.s.Day <- sum.s.Day/sum.s.Total
+p.s.h2fDay <- sum.s.h2fDay/sum.s.Total
+p.s.hDay <- sum.s.hDay/sum.s.Total
+p.s.qDay <- sum.s.qDay/sum.s.Total
+p.s.Hourly <- sum.s.Hourly/sum.s.Total
+
+sd.d.Week <- sqrt(sum(p.d.Day,p.d.h2fDay,p.d.hDay,p.d.qDay,p.d.Hourly))
+sd.d.Day <- sqrt(sum(p.d.h2fDay,p.d.hDay,p.d.qDay,p.d.Hourly))
+sd.d.h2fDay <- sqrt(sum(p.d.hDay,p.d.qDay,p.d.Hourly))
+sd.d.hDay <- sqrt(sum(p.d.qDay,p.d.Hourly))
+sd.d.qDay <- sqrt(sum(p.d.Hourly))
+
+p.data2 <- data.frame(apply(p.data2, 2, rev))
+
+p.data2$vari <- cumsum(p.data2$PSD)
+p.data2$sdm <- sqrt(p.data2$vari)
+plot(log(p.data2$period.hr),log(p.data2$sdm))
+exp(2)
+
+x1 <- log(p.data2$period.hr[which(p.data2$period.hr< 13)])
+y1 <- log(p.data2$sdm[which(p.data2$period.hr< 13)])
+mod <- lm(y1 ~ x1)
+cf <- coef(mod)
+
+x2 <- log(p.data2$period.hr[which(p.data2$period.hr> 13 & p.data2$period.hr != Inf)])
+y2 <- log(p.data2$sdm[which(p.data2$period.hr> 13 & p.data2$period.hr != Inf)])
+mod2 <- lm(y2 ~ x2)
+cf2 <- coef(mod2)
+
+
+sd.s.Week <- sqrt(sum(p.s.Day,p.s.h2fDay,p.s.hDay,p.s.qDay,p.s.Hourly))
+sd.s.Day <- sqrt(sum(p.s.h2fDay,p.s.hDay,p.s.qDay,p.s.Hourly))
+sd.s.h2fDay <- sqrt(sum(p.s.hDay,p.s.qDay,p.s.Hourly))
+sd.s.hDay <- sqrt(sum(p.s.qDay,p.s.Hourly))
+sd.s.qDay <- sqrt(sum(p.s.Hourly))
+
+p.data2sacr <- data.frame(apply(p.data2sacr, 2, rev))
+p.data2sacr$vari <- cumsum(p.data2sacr$PSD)
+p.data2sacr$sdm <- sqrt(p.data2sacr$vari)
+plot(log(p.data2sacr$period.hr),log(p.data2sacr$sdm))
+exp(2)
+
+s.x1 <- log(p.data2sacr$period.hr[which(p.data2sacr$period.hr< 13)])
+s.y1 <- log(p.data2sacr$sdm[which(p.data2sacr$period.hr< 13)])
+s.mod <- lm(s.y1 ~ s.x1)
+s.cf <- coef(s.mod)
+
+s.x2 <- log(p.data2sacr$period.hr[which(p.data2sacr$period.hr> 13 & p.data2sacr$period.hr != Inf)])
+s.y2 <- log(p.data2sacr$sdm[which(p.data2sacr$period.hr> 13 & p.data2sacr$period.hr != Inf)])
+s.mod2 <- lm(s.y2 ~ s.x2)
+s.cf2 <- coef(s.mod2)
+
+# Regional Kendall Test
+library(EnvStats)
+both <- rbind.data.frame(dfDeck, dfM13)
+kendallSeasonalTrendTest(TempC ~ Station.Code, data = both)
+
+library(rkt)
+?rkt
+both$frac <- c(rep(1:3744,2))
+both$block <- c(rep(1,3744),rep(2,3744))
+both$yrfrac <- as.numeric(paste(2021,both$frac, sep = "."))
+rkt(both$yrfrac, y = both$TempC, block = both$block)
+
+### Applying high-pass filter
+library(dplR)
+filt.deck <- pass.filt(dfDeck$TempC, 10,type = "high", method = "Butterworth")
+
+to_plo_sub <- rbind.data.frame(dfDeck, dfM13)
+#to_plo_sub$dts <- as.POSIXct(strptime(as.character(to_plo_sub$datetimestamp),format = "%Y-%m-%d"))
+to_plo_sub$Station.Code <- factor(to_plo_sub$Station.Code, levels = c("Decker Pool", "M13_USGS"))
+
+mycol <- (viridis_pal(option = "H")(56))[c(24,44)]
+#mycol[3] <- c("black")
+mysh <- c(25,21)
+myps <- c(1.5,1.3)
+myalf <- c(0.5,1)
+
+xdtsJuly <- c(as.POSIXct(strptime("2021-07-31 00:00", format = "%Y-%m-%d")),
+              as.POSIXct(strptime("2021-09-09 00:00", format = "%Y-%m-%d")))
+
+dates4sun <- unique(as.Date(to_plo_sub$datetimestamp[which(to_plo_sub$datetimestamp >= xdtsJuly[1] &  to_plo_sub$datetimestamp <= xdtsJuly[2])]))
+
+suntimes <- getSunlightTimes(date = as.Date(dates4sun), lat = 38.086880, lon = -121.719738,
+                             keep = c("sunrise","sunset","goldenHour","goldenHourEnd"),
+                             tz = "America/Los_Angeles")
+suntimes2 <- data.frame(suntimes$date[1:length(suntimes$date)-1],suntimes$sunset[1:length(suntimes$date)-1],suntimes$sunrise[2:length(suntimes$date)])
+colnames(suntimes2) <- c("date","sunset","sunrise")
+
+moonphase <- getMoonIllumination(date = as.Date(dates4sun),
+                                 keep = c("fraction","phase"))
+moonphase$date2 <- as.POSIXct(strptime(moonphase$date, format = "%Y-%m-%d"))
+moonphase2 <- data.frame(moonphase$date[which.max(moonphase$fraction)], moonphase$fraction[which.max(moonphase$fraction)], "Full")
+moonphase2[2,] <- data.frame(moonphase$date[which.min(moonphase$fraction)], moonphase$fraction[which.min(moonphase$fraction)], "New")
+colnames(moonphase2) <- c("date","fraction","phase")
+moonphase2$date2 <- as.POSIXct.Date(moonphase2$date)
+moonphase2$phase2 <- factor(moonphase2$phase, levels = c("Full","New"))
+
+plo_agg_Trend <- ggplot(to_plo_sub, aes(x = datetimestamp, y = seas_adj, color = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) + 
+  geom_line() +#, shape = 21
+  geom_hline(yintercept=25.4) + ###DMC: "Swanson C, Reid T, Young PS, Cech Jr JJ. 2000. Comparative environmental tolerances of threatened delta smelt (Hypomesus transpacificus) and introduced Wakasagi (H. nipponensis) in an altered California estuary. Oecologia 123(3):384-390
+  geom_hline(yintercept=24, linetype="dashed") + ###DMC: reference is "Rich A.A. (1987). Report on studies conducted by Sacramento County to determine the temperatures which optimize growth and survival in juvenile chinook salmon (Onchorhynchus tshawwytscha). McDonough, Holland, & Allen, Sacramento, CA"
+  geom_line(data = to_plo_sub, inherit.aes = FALSE, aes(x = datetimestamp, y = TempC, color = Station.Code)) +
+  geom_line(data = to_plo_sub, inherit.aes = FALSE, aes(x = datetimestamp, y = trend, alpha = Station.Code), color = "black") +
+  geom_rect(data = suntimes2, inherit.aes = FALSE, aes(xmin = sunset, xmax = sunrise, ymin = -Inf, ymax = Inf),
+            fill = "gray", alpha = 0.1) +
+  geom_point(data = moonphase2, aes(x = date2, y = 20, fill = phase2),
+              inherit.aes = FALSE,
+             size = 4, shape = 21, color = "black") +
+  scale_color_manual(values = mycol,labels = c("Interior","Sacramento\nRiver")) + 
+  scale_shape_manual(values = mysh,labels = c("Interior","Sacramento\nRiver")) +
+  scale_size_manual(values = myps,labels = c("Interior","Sacramento\nRiver")) +
+  scale_alpha_manual(values = myalf,labels = c("Interior","Sacramento\nRiver")) +
+  theme_classic() +
+  xlab("Date") +
+  ylab("Temperature (\u00b0C)") +
+  theme(axis.text.x =element_text(),
+        axis.title = element_text(face = "bold"),
+        legend.title = element_blank())
+
+dat3 <- swmpr(dat3, meta_in = FALSE)
+attr(dat3,'timezone')<-"UTC"
+
+agg_dat_sub <- aggreswmp(dat3, by = 'hours', 
+                         params = c('Station.Code','TempC','SPC','Turb','DOmgL','ChlRFU','fDOMRFU','fdomConc','PCRFU','Depthm'), aggs_out = T)
+  #params = c('Station.Code','TempC','SPC','Turb','DOmgL','ChlRFU','Chlconc','fDOMRFU','fDOMconc','PCRFU'), aggs_out = T)
+
+summH <- ddply(agg_dat_sub, c("Station.Code","datetimestamp"), summarise,
+               Tempbar = mean(TempC),
+               SPCbar = mean(SPC),
+               Turbbar = mean(Turb),
+               DObar = mean(DOmgL),
+               ChlRFUbar = mean(ChlRFU),
+               #Chlconcbar = mean(Chlconc),
+               fDOMRFUbar = mean(fDOMRFU),
+               fDOMconcbar = mean(fdomConc),
+               PCbar = mean(PCRFU),
+               Depthbar = mean(Depthm)
+               )
+agg_dat_sub <- summH
+
+to_plo_sub <- melt(agg_dat_sub, id.var = c('Station.Code','datetimestamp'))
+to_plo_sub$dts <- as.POSIXct(strptime(as.character(to_plo_sub$datetimestamp),format = "%Y-%m-%d"))
+to_plo_sub$Station.Code <- factor(to_plo_sub$Station.Code, levels = c("Decker Breach", "Decker Pool", "M13_USGS"))#, "SacSherman_CDEC", "SDI_USGS", "Emmaton_CDEC"
+                                  #labels = c("P","B","S","Y","T"))
+to_plo_sub <- to_plo_sub[which(is.na(to_plo_sub$datetimestamp)==FALSE),]
+
+to_plo_sub$ord <- as.numeric(to_plo_sub$Station.Code)
+to_plo_sub <- to_plo_sub[order(to_plo_sub$ord),]
+
+unique(to_plo_sub$Station.Code)
+yolo <- c("Yolo Flyway Farm","Toe Drain")
+decker <- c("Decker Breach","Decker Pool","M13_USGS") # ,"SacSherman_CDEC" has info #,"SDI_USGS","Emmaton_CDEC" ###DMC220713: these stations did not have data
+
+xdtsDeck <- to_plo_sub$datetimestamp[which(to_plo_sub$Station.Code == "Decker Pool" | to_plo_sub$Station.Code == "Decker Breach")]
+xdtsDeck2 <- range(xdtsDeck)
+
+mycol <- (viridis_pal(option = "H")(56))[c(24,44,33)]
+mycol[3] <- c("black")
+mysh <- c(25,21,21)
+myps <- c(1.5,1.3,1)
+myalf <- c(0.5,0.5,0.7)
+
+xdtsSpring1 <- c(as.POSIXct(strptime("2021-04-19 00:00", format = "%Y-%m-%d")),
+                 as.POSIXct(strptime("2021-05-10 00:00", format = "%Y-%m-%d")))
+xdtsSpring2 <- c(as.POSIXct(strptime("2021-01-01 00:00", format = "%Y-%m-%d")),
+                 as.POSIXct(strptime("2021-05-30 00:00", format = "%Y-%m-%d")))
+xdtsJune <- c(as.POSIXct(strptime("2021-06-01 00:00", format = "%Y-%m-%d")),
+              as.POSIXct(strptime("2021-06-30 00:00", format = "%Y-%m-%d")))
+xdtsJuly <- c(as.POSIXct(strptime("2021-07-01 00:00", format = "%Y-%m-%d")),
+              as.POSIXct(strptime("2021-07-31 00:00", format = "%Y-%m-%d")))
+xdtsAug <- c(as.POSIXct(strptime("2021-08-01 00:00", format = "%Y-%m-%d")),
+              as.POSIXct(strptime("2021-08-30 00:00", format = "%Y-%m-%d")))
+
+dates4sun <- unique(as.Date(to_plo_sub$datetimestamp[which(to_plo_sub$datetimestamp >= xdtsAug[1] &  to_plo_sub$datetimestamp <= xdtsAug[2])]))
+
+suntimes <- getSunlightTimes(date = as.Date(dates4sun), lat = 38.086880, lon = -121.719738,
+                             keep = c("sunrise","sunset","goldenHour","goldenHourEnd"),
+                             tz = "America/Los_Angeles")
+suntimes2 <- data.frame(suntimes$date[1:length(suntimes$date)-1],suntimes$sunset[1:length(suntimes$date)-1],suntimes$sunrise[2:length(suntimes$date)])
+colnames(suntimes2) <- c("date","sunset","sunrise")
+
+moonphase <- getMoonIllumination(date = as.Date(dates4sun),
+                                 keep = c("fraction","phase"))
+moonphase$date2 <- as.POSIXct(strptime(moonphase$date, format = "%Y-%m-%d"))
+moonphase2 <- data.frame(moonphase$date[which.max(moonphase$fraction)], moonphase$fraction[which.max(moonphase$fraction)], "Full")
+moonphase2[2,] <- data.frame(moonphase$date[which.min(moonphase$fraction)], moonphase$fraction[which.min(moonphase$fraction)], "New")
+colnames(moonphase2) <- c("date","fraction","phase")
+moonphase2$date2 <- as.POSIXct.Date(moonphase2$date)
+moonphase2$phase2 <- factor(moonphase2$phase, levels = c("Full","New"))
+
+
+plo_agg_subTsub <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker & to_plo_sub$datetimestamp >= xdtsAug[1] &  to_plo_sub$datetimestamp <= xdtsAug[2] & to_plo_sub$variable == "Tempbar"),], aes(x = datetimestamp, y = value, color = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) + 
+  geom_line() +#, shape = 21
+  geom_hline(yintercept=25.4) + ###DMC: "Swanson C, Reid T, Young PS, Cech Jr JJ. 2000. Comparative environmental tolerances of threatened delta smelt (Hypomesus transpacificus) and introduced Wakasagi (H. nipponensis) in an altered California estuary. Oecologia 123(3):384-390
+  geom_hline(yintercept=24, linetype="dashed") + ###DMC: reference is "Rich A.A. (1987). Report on studies conducted by Sacramento County to determine the temperatures which optimize growth and survival in juvenile chinook salmon (Onchorhynchus tshawwytscha). McDonough, Holland, & Allen, Sacramento, CA"
+  geom_rect(data = suntimes2, inherit.aes = FALSE, aes(xmin = sunset, xmax = sunrise, ymin = -Inf, ymax = Inf),
+            fill = "gray", alpha = 0.1) +
+  scale_color_manual(values = mycol,labels = c("Breach","Interior","Sacramento\nRiver")) + 
+  scale_shape_manual(values = mysh,labels = c("Breach","Interior","Sacramento\nRiver")) +
+  scale_size_manual(values = myps,labels = c("Breach","Interior","Sacramento\nRiver")) +
+  scale_alpha_manual(values = myalf,labels = c("Breach","Interior","Sacramento\nRiver")) +
+  theme_classic() +
+  xlab("Date") +
+  ylab("Temperature (\u00b0C)") +
+  theme(axis.text.x =element_text(),
+        axis.title = element_text(face = "bold"),
+        legend.title = element_blank())
+
+plo_agg_subDep <- ggplot(to_plo_sub[which(to_plo_sub$Station.Code %in% decker & to_plo_sub$datetimestamp >= xdtsAug[1] &  to_plo_sub$datetimestamp <= xdtsAug[2] & to_plo_sub$variable == "Depthbar"),], aes(x = datetimestamp, y = value, color = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) + 
+  geom_line() +#, shape = 21
+  #geom_hline(yintercept=25.4) + ###DMC: "Swanson C, Reid T, Young PS, Cech Jr JJ. 2000. Comparative environmental tolerances of threatened delta smelt (Hypomesus transpacificus) and introduced Wakasagi (H. nipponensis) in an altered California estuary. Oecologia 123(3):384-390
+  #geom_hline(yintercept=24, linetype="dashed") + ###DMC: reference is "Rich A.A. (1987). Report on studies conducted by Sacramento County to determine the temperatures which optimize growth and survival in juvenile chinook salmon (Onchorhynchus tshawwytscha). McDonough, Holland, & Allen, Sacramento, CA"
+  geom_rect(data = suntimes2, inherit.aes = FALSE, aes(xmin = sunset, xmax = sunrise, ymin = -Inf, ymax = Inf),
+            fill = "gray", alpha = 0.1) +
+  geom_point(data = moonphase2, aes(x = date2, y = 0, fill = phase2),
+              inherit.aes = FALSE,
+             size = 4, shape = 21, color = "black") +
+  ylim(-0.1,1.5) +
+  scale_color_manual(values = mycol,labels = c("Breach","Interior","Sacramento\nRiver")) + 
+  scale_shape_manual(values = mysh,labels = c("Breach","Interior","Sacramento\nRiver")) +
+  scale_size_manual(values = myps,labels = c("Breach","Interior","Sacramento\nRiver")) +
+  scale_alpha_manual(values = myalf,labels = c("Breach","Interior","Sacramento\nRiver")) +
+  scale_fill_manual(values = c("white","black"),labels = c("Full","New")) + 
+  theme_classic() +
+  xlab("Date") +
+  ylab("Depth (m)") +
+  theme(axis.text.x =element_text(),
+        axis.title = element_text(face = "bold"),
+        legend.title = element_blank())
+
+gridExtra::grid.arrange(arrangeGrob(plo_agg_subTsub, plo_agg_subDep,nrow = 2), ncol =1)
+```
+
+
+Time-series Decomposition For Flyway
+Saving figures to "C:\Users\DCox\OneDrive - California Department of Fish and Wildlife\Documents\FRP\Monitoring\Reports\2021SiteReports"
+```{r}
+library(SWMPr)
+library(ggplot2)
+library(reshape2)
+library(viridis)
+library(plyr)
+library(scales)
+library(gridExtra)
+library(suncalc)
+
+rm(list = ls())
+
+
+load("FRP_LTMsonde_220526.RData")
+load("ExtLTM_CompleteMerge.RData") ###DMC220601: this is a huge file with all data from every nearby sonde
+
+unique(df$Site)
+
+df <- df[which(df$dts >= as.POSIXct(strptime("2021-08-01 00:00", format = "%Y-%m-%d")) & 
+                 df$dts <= as.POSIXct(strptime("2021-08-31 23:45", format = "%Y-%m-%d")) &
+                 df$Site == "Yolo Flyway Farm" ),]
+
+df$Turb[which(df$Turb > 1000)] <- NA ###DMC220713: Turbidity sensor is only rated up to 1000 so any values above it must be discarded. The high calibration standard used is ~100 so any values above that are suspect
+df[which(df$TempC == 0), 6:15] <- NA
+
+#df[which(df$dts == "2021-07-30 10:18:04" | df$dts == "2021-07-30 10:33:04"),c(6:14)] <- NA
+#df$Depthm[which(df$dts == "2021-07-03 21:24:18")] <- NA
+
+df$ChlRFU[which(df$ChlRFU > 100)] <- NA ###DMC220713: Chl sensor is only rated up to 100 RFU so any values above it must be discarded.
+df$PCRFU[which(df$PCRFU > 100 | df$PCRFU < 0)] <- NA ###DMC220713: Phycocyanin sensor is only rated up to 100 RFU so any values above it must be discarded. Any values below 0 must be discarded too
+df$fDOMRFU[which(df$fDOMRFU < 0)] <- NA ###DMC220713: FDOM sensor is only rated up to 100 RFU so any values above it must be discarded. Any values below 0 must be discarded too
+
+
+unique(dfAll$site)
+dfAll <- dfAll[which(dfAll$site %in% c("TOE_USGS") & # "SacSherman_CDEC", "SDI_USGS","Emmaton_CDEC" ###DMC220713: these stations did not have data
+                       dfAll$dts >= as.POSIXct(strptime("2021-08-01 00:00", format = "%Y-%m-%d")) & 
+                       dfAll$dts <= as.POSIXct(strptime("2021-08-31 23:45", format = "%Y-%m-%d"))),]
+
+dat <- df[,c("Site","dts","TempC","SPC","Turb","DOmgL","ChlRFU","PCRFU","fDOMRFU","Depthm")]
+dat[,11:12] <- as.numeric(NA)
+colnames(dat)[11:12] <- c("fdomConc","velocity")
+
+dfAll <- dfAll[,-5]
+dfAll[,10:12] <- as.numeric(NA)
+dfAll <- dfAll[,c(1:7,10,8,11,12,9)]
+colnames(dfAll) <- colnames(dat)
+
+dfAll$ChlRFU <- as.numeric(dfAll$ChlRFU)
+dfAll$PCRFU <- as.numeric(dfAll$PCRFU)
+dfAll$fDOMRFU <- as.numeric(dfAll$fDOMRFU)
+
+dfAll$ChlRFU[which(dfAll$ChlRFU > 400)] <- NA ###DMC220713: Chl sensor is only rated up to 400 ug/L so any values above it must be discarded.
+
+dat3 <- rbind.data.frame(dat,dfAll)
+colnames(dat3)[1:2] <- c("Station.Code","datetimestamp")
+
+dat3$Date <- substr(as.character(dat3$datetimestamp),0,10)
+dat3$Time <- substr(as.character(dat3$datetimestamp),12,19)
+
+?decompose
+summTime <- ddply(dat3, c("Station.Code","Date"), summarise,
+               nTime = length(Time)) # 96 measurements per day
+
+dfDeck <- dat3[which(dat3$Station.Code == "Yolo Flyway Farm"),]
+dfM13 <- dat3[which(dat3$Station.Code == "TOE_USGS" & dat3$Date != "2021-08-31"),]
+
+dfDeck$day <- as.integer(factor(df$Date, levels = unique(df$Date)))
+dfDeck$frac <- as.integer(rep(c(1:96),30))
+
+dfM13$day <- as.integer(factor(dfM13$Date, levels = unique(dfM13$Date)))
+dfM13$frac <- as.integer(rep(c(1:96),30))
+
+deck_ts <- ts(data = dfDeck$TempC,
+              start = c(dfDeck$day[1], dfDeck$frac[1]),
+              frequency = 96)
+deck_st1 <- stlplus::stlplus(deck_ts, s.window = "periodic")
+plot(deck_st1)
+deck_mst1 <- forecast::mstl(deck_ts, lambda = NULL)
+plot(deck_mst1)
+
+sacr_ts <- ts(data = dfM13$TempC,
+              start = c(dfM13$day[1], dfM13$frac[1]),
+              frequency = 96)
+sacr_st1 <- stlplus::stlplus(sacr_ts, s.window = "periodic")
+plot(sacr_st1)
+sacr_mst1 <- forecast::mstl(sacr_ts, lambda = NULL)
+plot(sacr_mst1)
+sacr_mst1_auto <- forecast::mstl(sacr_ts, lambda = "auto")
+plot(sacr_mst1_auto)
+
+dfDeck$trend <- as.numeric(deck_mst1[,"Trend"])
+dfDeck$remainder <- as.numeric(deck_mst1[,"Remainder"])
+dfDeck$seas_adj <- dfDeck$trend + dfDeck$remainder
+dfM13$trend <- as.numeric(sacr_mst1[,2])
+dfM13$remainder <- as.numeric(sacr_mst1[,"Remainder"])
+dfM13$seas_adj <- dfM13$trend + dfM13$remainder
+
+to_plo_sub <- rbind.data.frame(dfDeck, dfM13)
+#to_plo_sub$dts <- as.POSIXct(strptime(as.character(to_plo_sub$datetimestamp),format = "%Y-%m-%d"))
+to_plo_sub$Station.Code <- factor(to_plo_sub$Station.Code, levels = c("Yolo Flyway Farm", "TOE_USGS"))
+
+mycol <- (viridis_pal(option = "H")(56))[c(24,44)]
+#mycol[3] <- c("black")
+mysh <- c(25,21)
+myps <- c(1.5,1.3)
+myalf <- c(0.5,1)
+
+xdtsJuly <- c(as.POSIXct(strptime("2021-08-01 00:00", format = "%Y-%m-%d")),
+              as.POSIXct(strptime("2021-08-31 00:00", format = "%Y-%m-%d")))
+
+dates4sun <- unique(as.Date(to_plo_sub$datetimestamp[which(to_plo_sub$datetimestamp >= xdtsJuly[1] &  to_plo_sub$datetimestamp <= xdtsJuly[2])]))
+
+suntimes <- getSunlightTimes(date = as.Date(dates4sun), lat = 38.086880, lon = -121.719738,
+                             keep = c("sunrise","sunset","goldenHour","goldenHourEnd"),
+                             tz = "America/Los_Angeles")
+suntimes2 <- data.frame(suntimes$date[1:length(suntimes$date)-1],suntimes$sunset[1:length(suntimes$date)-1],suntimes$sunrise[2:length(suntimes$date)])
+colnames(suntimes2) <- c("date","sunset","sunrise")
+
+moonphase <- getMoonIllumination(date = as.Date(dates4sun),
+                                 keep = c("fraction","phase"))
+moonphase$date2 <- as.POSIXct(strptime(moonphase$date, format = "%Y-%m-%d"))
+moonphase2 <- data.frame(moonphase$date[which.max(moonphase$fraction)], moonphase$fraction[which.max(moonphase$fraction)], "Full")
+moonphase2[2,] <- data.frame(moonphase$date[which.min(moonphase$fraction)], moonphase$fraction[which.min(moonphase$fraction)], "New")
+colnames(moonphase2) <- c("date","fraction","phase")
+moonphase2$date2 <- as.POSIXct.Date(moonphase2$date)
+moonphase2$phase2 <- factor(moonphase2$phase, levels = c("Full","New"))
+
+plo_agg_Trend <- ggplot(to_plo_sub, aes(x = datetimestamp, y = seas_adj, color = Station.Code, alpha = Station.Code, shape = Station.Code, size = Station.Code)) + 
+  geom_line() +#, shape = 21
+  geom_hline(yintercept=25.4) + ###DMC: "Swanson C, Reid T, Young PS, Cech Jr JJ. 2000. Comparative environmental tolerances of threatened delta smelt (Hypomesus transpacificus) and introduced Wakasagi (H. nipponensis) in an altered California estuary. Oecologia 123(3):384-390
+  geom_hline(yintercept=24, linetype="dashed") + ###DMC: reference is "Rich A.A. (1987). Report on studies conducted by Sacramento County to determine the temperatures which optimize growth and survival in juvenile chinook salmon (Onchorhynchus tshawwytscha). McDonough, Holland, & Allen, Sacramento, CA"
+  geom_line(data = to_plo_sub, inherit.aes = FALSE, aes(x = datetimestamp, y = TempC, color = Station.Code)) +
+  geom_line(data = to_plo_sub, inherit.aes = FALSE, aes(x = datetimestamp, y = trend, alpha = Station.Code), color = "black") +
+  geom_rect(data = suntimes2, inherit.aes = FALSE, aes(xmin = sunset, xmax = sunrise, ymin = -Inf, ymax = Inf),
+            fill = "gray", alpha = 0.1) +
+  geom_point(data = moonphase2, aes(x = date2, y = 20, fill = phase2),
+              inherit.aes = FALSE,
+             size = 4, shape = 21, color = "black") +
+  scale_color_manual(values = mycol,labels = c("Flyway","Toe\nDrain")) + 
+  scale_shape_manual(values = mysh,labels = c("Flyway","Toe\nDrain")) +
+  scale_size_manual(values = myps,labels = c("Flyway","Toe\nDrain")) +
+  scale_alpha_manual(values = myalf,labels = c("Flyway","Toe\nDrain")) +
+  theme_classic() +
+  xlab("Date") +
+  ylab("Temperature (\u00b0C)") +
+  theme(axis.text.x =element_text(),
+        axis.title = element_text(face = "bold"),
+        legend.title = element_blank())
+```

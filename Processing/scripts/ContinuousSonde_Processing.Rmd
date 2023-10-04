@@ -32,9 +32,14 @@ load(here::here("working","CDFW_VarNamesConversion.RData"))
 path2_DECK_Pool <- here::here("raw","DECK", "Pool")
 path2_DECK_Breach <- here::here("raw","DECK", "Breach")
 path2_FLYW <- here::here("raw","FLYW")
+path2_TULE_Breach <- here::here("raw","TULE","FRP_DWR","TULE_Breach")
+path2_TULE_PondC <- here::here("raw","TULE","FRP_DWR","TULE_PondC")
+path2_ARNO_Ext <- here::here("raw","ARNO","Exterior")
+path2_ARNO_Int <- here::here("raw","ARNO","Interior")
+path2_BRAD_Ext <- here::here("raw","BRAD","Exterior")
 
-pathnames <- data.frame(SiteName = c("FLYW","DECK_Pool","DECK_Breach"), 
-                        pathname = c(path2_FLYW, path2_DECK_Pool, path2_DECK_Breach))
+pathnames <- data.frame(SiteName = c("FLYW","DECK_Pool","DECK_Breach","TULE_Breach","TULE_PondC","ARNO_Exterior","ARNO_Interior","BRAD_Exterior"), 
+                        pathname = c(path2_FLYW, path2_DECK_Pool, path2_DECK_Breach, path2_TULE_Breach, path2_TULE_PondC, path2_ARNO_Ext, path2_ARNO_Int, path2_BRAD_Ext))
 
 list_all_meta <- list()
 list_all_raw <- list()
@@ -245,9 +250,9 @@ for(i in 1:length(list_all_trim1)){
     To_trim <- cbind.data.frame(list_all_trim2[[i]][[j]],data.frame(trim = NA))
     # First, look at deployment start/end times
     # dictate how many rows to look at in the beginning of the file
-    trim_head <- c(1:20)
+    trim_head <- c(1:100)
     # dictate how many rows to look at in the end of the file
-    trim_tail <- c(nrow(To_trim)-19):nrow(To_trim)
+    trim_tail <- c(nrow(To_trim)-99):nrow(To_trim)
     for(k in 1:length(var2check)){
       if(var2check[k] %ni% colnames(To_trim)==TRUE){
         varNeeded <- var2check[k]
