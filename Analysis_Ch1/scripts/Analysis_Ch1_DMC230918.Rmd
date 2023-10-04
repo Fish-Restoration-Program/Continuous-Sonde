@@ -66,6 +66,16 @@ plo <- ggplot(DECK_pool, aes(x = dts2, y = TempC)) +
 
 DECK <- rbind.data.frame(DECK_pool, DECK_breach.2)
 
+load(here::here("working","USGS_DeckerTogether.Rds"))
+load(here::here("working","USGS_ToeDrain.RData"))
+
+TOED <- df_ToeDrain
+SACR <- USGS_DECK.2
+
+list_all <- list(FLYW, DECK, TOED, SACR)
+names(list_all) <- c("FLYW", "DECK", "TOED", "SACR")
+
+save(list_all, file = here::here("working","All_Raw.RData"))
 save(DECK, FLYW, file = here::here("working","FRP_Raw.RData"))
 ```
 
@@ -73,7 +83,19 @@ save(DECK, FLYW, file = here::here("working","FRP_Raw.RData"))
 ```{r}
 library(ggplot2)
 rm(list = ls())
-load(here::here("working","FRP_Raw.RData"))
+load(here::here("working","All_Raw.RData"))
+
+xSite <- names(list_all)
+cols.num <- c("TempC","DOmgL","SPC","Turb")
+for(i in 1:length(xSite)){
+  df <- list_all[[xSite[4]]]
+  df$Site2 <- names(list_all)[4]
+  df[cols.num] <- sapply(df[cols.num], as.numeric)
+  rownames(df) <- NULL
+  dfDUP <- df[duplicated(df$dts2),]
+  df.2 <- df[-duplicated(df$dts2),]
+  df.3 <- df.2[-which(is.na(df.2$dts2)==T | df.2$TempC <0.9),]
+}
 
 FLYW$TempC <- as.numeric(FLYW$TempC)
 
@@ -88,7 +110,6 @@ DECK.3 <- DECK.2[-which(is.na(DECK.2$dts2)==T | DECK.2$TempC < 0.9),]
 
 DECK.3$Temp_Resto <- DECK.3$TempC
 
-load(here::here("working","USGS_DeckerTogether.Rds"))
 USGS_DECK.2$Temp_Ref <- USGS_DECK.2$tempC
 USGS_DECK.2$dts2 <- USGS_DECK.2$dateTime
 

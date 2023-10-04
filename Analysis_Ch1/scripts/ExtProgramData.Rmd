@@ -38,7 +38,7 @@ df_DECKUSGS <- siteAll[,c(2,3,8,9, # 14 and 15 are DO and its QC status
                                                                   ,"colsNames"] 
                                   ))] 
 
-colnames(df_DECKUSGS)[3:10] <- c("do","do_flag","tempC","tempC_flag","sc","sc_flag","turb","turb_flag")
+colnames(df_DECKUSGS)[3:10] <- c("DOmgL","DO_flag","TempC","TempC_flag","SPC","SPC_flag","Turb","Turb_flag")
 
 save(df_DECKUSGS, file = here::here("working", "USGS_Decker.RData"))
 ```
@@ -83,7 +83,7 @@ df_Toland <- siteAll[,c(2,3,14,15, # 14 and 15 are DO and its QC status
                                                                   ,"colsNames"] 
                                   ))] 
 
-colnames(df_Toland)[3:10] <- c("do","do_flag","tempC","tempC_flag","sc","sc_flag","turb","turb_flag")
+colnames(df_Toland)[3:10] <- c("DOmgL","DO_flag","TempC","TempC_flag","SPC","SPC_flag","Turb","Turb_flag")
 
 save(df_Toland, file = here::here("working", "USGS_Toland.RData"))
 ```
@@ -128,7 +128,7 @@ df_ToeDrain <- siteAll[,c(2,3,12,13, # 12 and 13 are DO and its QC status
                                                                   ,"colsNames"] 
                                   ))] 
 
-colnames(df_ToeDrain)[3:10] <- c("do","do_flag","tempC","tempC_flag","sc","sc_flag","turb","turb_flag")
+colnames(df_ToeDrain)[3:10] <- c("DOmgL","DO_flag","TempC","TempC_flag","SPC","SPC_flag","Turb","Turb_flag")
 
 save(df_ToeDrain, file = here::here("working", "USGS_ToeDrain.RData"))
 ```
