@@ -61,7 +61,7 @@ for(i in 1:length(xSite)){
     var_H <- df_ts %>%
       group_by(Site2, date, hour) %>% #group (calculations) by these vars
       arrange(Site2, date, hour, minute) %>% #arrange in order of these vars to visualize duplication
-      #slice(1) %>% #keep only the first value for each station, date, hour group so 1 value/hour
+      slice(1) %>% #keep only the first value for each station, date, hour group so 1 value/hour
       ungroup()
     var_H_0 <- var_H[,c("Site2","dts2",xVar[j],"date","hour","minute")]
     colnames(var_H_0) <- c("Station","Datetime","Var","Date","Hour","Minute")
@@ -77,13 +77,13 @@ for(i in 1:length(xSite)){
 }
 names(list_all_qc) <- xSite
 
-save(list_all_qc, xSite, xVar, file = here::here("working","VarQC_initial.RData"))
+save(list_all_qc, xSite, xVar, file = here::here("working","VarQCHourly_initial.RData"))
 ```
 
 ## QC1) Flag data outside of reasonable temperature range (1-40C)
 ```{r 0-40, message = FALSE}
 rm(list = ls())
-load(here::here("working","VarQC_initial.RData"))
+load(here::here("working","VarQCHourly_initial.RData"))
 
 #xVar <- c("TempC","DOmgL","SPC","ChlRFU","PCRFU","fDOMRFU","Turb")
 df_ranges <- data.frame(xVar = xVar,
@@ -108,7 +108,7 @@ for(i in 1:length(xSite)){
 }
 names(list_all_QC1) <- xSite
 
-save(list_all_QC1, xSite, xVar, file = here::here("working","VarQC_step1.RData"))
+save(list_all_QC1, xSite, xVar, file = here::here("working","VarQCHourly_step1.RData"))
 ```
 
 ## QC2) Missing values: Flag days with less than n(20) values 
@@ -119,7 +119,7 @@ save(list_all_QC1, xSite, xVar, file = here::here("working","VarQC_step1.RData")
 
 ```{r Missing Values, message = FALSE}
 rm(list = ls())
-load(here::here("working","VarQC_step1.RData"))
+load(here::here("working","VarQCHourly_step1.RData"))
 
 list_all_QC2 <- list()
 for(i in 1:length(xSite)){
@@ -130,9 +130,9 @@ for(i in 1:length(xSite)){
     temp_q2_a <- df %>%
       filter(Flag_QC1 == "N") %>% # only running on data that have not been flagged by the above to be consistent with rest of QC steps
       group_by(Station, Date) %>%
-      arrange(Station, Date, Hour, Minute) %>% # use 'Minute' for quarterly-hour, remove for hourly
+      arrange(Station, Date) %>% # use 'Minute' for quarterly-hour, remove for hourly
       summarise(total = n()) %>%
-      mutate(Flag_QC2 = ifelse(total < 80, "Y", "N")) %>% # 20 for hourly, 80 for quarter-hourly
+      mutate(Flag_QC2 = ifelse(total < 20, "Y", "N")) %>% # 20 for hourly, 80 for quarter-hourly
       select(-total) %>%
       ungroup()
     # Flagged values
@@ -154,7 +154,7 @@ for(i in 1:length(xSite)){
 }
 names(list_all_QC2) <- xSite
 
-save(list_all_QC2, xSite, xVar, file = here::here("working","VarQC_step2.RData"))
+save(list_all_QC2, xSite, xVar, file = here::here("working","VarQCHourly_step2.RData"))
 ```
 
 ## QC3) Flag if there are 18+ repeating values in a row
@@ -166,7 +166,7 @@ save(list_all_QC2, xSite, xVar, file = here::here("working","VarQC_step2.RData")
 
 ```{r repeating values, message = FALSE}
 rm(list = ls())
-load(here::here("working","VarQC_step2.RData"))
+load(here::here("working","VarQCHourly_step2.RData"))
 #########################################################
 # Significant help from Michael Koohafkan and Rosie Hartman
 
@@ -197,7 +197,7 @@ for(i in 1:length(xSite)){
     df <- list_all_QC2[[i]][[j]]
     df$Var <- as.numeric(df$Var)
     # Run function repeating values and get rid of the columns we don't need
-    df_q3 <- repeating_vals(df = df, x = 72) %>% # 18 for hourly, 72 for quarter-hourly
+    df_q3 <- repeating_vals(df = df, x = 18) %>% # 18 for hourly, 72 for quarter-hourly
       select(-flag, -issame, -same) %>%
       rename(Flag_QC3 = Flag_repeats) 
     # Flagged values
@@ -212,7 +212,7 @@ for(i in 1:length(xSite)){
 }
 names(list_all_QC3) <- xSite
 
-save(list_all_QC3, xSite, xVar, file = here::here("working","VarQC_step3.RData"))
+save(list_all_QC3, xSite, xVar, file = here::here("working","VarQCHourly_step3.RData"))
 ```
 
 
@@ -228,7 +228,7 @@ library(tibbletime)
 # see https://business-science.github.io/anomalize/articles/anomalize_methods.html
 
 rm(list = ls())
-load(here::here("working","VarQC_step3.RData"))
+load(here::here("working","VarQCHourly_step3.RData"))
 
 #xVar <- c("TempC","DOmgL","SPC","ChlRFU","PCRFU","fDOMRFU","Turb")
 df_Trend <- data.frame(xVar = xVar,
@@ -282,7 +282,7 @@ for(i in 1:length(xSite)){
 }
 names(list_all_QC4) <- xSite
 
-save(list_all_QC4, xSite, xVar, file = here::here("working","VarQC_step4.RData"))
+save(list_all_QC4, xSite, xVar, file = here::here("working","VarQCHourly_step4.RData"))
 ```
 
 ### QC5) Spike test
@@ -297,7 +297,7 @@ Anomalize is pretty good, but there are a few single points here and there that 
 # Additionally, if Q5 > 5 (5 degree change in 1 hour), flag. 
 
 rm(list = ls())
-load(here::here("working","VarQC_step4.RData"))
+load(here::here("working","VarQCHourly_step4.RData"))
 
 #xVar <- c("TempC","DOmgL","SPC","ChlRFU","PCRFU","fDOMRFU","Turb")
 df_spike <-  data.frame(xVar = xVar,
@@ -313,7 +313,7 @@ for(i in 1:length(xSite)){
     df_q5 <- df %>%
       group_by(Station) %>%
       arrange(Station, Datetime) %>%
-      mutate(QC5 = abs(Var- 0.5 * (lag(Var, n = 4, default = 0) + lead(Var, n=4, default = 0))))%>% # n = 1 for hourly, n = 4 for quarter-hourly
+      mutate(QC5 = abs(Var- 0.5 * (lag(Var, n = 1, default = 0) + lead(Var, n=4, default = 0))))%>% # n = 1 for hourly, n = 4 for quarter-hourly
       mutate(Flag_QC5 = ifelse((QC5 > df_spike$xSpike[j]), "Y", "N"))  %>%
       mutate(Flag_QC5 = replace(Flag_QC5, is.na(Flag_QC5), "N")) %>% # Replace NA with No
       select(-QC5) %>%
@@ -331,7 +331,7 @@ for(i in 1:length(xSite)){
 }
 names(list_all_QC5) <- xSite
 
-save(list_all_QC5, xSite, xVar, file = here::here("working","VarQC_step5.RData"))
+save(list_all_QC5, xSite, xVar, file = here::here("working","VarQCHourly_step5.RData"))
 ```
 
 
@@ -346,7 +346,7 @@ save(list_all_QC5, xSite, xVar, file = here::here("working","VarQC_step5.RData")
 # If Q6 > sdev_th, flag.
 
 rm(list = ls())
-load(here::here("working","VarQC_step5.RData"))
+load(here::here("working","VarQCHourly_step5.RData"))
 
 #xVar <- c("TempC","DOmgL","SPC","ChlRFU","PCRFU","fDOMRFU","Turb")
 df_Rate <-  data.frame(xVar = xVar,
@@ -361,8 +361,8 @@ for(i in 1:length(xSite)){
     df_q6 <- df %>%
       group_by(Station) %>%
       arrange(Station, Datetime) %>%
-      mutate(QC6 = abs(Var- lag(Var, n = 4, default = 0)))%>% # n = 1 for hourly, n = 4 for quarter-hourly
-      mutate(sdev_th = df_Rate$xSDth[j] * runSD(Var, 200))%>% # n = 50 for hourly, n = 200 for quarter-hourly
+      mutate(QC6 = abs(Var- lag(Var, n = 1, default = 0)))%>% # n = 1 for hourly, n = 4 for quarter-hourly
+      mutate(sdev_th = df_Rate$xSDth[j] * runSD(Var, 50))%>% # n = 50 for hourly, n = 200 for quarter-hourly
       mutate(Flag_QC6 = ifelse((QC6 > sdev_th), "Y", "N"))  %>%
       mutate(Flag_QC6 = replace(Flag_QC6, is.na(Flag_QC6), "N")) %>% # Replace NA with No
       select(-c(QC6, sdev_th)) %>%
@@ -381,7 +381,7 @@ for(i in 1:length(xSite)){
 }
 names(list_all_QC6) <- xSite
 
-save(list_all_QC6, xSite, xVar, file = here::here("working","VarQC_step6.RData"))
+save(list_all_QC6, xSite, xVar, file = here::here("working","VarQCHourly_step6.RData"))
 ```
 
 ## Filter final 
@@ -392,8 +392,8 @@ save(list_all_QC6, xSite, xVar, file = here::here("working","VarQC_step6.RData")
 ```{r final dataset}
 
 rm(list = ls())
-load(here::here("working","VarQC_step1.RData"))
-load(here::here("working","VarQC_step6.RData"))
+load(here::here("working","VarQCHourly_step1.RData"))
+load(here::here("working","VarQCHourly_step6.RData"))
 
 list_all_QC6[["SACR"]][["Depthm"]][,c("Flag_QC1","Flag_QC2","Flag_QC3","Flag_QC4","Flag_QC5","Flag_QC6")] <- "N"
 list_all_QC6[["TOED"]][["Depthm"]][,c("Flag_QC1","Flag_QC2","Flag_QC3","Flag_QC4","Flag_QC5","Flag_QC6")] <- "N"
@@ -438,7 +438,7 @@ for(i in 1:length(xSite)){
 }
 names(list_all_QC7) <- xSite
 
-save(list_all_QC7, xSite, xVar, file = here::here("working","VarQC_step7.RData"))
+save(list_all_QC7, xSite, xVar, file = here::here("working","VarQCHourly_step7.RData"))
 #ggplot(temp_q6, aes(x = Datetime, y = Temp)) + geom_point() + facet_grid(Station ~., scales = "free_y")
 
 #save(temp_final, file = "AllLTM4AnalysisQC_TempQH_221230.RData")
@@ -448,8 +448,8 @@ save(list_all_QC7, xSite, xVar, file = here::here("working","VarQC_step7.RData")
 library(ggplot2)
 library(ggpubr)
 rm(list = ls())
-load(here::here("working","VarQC_step1.RData"))
-load(here::here("working","VarQC_step7.RData"))
+load(here::here("working","VarQCHourly_step1.RData"))
+load(here::here("working","VarQCHourly_step7.RData"))
 
 list_all_plo <- list()
 list_all_multi <- list()
@@ -471,7 +471,7 @@ for(i in 1:length(xSite)){
   multi_plo <- ggarrange(list_plo[[1]], list_plo[[2]], list_plo[[3]], list_plo[[4]], list_plo[[5]],
                          ncol = 1, nrow = 5)
                          #common.legend = TRUE, legend = "bottom")
-  ggsave(paste("ContinuousWQ_",xSite[i],".png",sep = ""), path = here::here("figures","diagnostics"), multi_plo, width = 625, height = 800, dpi = 96, units = "px")
+  ggsave(paste("ContinuousWQHourly_",xSite[i],".png",sep = ""), path = here::here("figures","diagnostics"), multi_plo, width = 625, height = 800, dpi = 96, units = "px")
   list_all_multi[[i]] <- multi_plo
   list_all_plo[[i]] <- list_plo
   rm(list_plo, multi_plo)
@@ -479,7 +479,7 @@ for(i in 1:length(xSite)){
 names(list_all_multi) <- xSite
 names(list_all_plo) <- xSite
 
-save(list_all_QC7, xSite, xVar, file = here::here("working","QCd2_Data.RData"))
+save(list_all_QC7, xSite, xVar, file = here::here("working","QCd2_HourlyData.RData"))
 ```
 
 
