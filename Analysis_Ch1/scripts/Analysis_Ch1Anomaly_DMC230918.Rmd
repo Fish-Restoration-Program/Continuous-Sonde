@@ -394,7 +394,7 @@ summThresh.Diff <- ddply(dfwideAll[which(dfwideAll$year2 >2020),], c("project","
                          oTemp_A = length(which(Adjacent >12 & Adjacent <80)),
                          p_oTemp_R = oTemp_R/nTemp_R,
                          p_oTemp_A = oTemp_A/nTemp_A,
-                         p_TimeDiff = p_oTemp_R - p_oTemp_A00
+                         p_TimeDiff = p_oTemp_R - p_oTemp_A
                          )
 
 
@@ -490,12 +490,13 @@ ggarrange(heatFLYW.diff, heatDECK.diff,
           align = "hv"
           )
 
-ggarrange(heatFLYW, heatDECK, legendT,
-          heatFLYW.diff, heatDECK.diff +rremove("legend"), legendT.Diff,
-          ncol = 3, nrow = 2,
-          align = "h",
-          widths = c(2,2,0.8))
-################################################################################
+plo_turb <- ggarrange(heatFLYW, heatDECK, legendT,
+                      heatFLYW.diff, heatDECK.diff +rremove("legend"), legendT.Diff,
+                      ncol = 3, nrow = 2,
+                      align = "h",
+                      widths = c(2,2,0.8))
+
+ggsave(paste("Heatmap_Turb",".png",sep = ""), path = here::here("figures","publication"), plo_turb, width = 1600, height = 1080, dpi = 192, units = "px", bg="white")
 ```
 
 # Dissolved Oxygen
@@ -577,12 +578,12 @@ plo_deck <- ggplot(dfpred.D, aes(x = DoY, y = hr, z = predvalues, fill = predval
 
 
 dfwideFLYW <- dfwideAll[which(dfwideAll$project == "FLYW"),]
-bF.2 <- bam(Restoration ~ te(DoY, hr, k = c(5,5), bs = c("cc","cc")), data = dfwideFLYW)
+bF.2 <- bam(Restoration ~ te(DoY, hr, bs = c("cc","cc")), data = dfwideFLYW)
 plot(bF.2)
 gam.check(bF.2)
 dfwideFLYW$resAnom <- residuals(bF.2, type = "response")
 
-bF.3 <- bam(Difference ~ te(DoY,hr, resAnom, k = c(14,7,6), bs = c("cc","cc","tp")), data = dfwideFLYW)
+bF.3 <- bam(Difference ~ te(DoY,hr, resAnom, bs = c("cc","cc","tp")), data = dfwideFLYW)
 plot(bF.3)
 gam.check(bF.3)
 
@@ -737,11 +738,12 @@ ggarrange(heatFLYW.diff, heatDECK.diff,
           align = "hv"
           )
 
-ggarrange(heatFLYW, heatDECK, legendT,
-          heatFLYW.diff, heatDECK.diff +rremove("legend"), legendT.Diff,
-          ncol = 3, nrow = 2,
-          align = "h",
-          widths = c(2,2,0.8))
-################################################################################
+plo_DO <- ggarrange(heatFLYW, heatDECK, legendT,
+                    heatFLYW.diff, heatDECK.diff +rremove("legend"), legendT.Diff,
+                    ncol = 3, nrow = 2,
+                    align = "h",
+                    widths = c(2,2,0.8))
+
+ggsave(paste("Heatmap_DO",".png",sep = ""), path = here::here("figures","publication"), plo_DO, width = 1200, height = 900, dpi = 168, units = "px", bg="white")
 ```
 
