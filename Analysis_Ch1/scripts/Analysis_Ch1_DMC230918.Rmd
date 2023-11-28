@@ -292,7 +292,7 @@ df_DECK <- rbind.data.frame(data.frame(dateTime = list_DECK$TempC$Datetime,
                                         Station = "DECK"),
                              data.frame(dateTime = list_DECK$Depthm$Datetime,
                                         variable = "depth",
-                                        value = list_DECK$Depthm$Var,
+                                        value = as.numeric(list_DECK$Depthm$Var),
                                         Station = "DECK")
 )
 

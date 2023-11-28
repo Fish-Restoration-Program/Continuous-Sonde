@@ -87,7 +87,7 @@ load(here::here("working","VarQC_initial.RData"))
 
 #xVar <- c("TempC","DOmgL","SPC","ChlRFU","PCRFU","fDOMRFU","Turb")
 df_ranges <- data.frame(xVar = xVar,
-                        range_low = c(1,0,100,1,0),
+                        range_low = c(1,0,100,1,-0.5),
                         range_high = c(40,10,55000,100,10))
 
 list_all_QC1 <- list()
@@ -95,8 +95,8 @@ for(i in 1:length(xSite)){
   list_QC1 <- list()
   for(j in 1:length(xVar)){
     df_q1 <- list_all_qc[[i]][[j]]
-    df_q1$Flag_QC1 <- ifelse(df_q1$Var < df_ranges$range_low[j] |
-                               df_q1$Var > df_ranges$range_high[j],
+    df_q1$Flag_QC1 <- ifelse(as.numeric(df_q1$Var) < df_ranges$range_low[j] |
+                               as.numeric(df_q1$Var) > df_ranges$range_high[j],
                              "Y","N")
     #df_q1flagged <- df_q1[which(df_q1$Flag_QC1 == "Y"),]
     list_QC1[[j]] <- df_q1

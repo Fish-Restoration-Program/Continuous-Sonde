@@ -220,7 +220,7 @@ plo_deck.fit <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = SEfit, fill = SEfit)) 
 # Quarter-hourly
 Get tide position from depth for all locations
 ```{r}
-library(dplyr)
+#library(dplyr)
 #library(plyr)
 #library(VulnToolkit)
 #library(zoo)
@@ -374,7 +374,8 @@ dfwideAll.Final$HM <- dfwideAll.Final$hr + dfwideAll.Final$minute/60
 
 
 dfWide.DECK <- dfwideAll.Final[which(is.na(dfwideAll.Final$diff_TempC) == F &
-                                       is.na(dfwideAll.Final$tide_position2) == F),]
+                                       is.na(dfwideAll.Final$tide_position2) == F &
+                                       dfwideAll.Final$depth >= 0),]
 colnames(dfWide.DECK)[14] <- "Difference"
 #colnames(dfWide.DECK)[7] <- "tide_position2"
 dfWide.DECK$depth_tp <- NA
@@ -405,30 +406,32 @@ dfWide.DECK$predvalues <- dfWide.DECK$Difference
 dfWide.DECK
 
 
-bD.3 <- bam(Difference ~ te(DoY, HM, tide_position2, k = c(9,7,6), bs = c("cc","cc","cc")), data = dfWide.DECK)
+bD.3 <- bam(Difference ~ te(DoY, HM, tide_position2, k = c(24,10,10), bs = c("cc","cc","cc")), data = dfWide.DECK)
 vis.gam(bD.3,n.grid=50, theta=35, phi=32, zlab="", too.far=0.1) 
 plot(bD.3)
 gam.check(bD.3)
 acf(residuals.gam(bD.3), ylab="", xlab="", main="")
+dfTides <- data.frame(tide_position2 = c(0,0.25,0.5,0.75,1,-0.75,-0.5,-0.25),
+                      tide_label = c("High Slack","Early Ebb","Mid Ebb","Late Ebb","Low Slack","Early Flood","Mid Flood","Late Flood"))
 dfpred.D <- expand.grid(DoY = seq(1,365,1),
                         HM = seq(0,23.75,0.25),
-                        tide_position2 = seq(-0.9,0.9,0.3))#Depth_R = seq(0.2,1,0.4)
+                        tide_position2 = dfTides$tide_position2)#seq(-0.9,0.9,0.3))#Depth_R = seq(0.2,1,0.4)
 dfpred.D2 = predict(bD.3, newdata = dfpred.D, se.fit = TRUE)
 dfpred.D$predvalues = predict(bD.3, newdata = dfpred.D)
-dfpred.D$predvalues <- dfpred.D2[["fit"]][as.character(c(1:245280))]
-dfpred.D$SEfit <- dfpred.D2[["se.fit"]][as.character(c(1:245280))]
+dfpred.D$predvalues <- dfpred.D2[["fit"]][as.character(c(1:280320))]#245280))]
+dfpred.D$SEfit <- dfpred.D2[["se.fit"]][as.character(c(1:280320))]#245280))]
 dfpred.D$assessFit <- dfpred.D$SEfit/dfpred.D$predvalues
-dfpred.D$Depth_R <- factor(dfpred.D$tide_position2, levels = c(seq(-0.9,0.9,0.3)), labels = c("Early Flood","Mid Flood","Late Flood","High Slack","Early Ebb","Mid Ebb","Late Ebb"))#factor(dfpred.D$Depth_R, levels = c(0.2,0.6,1))
+dfpred.D$Depth_R <- factor(dfpred.D$tide_position2, levels = dfTides$tide_position2, labels = dfTides$tide_label)#levels = c(seq(-0.9,0.9,0.3)), labels = c("Early Flood","Mid Flood","Late Flood","High Slack","Early Ebb","Mid Ebb","Late Ebb"))#factor(dfpred.D$Depth_R, levels = c(0.2,0.6,1))
 dfpred.D$date <- as.Date(NA)
 dfpred.D$date<- as.Date(dfpred.D$DoY, origin = '2019-05-31')
 myPaletteContour <- colorRampPalette(rev(brewer.pal(6, "RdBu")))
 plo_deck <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = predvalues, fill = predvalues)) + 
   geom_tile() + 
-  geom_rug(data = dfWide.DECK[which(is.na(dfWide.DECK$Depth_R)==F),], mapping = aes(x = DoY, y = HM),sides="bl") +
+  #geom_rug(data = dfWide.DECK[which(is.na(dfWide.DECK$Depth_R)==F),], mapping = aes(x = DoY, y = HM),sides="bl") +
   geom_contour(binwidth = 1) + 
   geom_text_contour(rotate = FALSE, binwidth = 1) +
   scale_y_continuous(breaks = c(seq(0,24,8)))+
-  scale_fill_gradientn(colours = myPaletteContour(11),
+  scale_fill_gradientn(colours = myPaletteContour(8),
                        limits=c(range(dfpred.D$predvalues)),
                        name = "Difference in temperature (Restoration - Adj. Waterbody)")  +
   ylab("Hour")+
@@ -438,15 +441,15 @@ plo_deck <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = predvalues, fill = predval
   theme_classic2()+
   theme(legend.position = "top")
 plo_deck
-
-ggsave(paste("GAM_TempTide",".png",sep = ""), path = here::here("figures","publication"), plo_deck, width = 1200, height = 900, dpi = 168, units = "px")
+save(bD.3, file = here::here("working","Tide_24_10_10.rds"))
+ggsave(paste("GAM_TempTide_24_10_10",".png",sep = ""), path = here::here("figures","publication"), plo_deck, width = 1200, height = 900, dpi = 96, units = "px")
 
 plo_deck.fit <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = SEfit, fill = SEfit)) + 
   geom_tile() + 
-  geom_contour(binwidth = 0.025) + 
-  geom_text_contour(rotate = FALSE, binwidth = 0.025) +
+  geom_contour(binwidth = 0.05) + 
+  geom_text_contour(rotate = FALSE, binwidth = 0.05) +
   scale_y_continuous(breaks = c(seq(0,24,8)))+
-  scale_fill_gradientn(colours = myPaletteContour(11),
+  scale_fill_gradientn(colours = myPaletteContour(3),
                        name = "Standard Error of Difference in temperature (Restoration - Adj. Waterbody)")  +
   ylab("Hour")+
   xlab("Day of Year")+
@@ -454,6 +457,13 @@ plo_deck.fit <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = SEfit, fill = SEfit)) 
   facet_grid(.~ Depth_R) +
   theme_classic2()+
   theme(legend.position = "top")
+plo_deck.fit
+
+library(brms)
+fit2 <- brm(Difference ~ t2(DoY, HM),
+            data = dfWide.DECK, chains = 2)
+summary(fit2)
+plot(conditional_smooths(fit2), ask = FALSE)
 
 ```
 
