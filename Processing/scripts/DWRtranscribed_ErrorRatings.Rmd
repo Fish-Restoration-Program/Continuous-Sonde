@@ -1,0 +1,44 @@
+---
+title: "FRP_ContinuousWQ_SondeWorksheets"
+author: "DMC"
+date: "6/23/2023"
+output: html_document
+---
+
+The goal of this file is to import worksheets from Survey123 and make RData files to use in the Processing script
+
+First, we'll import the Exchange Worksheets and their crosswalk (these were generated using the first version of the CDFW Survey123 e-forms)
+```{r}
+rm(list = ls())
+
+# read in the crosswalk file for renaming columns of raw Survey123 export file (Must make sure version matches)
+df_Ratings <- rbind.data.frame(data.frame(readxl::read_xlsx(here::here("raw","DWR_ErrorTransferWorksheet_Kiana.xlsx"), sheet = "ARN")),
+                               data.frame(readxl::read_xlsx(here::here("raw","DWR_ErrorTransferWorksheet_Kiana.xlsx"), sheet = "BRD")),
+                               data.frame(readxl::read_xlsx(here::here("raw","DWR_ErrorTransferWorksheet_Kiana.xlsx"), sheet = "LYR")),
+                               data.frame(readxl::read_xlsx(here::here("raw","DWR_ErrorTransferWorksheet_Kiana.xlsx"), sheet = "TRC")),
+                               data.frame(readxl::read_xlsx(here::here("raw","DWR_ErrorTransferWorksheet_Kiana.xlsx"), sheet = "TRB_TRM")),
+                               data.frame(readxl::read_xlsx(here::here("raw","DWR_ErrorTransferWorksheet_Kiana.xlsx"), sheet = "WNG")),
+                               data.frame(readxl::read_xlsx(here::here("raw","DWR_ErrorTransferWorksheet_Kiana.xlsx"), sheet = "WNT"))
+                               )
+
+# create crosswalk for the different variable names to match pipeline's naming scheme
+cw_varX <- data.frame(varX = c("temp","pH","DO","sc","turb"), # pipeline's naming scheme
+                      Channel = c("Water Temp","pH","DO","SpC","Turbidity")) # DWR channel names
+
+## Merge with crosswalk to get varX naming scheme
+# First, check that merge didn't change length of data frame
+nrow(merge(df_Ratings, cw_varX, by = "Channel", all.x = TRUE)) == nrow(df_Ratings) # TRUE, so continue with merge
+df_Ratings.2 <- merge(df_Ratings, cw_varX, by = "Channel", all.x = TRUE)
+
+# Subset columns of interest and re-order
+DWR_Ratings <- df_Ratings.2[,c("varX","SondeID","DateRecovered","Rating")]
+# Rename columns to match pipeline's naming scheme
+colnames(DWR_Ratings) <- c("varX","sondeID","dateRecov","Rating_final")
+
+unique(DWR_Ratings$Rating_final)
+DWR_Ratings$Rating_final[which(DWR_Ratings$Rating_final %in% c("Max Limit","Max. Limit"))] <- "MaxLimit"
+
+save(DWR_Ratings, file = here::here("working","DWRtranscribed_Ratings.RData"))
+```
+
+The above ratings (transcribed from DWR error calculation worksheets in Excel) will be loaded into the chunk labeled '{r Apply quality scores}' in the script "ContinuousSonde_Processing.Rmd"

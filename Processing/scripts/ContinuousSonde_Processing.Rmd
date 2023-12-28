@@ -210,7 +210,7 @@ Trim datasets based on Start/Stop times of each deployment recorded in the Excha
 ```{r Primary Trim}
 rm(list = ls())
 
-load(here::here("working", "CDFW_Lists_Raw_Meta.RData"))
+load(here::here("working", "CDFW_DWR_Lists_Raw_Meta.RData"))
 load(here::here("working","CDFW_ExchangeTimes.RData"))
 
 # create a new list of trimmed data frames
@@ -305,21 +305,25 @@ names(list_all_excess2) <- names(list_all_trim1)
 save(list_all_excess2, list_all_trim2, file = here::here("working","RTD_Trim2.RData"))
 ```
 
-Now, we will bring in the sensor ratings and associate them with each dataset. Ratings were calculated in the 'ErrorCalculations.Rmd' script
-
+Now, we will bring in the sensor ratings and associate them with each dataset. Ratings were calculated in the 'ErrorCalculations.Rmd' script. On 231228, DMC added Error Ratings from DWR (see 'DWRtranscribed_ErrorRatings.Rmd') that were transcribed by KP from the Excel calculation sheets.
 ```{r Apply quality scores}
 rm(list = ls())
 '%ni%' = Negate('%in%')
 load(here::here("working","RTD_Trim2.RData"))
 load(here::here("working","SensorRatings230714.RData"))
+load(here::here("working","DWRtranscribed_Ratings.RData"))
 load(here::here("working","CDFW_VarNamesConversion.RData"))
 rm(list_all_excess2)
 colnames(list_all_trim2[[1]][[1]])
 df_VarNames$VarName
 list_ratings[[1]]$varX
-df_xNames <- data.frame(VarName = c("TempC","DOmgL","SPC","ChlRFU","PCRFU","fDOMRFU","Turb"),
-                        ErrorName = c("temp","DO", "sc","chl","pc","fdom","turb"),
-                        qcName = c("TempC_qcE","DOmgL_qcE","SPC_qcE","ChlRFU_qcE","PCRFU_qcE","fDOMRFU_qcE","Turb_qcE"))
+df_xNames <- data.frame(VarName = c("TempC","DOmgL","SPC","ChlRFU","PCRFU","fDOMRFU","Turb","pH"),
+                        ErrorName = c("temp","DO", "sc","chl","pc","fdom","turb","pH"),
+                        qcName = c("TempC_qcE","DOmgL_qcE","SPC_qcE","ChlRFU_qcE","PCRFU_qcE","fDOMRFU_qcE","Turb_qcE","pH_qcE"))
+
+allRatings.CDFWold <- allRatings
+allRatings <- rbind.data.frame(allRatings[,c("varX","sondeID","dateRecov","Rating_final")],
+                               DWR_Ratings)
 
 # create a new list of trimmed data frames
 list_all_qc <- list_all_trim2
@@ -360,16 +364,16 @@ for(i in 1:length(list_all_qc)){
 names(list_all_qc) <- names(list_all_trim2)
 
 library(plyr)
-summ_2022 <- ddply(allRatings[-which(allRatings$varX %in% c("pH","DO_sat","sc_InAir")),], c("varX","Rating_final"), summarise,
+summ_2022 <- ddply(allRatings[-which(allRatings$varX %in% c("DO_sat","sc_InAir")),], c("varX","Rating_final"), summarise,
                    v = sum(nObs, na.rm = TRUE))
-tot_2022 <- ddply(allRatings, c("sondeID","dateRecov"), summarise,
+tot_2022 <- ddply(allRatings[which(is.na(allRatings$nObs)==F),], c("sondeID","dateRecov"), summarise,
                    v = sum(nObs, na.rm = TRUE),
                    t = mean(nObs, na.rm = TRUE))
 allObs <- sum(tot_2022$t)
 
 summ_2022$propX <- summ_2022$v/allObs
 summ_2022$Rating_finalF <- factor(summ_2022$Rating_final, levels = c("Excellent","Good","Fair","Poor","MaxLimit","NA"))
-summ_2022$varX_F <- factor(summ_2022$varX, levels = c("temp","sc","DO","turb","chl","pc","fdom"))
+summ_2022$varX_F <- factor(summ_2022$varX, levels = c("temp","sc","DO","turb","chl","pc","fdom","pH"))
 
 library(ggplot2)
 plo_summ <- ggplot(summ_2022, aes(varX_F, propX)) + geom_bar(aes(fill = Rating_finalF), stat = "identity")
