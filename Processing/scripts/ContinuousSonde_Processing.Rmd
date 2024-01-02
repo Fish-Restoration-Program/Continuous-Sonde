@@ -35,6 +35,7 @@ path2_DECK_Breach <- here::here("raw","DECK", "Breach")
 path2_FLYW <- here::here("raw","FLYW")
 path2_TULE_Breach <- here::here("raw","TULE","FRP_DWR","TULE_Breach")
 path2_TULE_PondC <- here::here("raw","TULE","FRP_DWR","TULE_PondC")
+path2_TULE_Main <- here::here("raw","TULE","FRP_DWR","TULE_Main")
 path2_ARNO_Ext <- here::here("raw","ARNO","Exterior")
 path2_ARNO_Int <- here::here("raw","ARNO","Interior")
 path2_BRAD_Ext <- here::here("raw","BRAD","Exterior")
@@ -44,8 +45,8 @@ path2_WING <- here::here("raw","WING")
 path2_WINT <- here::here("raw","WINT")
 
 # Made a dataframe of the pathways
-pathnames <- data.frame(SiteName = c("FLYW","DECK_Pool","DECK_Breach","TULE_Breach","TULE_PondC","ARNO_Exterior","ARNO_Interior","BRAD_Exterior","BRAD_Interior","LOWE_EastInt","WING","WINT"), 
-                        pathname = c(path2_FLYW, path2_DECK_Pool, path2_DECK_Breach, path2_TULE_Breach, path2_TULE_PondC, path2_ARNO_Ext, path2_ARNO_Int, path2_BRAD_Ext, path2_BRAD_Int, path2_LOWE_EastInt, path2_WING, path2_WINT))
+pathnames <- data.frame(SiteName = c("FLYW","DECK_Pool","DECK_Breach","TULE_Breach","TULE_PondC", "TULE_Main","ARNO_Exterior","ARNO_Interior","BRAD_Exterior","BRAD_Interior","LOWE_EastInt","WING","WINT"), 
+                        pathname = c(path2_FLYW, path2_DECK_Pool, path2_DECK_Breach, path2_TULE_Breach, path2_TULE_PondC, path2_TULE_Main, path2_ARNO_Ext, path2_ARNO_Int, path2_BRAD_Ext, path2_BRAD_Int, path2_LOWE_EastInt, path2_WING, path2_WINT))
 
 
 # For loop nested with multiple for loops to: 
@@ -243,7 +244,7 @@ names(list_all_excess) <- names(list_all_trim1)
 save(list_all_trim1, file = here::here("working","RTD_Trim1.RData"))
 ```
 
-Trim the edges of the dataset based on whether the sonde has observations indicating it was out of the water.
+Trim the edges of the dataset based on whether the sonde has observations indicating it was out of the water. There may be values inside of these outer edges of the data that indicate the sonde was out of the water. Those will be dealt with in the secondary QC scoring.
 
 ```{r Secondary Trim}
 rm(list = ls())
@@ -326,9 +327,10 @@ allRatings <- rbind.data.frame(allRatings[,c("varX","sondeID","dateRecov","Ratin
                                DWR_Ratings)
 
 # create a new list of trimmed data frames
-list_all_qc <- list_all_trim2
-allRatings$nObs <- NA
-#list_all_excess <- list() # create a list of removed rows from each data frame to review after process
+list_all_qc <- list_all_trim2 # create a list of to store new data frames that have quality scores appended
+allRatings$nObs <- NA # create a variable that stores the number of observations in a particular data frame
+
+# This for loop picks out each data frame and appends new columns to store the quality scores
 for(i in 1:length(list_all_qc)){
   list_qc <- list() # temporary list
   for(j in 1:length(list_all_qc[[i]])){
@@ -342,7 +344,8 @@ for(i in 1:length(list_all_qc)){
                                            ChlRFU_qcE = NA,
                                            PCRFU_qcE = NA,
                                            fDOMRFU_qcE = NA,
-                                           Turb_qcE = NA))
+                                           Turb_qcE = NA,
+                                           pH_qcE = NA))
     # fill in rating columns of deployment dataframe with the Final Rating
     for(a in 1:ncol(df_temp)){
       for(b in 1:nrow(df_xNames)){
@@ -355,14 +358,19 @@ for(i in 1:length(list_all_qc)){
         allRatings$nObs[which(allRatings$sondeID == rtd_sondeID & allRatings$dateRecov == rtd_dateRecov)] <- nrow(df_temp)
       }
     }
+    # store the temporary data frame in the temorary list
     list_qc[[j]] <- df_temp
   }
+  # name the objects in the temporary list
   names(list_qc) <- names(list_all_trim2[[i]])
+  # store the temporary list in the overarching list
   list_all_qc[[i]] <- list_qc
   rm(list_qc, rtd_sondeID, rtd_dateDeploy, rtd_dateRecov)
 }
+# name the objects in the overarching list
 names(list_all_qc) <- names(list_all_trim2)
 
+### summarise the data for each variable based on Quality Score and then plot them to see proportion of data that is satisfactory
 library(plyr)
 summ_2022 <- ddply(allRatings[-which(allRatings$varX %in% c("DO_sat","sc_InAir")),], c("varX","Rating_final"), summarise,
                    v = sum(nObs, na.rm = TRUE))
