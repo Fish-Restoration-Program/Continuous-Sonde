@@ -21,7 +21,7 @@ df_Exch <- data.frame(read.csv(here::here("raw","Survey123", "Exchanges230630_Ex
 colnames(df_Exch) <- cw_Exch$Var_Name
 
 # make a date variable that is in local timezone
-df_Exch$date2 <- as.Date(format(lubridate::mdy_hms(df_Exch$exchange_date), tz = "America/Los_Angeles"))
+df_Exch$date2 <- as.Date(format(lubridate::mdy_hms(df_Exch$exchange_date), tz = "UTC"))
 
 
 ### make datetime variable for the individual measurements
@@ -34,7 +34,7 @@ df_ExchTimes3 <- df_ExchTimes
 df_ExchTimes3[,] <- NA
 # populate blank version of subset with newly created datetime objects
 for(i in 1:ncol(df_ExchTimes3)){
-  df_ExchTimes3[,i] = as.POSIXct(strptime(paste(as.character(df_ExchTimes2[,"date2"]),df_ExchTimes[,i],sep = " "), format = "%Y-%m-%d %H:%M"), tz = "America/Los_Angeles")
+  df_ExchTimes3[,i] = as.POSIXct(strptime(paste(as.character(df_ExchTimes2[,"date2"]),df_ExchTimes[,i],sep = " "), format = "%Y-%m-%d %H:%M"), tz = "UTC")
 }
 # populate the original exchange dataset with the newly created datetime objects
 for(i in 1:ncol(df_ExchTimes3)){
@@ -80,7 +80,7 @@ df_Exch$date2[which(df_Exch$station == "FLYW_Bifurcation" & df_Exch$recovered_so
 
 #testTime <- data.frame(origTime = df_Exch$exchange_date, newTime = NA)
 #testTime$newTime <- lubridate::mdy_hms(testTime$origTime)
-#testTime$pacTime <- format(testTime$newTime, tz = "America/Los_Angeles")
+#testTime$pacTime <- format(testTime$newTime, tz = "UTC")
 #testTime$pacDate <- as.Date(testTime$pacTime)
 
 # save the exchange times for use in 'ContinuousSonde_Processing.Rmd'
@@ -98,7 +98,7 @@ df_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibration230612
 colnames(df_Calib) <- cw_Calib$Var_Name
 
 # make a datetime object for the deployment start/stop time
-df_Calib$dts_startstop <- format(lubridate::mdy_hms(df_Calib$deployment_startstop_time), tz = "America/Los_Angeles")
+df_Calib$dts_startstop <- format(lubridate::mdy_hms(df_Calib$deployment_startstop_time), tz = "UTC")
 
 # make 2 separate dataframes (1 with just the data we are interested and 1 with the metadata)
 df_CalibData <- df_Calib[,c("GlobalID","sonde_id","sonde_other","discrete_or_continuous","pre_post","dts_startstop",colnames(df_Calib)[53:95])]

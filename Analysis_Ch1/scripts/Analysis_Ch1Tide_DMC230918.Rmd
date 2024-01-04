@@ -1,0 +1,609 @@
+---
+title: "Analyses for Ch1 of Big Report"
+author: "DMC"
+date: "2023-09-18"
+---
+
+Here is the script for performing GAM with tide.
+
+# Hourly
+
+Get tide position from depth for all locations
+```{r}
+library(dplyr)
+#library(plyr)
+#library(VulnToolkit)
+#library(zoo)
+#library(data.table)
+
+rm(list = ls())
+
+load(here::here("working","MergedHourly_4Tide.RData"))
+'%ni%' <- Negate('%in%')
+
+
+df_DECK.m$dts2 <- df_DECK.m$dateTime
+df_DECK.m <- df_DECK.m[order(df_DECK.m$dts2),]
+df_DECK.m <- df_DECK.m[which(is.na(df_DECK.m$depth)==F),]
+
+list_All <- list(df_DECK.m)
+
+detach("package:dplyr", unload=TRUE)
+library(plyr)
+library(zoo)
+library(data.table)
+
+list_All.2 <- list()
+for(i in 1:length(list_All)){
+  workingDF.1 <- data.frame(list_All[[i]])
+  workingDF.1$deltaTime <- as.numeric(workingDF.1$dts2 - data.table::shift(workingDF.1$dts2, fill = data.table::first(workingDF.1$dts2)))/60
+  workingDF.1$deltaTime[1] <- 60
+  workingDF.1$is15 <- ifelse(workingDF.1$deltaTime == 60, "Y","N")
+  List_Split <- split(workingDF.1, cumsum(c(TRUE, diff(workingDF.1$deltaTime > 360) != 0)))
+  List_Tides <- list()
+  for(j in 1:length(List_Split)){
+    workingDF.2 <- List_Split[j][[1]]
+    rownames(workingDF.2) <- NULL
+    workingDF.2$joinBy <- rownames(workingDF.2)
+    if(nrow(workingDF.2) > 20){
+      x <- c(rep(-99999,5),workingDF.2$depth,rep(99999,5)) #workingDF.2$depth # this line pads the input vector so that the function returns a more complete output vector
+      xz <- as.zoo(x)
+      dMax <- rollapply(xz, 10, function(x) which.max(x)==4)
+      dMin <- rollapply(xz, 10, function(x) which.min(x)==4)
+      dd <- data.frame(dMax,dMin)
+      dd$joinBy <- as.numeric(rownames(dd)) -6 # this lines up the TRUE/FALSE with the appropriate key
+      dd.2 <- merge(workingDF.2, dd, by = "joinBy", all.x = TRUE)
+      dd.2$tide <- ifelse(dd.2$dMax == TRUE, "H",NA)
+      dd.2$tide <- ifelse(dd.2$dMin == TRUE, "L", dd.2$tide)
+      if(is.data.frame(dd)==TRUE){
+        List_Tides[[j]] <- dd.2
+      }
+    } else{
+      List_Tides[[j]] <- data.frame()
+      }
+    workingDF.2 <- NULL
+    dd.2 <- NULL
+  }
+  df_Tides <- do.call(rbind.data.frame, List_Tides)
+  #colnames(df_Tides)[2] <- "dts2"
+  df_Tides$Station <- unique(workingDF.1$Station)
+  list_All.2[[i]] <- df_Tides
+  df_Tides <- NULL
+  workingDF.1 <- NULL
+}
+
+list_All.3 <- list()
+for(i in 1:length(list_All.2)){
+  workingDF.1 <- data.frame(list_All[[i]])
+  workingDF.1$justDate <- as.Date(workingDF.1$dts2)
+  focusDate <- unique(workingDF.1$justDate)
+  workingDF.1$dts3 <- lubridate::floor_date(workingDF.1$dts2, "1 hour")
+  dts3 <- seq(lubridate::ymd_hms(workingDF.1$dts3[2],tz = "UTC"),lubridate::ymd_hms(workingDF.1$dts3[length(workingDF.1$dts3)],tz = "UTC"), by = '1 hour')
+  df_Tides <- list_All.2[[i]]
+  #df_Tides$tide[which(df_Tides$level < 0.2)]
+  df_Tides$dts3 <- lubridate::floor_date(df_Tides$dts2, "1 hour")
+  df_Tides.Long <- data.frame(dts3)
+  df_Tides.Long$justDate <- as.Date(df_Tides.Long$dts3)
+  df_Tides.Long <- df_Tides.Long[which(df_Tides.Long$justDate %in% focusDate),]
+  df_Tides.Long.2 <- merge(df_Tides.Long, df_Tides[,c("dts3","tide")], by = c("dts3"), all.x = TRUE)
+  df_Tides.Long.3 <- merge(df_Tides.Long.2, workingDF.1[,c("dts2","dts3","depth")], by = c("dts3"), all.x = TRUE)
+  df_Tides.Long.3$tide_position <- ifelse(df_Tides.Long.3$tide == "H",0,NA)
+  df_Tides.Long.3$tide_position[which(df_Tides.Long.3$tide == "L")] <- 1
+  df_Tides.Long.3$isValue <- is.na(df_Tides.Long.3$tide_position)
+  df_Tides.Long.3$incrementsLength <- rowid(rleid(df_Tides.Long.3$isValue))*df_Tides.Long.3$isValue
+  df_Tides.Long.3$tide_position2 <- df_Tides.Long.3$tide_position
+  df_Tides.Long.3$tide[which(is.na(df_Tides.Long.3$tide)==TRUE)] <- "None"
+  for(j in 1:nrow(df_Tides.Long.3)){
+    if(df_Tides.Long.3$tide[j] == "H"){
+      if(df_Tides.Long.3$incrementsLength[j-1] <= 26 & df_Tides.Long.3$incrementsLength[j-1] >= 2){
+        df_Tides.Long.3$tide_position2[(j- df_Tides.Long.3$incrementsLength[j-1]):(j - 1)] <-
+          seq(-1,0, length.out = df_Tides.Long.3$incrementsLength[j-1]+2)[2:((df_Tides.Long.3$incrementsLength[j-1])+1)]
+        }
+      #df_Tides.Long.3$tide_position2[(j- df_Tides.Long.3$incrementsLength[j-1]):(j - 1)] <- 
+      #  try(seq(-1,0, length.out = df_Tides.Long.3$incrementsLength[j-1]+2)[2:((df_Tides.Long.3$incrementsLength[j-1])+1)])
+      #}
+    }
+    if(df_Tides.Long.3$tide[j] == "L"){
+      if(df_Tides.Long.3$incrementsLength[j-1] <= 26 & df_Tides.Long.3$incrementsLength[j-1] >= 2){
+        df_Tides.Long.3$tide_position2[(j- df_Tides.Long.3$incrementsLength[j-1]):(j - 1)] <- 
+          seq(0,1, length.out = df_Tides.Long.3$incrementsLength[j-1]+2)[2:((df_Tides.Long.3$incrementsLength[j-1])+1)]
+        }
+      #df_Tides.Long.3$tide_position2[(j- df_Tides.Long.3$incrementsLength[j-1]):(j - 1)] <- 
+      #  try(seq(0,1, length.out = df_Tides.Long.3$incrementsLength[j-1]+2)[2:((df_Tides.Long.3$incrementsLength[j-1])+1)])
+      #}
+    }
+    }
+  list_All.3[[i]] <- df_Tides.Long.3 # After loop has been run, need to execute this one line to add Flyway to list_All.3
+}
+
+list_All.4 <- list()
+for(i in 1:length(list_All)){
+  workingDF.1 <- list_All[[i]]
+  workingDF.2 <- list_All.3[[i]]
+  workingDF.3 <- merge(workingDF.1, workingDF.2[,c("dts2","tide","tide_position2")], by = c("dts2"), all.x = TRUE)
+  list_All.4[[i]] <- workingDF.3
+}
+
+plo_test <- ggplot(list_All.4[[1]][which(is.na(list_All.4[[1]]$tide_position2)==TRUE),], aes(dts2, depth)) + geom_point()
+
+
+
+
+depth_final.2 <- do.call(rbind.data.frame, list_All.4)
+rm(df_Tides,df_Tides.Long,df_Tides.Long.2,list_All,list_All.2,list_All.3,list_All.4, workingDF.1,workingDF.2,workingDF.3)
+
+save(depth_final.2, file = here::here("working", "TidesHourly_4GAM.RData"))
+```
+
+For Temperature (hourly) - now with tide position from preceding chunk
+```{r}
+library(plyr)
+library(ggplot2)
+library(scales)
+library(gridExtra)
+library(metR)
+library(ggpubr)
+library(RColorBrewer)
+library(mgcv)
+
+rm(list = ls())
+load(here::here("working", "TidesHourly_4GAM.RData"))
+#load("AllLTM4Analysis_TidePosition_230214.RData")
+'%ni%' <- Negate('%in%')
+
+dfwideAll.Final <- depth_final.2
+
+dfwideAll.Final$date2 <- lubridate::date(dfwideAll.Final$dts2)
+dfwideAll.Final$year2 <- lubridate::year(dfwideAll.Final$dts2)
+dfwideAll.Final$DoY <- lubridate::yday(dfwideAll.Final$dts2)
+dfwideAll.Final$hr <- lubridate::hour(dfwideAll.Final$dts2)
+dfwideAll.Final$minute <- lubridate::minute(dfwideAll.Final$dts2)
+dfwideAll.Final$HM <- dfwideAll.Final$hr + dfwideAll.Final$minute/60
+
+
+
+
+dfWide.DECK <- dfwideAll.Final[which(is.na(dfwideAll.Final$diff_TempC) == F &
+                                       is.na(dfwideAll.Final$tide_position2) == F),]
+colnames(dfWide.DECK)[14] <- "Difference"
+#colnames(dfWide.DECK)[7] <- "tide_position2"
+
+bD.3 <- bam(Difference ~ te(DoY, hr, tide_position2, k = c(14,7,6), bs = c("cc","cc","cc")), data = dfWide.DECK)
+vis.gam(bD.3,n.grid=50, theta=35, phi=32, zlab="", too.far=0.1) 
+plot(bD.3)
+gam.check(bD.3)
+acf(residuals.gam(bD.3), ylab="", xlab="", main="")
+dfpred.D <- expand.grid(DoY = seq(1,365,1),
+                        hr = seq(0,23,1),
+                        tide_position2 = seq(-0.9,0.9,0.3))#Depth_R = seq(0.2,1,0.4)
+dfpred.D2 = predict(bD.3, newdata = dfpred.D, se.fit = TRUE)
+dfpred.D$predvalues = predict(bD.3, newdata = dfpred.D)
+dfpred.D$predvalues <- dfpred.D2[["fit"]][as.character(c(1:61320))]
+dfpred.D$SEfit <- dfpred.D2[["se.fit"]][as.character(c(1:61320))]
+dfpred.D$assessFit <- dfpred.D$SEfit/dfpred.D$predvalues
+dfpred.D$Depth_R <- factor(dfpred.D$tide_position2, levels = c(seq(-0.9,0.9,0.3)), labels = c("Early Flood","Mid Flood","Late Flood","High Slack","Early Ebb","Mid Ebb","Late Ebb"))#factor(dfpred.D$Depth_R, levels = c(0.2,0.6,1))
+dfpred.D$date <- as.Date(NA)
+dfpred.D$date<- as.Date(dfpred.D$DoY, origin = '2019-05-31')
+myPaletteContour <- colorRampPalette(rev(brewer.pal(6, "RdBu")))
+plo_deck <- ggplot(dfpred.D, aes(x = DoY, y = hr, z = predvalues, fill = predvalues)) + 
+  geom_tile() + 
+  geom_contour(binwidth = 1) + 
+  geom_text_contour(rotate = FALSE, binwidth = 1) +
+  scale_y_continuous(breaks = c(seq(0,24,8)))+
+  scale_fill_gradientn(colours = myPaletteContour(11),
+                       name = "Difference in temperature (Restoration - Adj. Waterbody)")  +
+  ylab("Hour")+
+  xlab("Day of Year")+
+  #guides(fill=guide_legend(title="Difference in temperature (Restoration - Adj. Waterbody)")) +
+  facet_grid(.~ Depth_R) +
+  theme_classic2()+
+  theme(legend.position = "top")
+
+plo_deck.fit <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = SEfit, fill = SEfit)) + 
+  geom_tile() + 
+  geom_contour(binwidth = 0.025) + 
+  geom_text_contour(rotate = FALSE, binwidth = 0.025) +
+  scale_y_continuous(breaks = c(seq(0,24,8)))+
+  scale_fill_gradientn(colours = myPaletteContour(11),
+                       name = "Standard Error of Difference in temperature (Restoration - Adj. Waterbody)")  +
+  ylab("Hour")+
+  xlab("Day of Year")+
+  #guides(fill=guide_legend(title="Difference in temperature (Restoration - Adj. Waterbody)")) +
+  facet_grid(.~ Depth_R) +
+  theme_classic2()+
+  theme(legend.position = "top")
+
+
+```
+
+
+# Quarter-hourly
+Get tide position from depth for all locations
+```{r}
+#library(dplyr)
+#library(plyr)
+#library(VulnToolkit)
+#library(zoo)
+#library(data.table)
+
+rm(list = ls())
+
+load(here::here("working","Merged_4Tide.RData"))
+'%ni%' <- Negate('%in%')
+
+
+df_DECK.m$dts2 <- df_DECK.m$dateTime
+df_DECK.m <- df_DECK.m[order(df_DECK.m$dts2),]
+df_DECK.m <- df_DECK.m[which(is.na(df_DECK.m$depth)==F),]
+
+list_All <- list(df_DECK.m)
+
+detach("package:dplyr", unload=TRUE)
+library(plyr)
+library(zoo)
+library(data.table)
+
+list_All.2 <- list()
+for(i in 1:length(list_All)){
+  workingDF.1 <- data.frame(list_All[[i]])
+  workingDF.1$deltaTime <- as.numeric(workingDF.1$dts2 - data.table::shift(workingDF.1$dts2, fill = data.table::first(workingDF.1$dts2)))/60
+  workingDF.1$deltaTime[1] <- 15
+  workingDF.1$is15 <- ifelse(workingDF.1$deltaTime == 15, "Y","N")
+  List_Split <- split(workingDF.1, cumsum(c(TRUE, diff(workingDF.1$deltaTime > 360) != 0)))
+  List_Tides <- list()
+  for(j in 1:length(List_Split)){
+    workingDF.2 <- List_Split[j][[1]]
+    rownames(workingDF.2) <- NULL
+    workingDF.2$joinBy <- rownames(workingDF.2)
+    if(nrow(workingDF.2) > 20){
+      x <- c(rep(-99999,13),workingDF.2$depth,rep(99999,13)) #workingDF.2$depth # this line pads the input vector so that the function returns a more complete output vector
+      xz <- as.zoo(x)
+      dMax <- rollapply(xz, 26, function(x) which.max(x)==10)
+      dMin <- rollapply(xz, 26, function(x) which.min(x)==10)
+      dd <- data.frame(dMax,dMin)
+      dd$joinBy <- as.numeric(rownames(dd))-16 # this lines up the TRUE/FALSE with the appropriate key
+      dd.2 <- merge(workingDF.2, dd, by = "joinBy", all.x = TRUE)
+      dd.2$tide <- ifelse(dd.2$dMax == TRUE, "H",NA)
+      dd.2$tide <- ifelse(dd.2$dMin == TRUE, "L", dd.2$tide)
+      if(is.data.frame(dd)==TRUE){
+        List_Tides[[j]] <- dd.2
+      }
+    } else{
+      List_Tides[[j]] <- data.frame()
+      }
+    workingDF.2 <- NULL
+    dd.2 <- NULL
+  }
+  df_Tides <- do.call(rbind.data.frame, List_Tides)
+  #colnames(df_Tides)[2] <- "dts2"
+  df_Tides$Station <- unique(workingDF.1$Station)
+  list_All.2[[i]] <- df_Tides
+  df_Tides <- NULL
+  workingDF.1 <- NULL
+}
+
+list_All.3 <- list()
+for(i in 1:length(list_All.2)){
+  workingDF.1 <- data.frame(list_All[[i]])
+  workingDF.1$justDate <- as.Date(workingDF.1$dts2)
+  focusDate <- unique(workingDF.1$justDate)
+  workingDF.1$dts3 <- lubridate::floor_date(workingDF.1$dts2, "15 minutes")
+  dts3 <- seq(lubridate::ymd_hms(workingDF.1$dts3[2],tz = "UTC"),lubridate::ymd_hms(workingDF.1$dts3[length(workingDF.1$dts3)],tz = "UTC"), by = '15 mins')
+  df_Tides <- list_All.2[[i]]
+  #df_Tides$tide[which(df_Tides$level < 0.2)]
+  df_Tides$dts3 <- lubridate::floor_date(df_Tides$dts2, "15 minutes")
+  df_Tides.Long <- data.frame(dts3)
+  df_Tides.Long$justDate <- as.Date(df_Tides.Long$dts3)
+  df_Tides.Long <- df_Tides.Long[which(df_Tides.Long$justDate %in% focusDate),]
+  df_Tides.Long.2 <- merge(df_Tides.Long, df_Tides[,c("dts3","tide")], by = c("dts3"), all.x = TRUE)
+  df_Tides.Long.3 <- merge(df_Tides.Long.2, workingDF.1[,c("dts2","dts3","depth")], by = c("dts3"), all.x = TRUE)
+  df_Tides.Long.3$tide_position <- ifelse(df_Tides.Long.3$tide == "H",0,NA)
+  df_Tides.Long.3$tide_position[which(df_Tides.Long.3$tide == "L")] <- 1
+  df_Tides.Long.3$isValue <- is.na(df_Tides.Long.3$tide_position)
+  df_Tides.Long.3$incrementsLength <- rowid(rleid(df_Tides.Long.3$isValue))*df_Tides.Long.3$isValue
+  df_Tides.Long.3$tide_position2 <- df_Tides.Long.3$tide_position
+  df_Tides.Long.3$tide[which(is.na(df_Tides.Long.3$tide)==TRUE)] <- "None"
+  for(j in 1:nrow(df_Tides.Long.3)){
+    if(df_Tides.Long.3$tide[j] == "H"){
+      if(df_Tides.Long.3$incrementsLength[j-1] <= 100 & df_Tides.Long.3$incrementsLength[j-1] >= 10){
+        df_Tides.Long.3$tide_position2[(j- df_Tides.Long.3$incrementsLength[j-1]):(j - 1)] <-
+          seq(-1,0, length.out = df_Tides.Long.3$incrementsLength[j-1]+2)[2:((df_Tides.Long.3$incrementsLength[j-1])+1)]
+        }
+      #df_Tides.Long.3$tide_position2[(j- df_Tides.Long.3$incrementsLength[j-1]):(j - 1)] <- 
+      #  try(seq(-1,0, length.out = df_Tides.Long.3$incrementsLength[j-1]+2)[2:((df_Tides.Long.3$incrementsLength[j-1])+1)])
+      #}
+    }
+    if(df_Tides.Long.3$tide[j] == "L"){
+      if(df_Tides.Long.3$incrementsLength[j-1] <= 100 & df_Tides.Long.3$incrementsLength[j-1] >= 10){
+        df_Tides.Long.3$tide_position2[(j- df_Tides.Long.3$incrementsLength[j-1]):(j - 1)] <- 
+          seq(0,1, length.out = df_Tides.Long.3$incrementsLength[j-1]+2)[2:((df_Tides.Long.3$incrementsLength[j-1])+1)]
+        }
+      #df_Tides.Long.3$tide_position2[(j- df_Tides.Long.3$incrementsLength[j-1]):(j - 1)] <- 
+      #  try(seq(0,1, length.out = df_Tides.Long.3$incrementsLength[j-1]+2)[2:((df_Tides.Long.3$incrementsLength[j-1])+1)])
+      #}
+    }
+    }
+  list_All.3[[i]] <- df_Tides.Long.3 # After loop has been run, need to execute this one line to add Flyway to list_All.3
+}
+
+list_All.4 <- list()
+for(i in 1:length(list_All)){
+  workingDF.1 <- list_All[[i]]
+  workingDF.2 <- list_All.3[[i]]
+  workingDF.3 <- merge(workingDF.1, workingDF.2[,c("dts2","tide","tide_position2")], by = c("dts2"), all.x = TRUE)
+  list_All.4[[i]] <- workingDF.3
+}
+
+plo_test <- ggplot(list_All.4[[1]][which(is.na(list_All.4[[1]]$tide_position2)==TRUE),], aes(dts2, depth)) + geom_point()
+
+
+
+
+depth_final.2 <- do.call(rbind.data.frame, list_All.4)
+rm(df_Tides,df_Tides.Long,df_Tides.Long.2,list_All,list_All.2,list_All.3,list_All.4, workingDF.1,workingDF.2,workingDF.3)
+
+save(depth_final.2, file = here::here("working", "Tides_4GAM.RData"))
+```
+
+For Temperature (quarter-hourly) - now with tide position from preceding chunk
+```{r}
+library(plyr)
+library(ggplot2)
+library(scales)
+library(gridExtra)
+library(metR)
+library(ggpubr)
+library(RColorBrewer)
+library(mgcv)
+
+rm(list = ls())
+load(here::here("working", "Tides_4GAM.RData"))
+#load("AllLTM4Analysis_TidePosition_230214.RData")
+'%ni%' <- Negate('%in%')
+
+dfwideAll.Final <- depth_final.2
+
+dfwideAll.Final$date2 <- lubridate::date(dfwideAll.Final$dts2)
+dfwideAll.Final$year2 <- lubridate::year(dfwideAll.Final$dts2)
+dfwideAll.Final$DoY <- lubridate::yday(dfwideAll.Final$dts2)
+dfwideAll.Final$hr <- lubridate::hour(dfwideAll.Final$dts2)
+dfwideAll.Final$minute <- lubridate::minute(dfwideAll.Final$dts2)
+dfwideAll.Final$HM <- dfwideAll.Final$hr + dfwideAll.Final$minute/60
+
+
+
+
+dfWide.DECK <- dfwideAll.Final[which(is.na(dfwideAll.Final$diff_TempC) == F &
+                                       is.na(dfwideAll.Final$tide_position2) == F &
+                                       dfwideAll.Final$depth >= 0),]
+colnames(dfWide.DECK)[14] <- "Difference"
+#colnames(dfWide.DECK)[7] <- "tide_position2"
+dfWide.DECK$depth_tp <- NA
+dfWide.DECK$depth_tp <- ifelse(dfWide.DECK$tide_position2 >= -.95 & dfWide.DECK$tide_position2 < -0.85,
+                               -0.9,
+                               dfWide.DECK$depth_tp)
+dfWide.DECK$depth_tp <- ifelse(dfWide.DECK$tide_position2 >= -0.65 & dfWide.DECK$tide_position2 < -0.55,
+                               -0.6,
+                               dfWide.DECK$depth_tp)
+dfWide.DECK$depth_tp <- ifelse(dfWide.DECK$tide_position2 >= -0.35 & dfWide.DECK$tide_position2 < -0.25,
+                               -0.3,
+                               dfWide.DECK$depth_tp)
+dfWide.DECK$depth_tp <- ifelse(dfWide.DECK$tide_position2 >= -0.05 & dfWide.DECK$tide_position2 < 0.05,
+                               0,
+                               dfWide.DECK$depth_tp)
+dfWide.DECK$depth_tp <- ifelse(dfWide.DECK$tide_position2 >= 0.25 & dfWide.DECK$tide_position2 < 0.35,
+                               0.3,
+                               dfWide.DECK$depth_tp)
+dfWide.DECK$depth_tp <- ifelse(dfWide.DECK$tide_position2 >= 0.55 & dfWide.DECK$tide_position2 < 0.65,
+                               0.6,
+                               dfWide.DECK$depth_tp)
+dfWide.DECK$depth_tp <- ifelse(dfWide.DECK$tide_position2 >= 0.85 & dfWide.DECK$tide_position2 <= .95,
+                               0.9,
+                               dfWide.DECK$depth_tp)
+dfWide.DECK$Depth_R <- factor(dfWide.DECK$depth_tp, levels = c(-0.9,-0.6,-0.3,0,0.3,0.6,0.9), labels = c("Early Flood","Mid Flood","Late Flood","High Slack","Early Ebb","Mid Ebb","Late Ebb"))
+dfWide.DECK$predvalues <- dfWide.DECK$Difference
+
+dfWide.DECK
+
+
+bD.3 <- bam(Difference ~ te(DoY, HM, tide_position2, k = c(24,10,10), bs = c("cc","cc","cc")), data = dfWide.DECK)
+vis.gam(bD.3,n.grid=50, theta=35, phi=32, zlab="", too.far=0.1) 
+plot(bD.3)
+gam.check(bD.3)
+acf(residuals.gam(bD.3), ylab="", xlab="", main="")
+dfTides <- data.frame(tide_position2 = c(0,0.25,0.5,0.75,1,-0.75,-0.5,-0.25),
+                      tide_label = c("High Slack","Early Ebb","Mid Ebb","Late Ebb","Low Slack","Early Flood","Mid Flood","Late Flood"))
+dfpred.D <- expand.grid(DoY = seq(1,365,1),
+                        HM = seq(0,23.75,0.25),
+                        tide_position2 = dfTides$tide_position2)#seq(-0.9,0.9,0.3))#Depth_R = seq(0.2,1,0.4)
+dfpred.D2 = predict(bD.3, newdata = dfpred.D, se.fit = TRUE)
+dfpred.D$predvalues = predict(bD.3, newdata = dfpred.D)
+dfpred.D$predvalues <- dfpred.D2[["fit"]][as.character(c(1:280320))]#245280))]
+dfpred.D$SEfit <- dfpred.D2[["se.fit"]][as.character(c(1:280320))]#245280))]
+dfpred.D$assessFit <- dfpred.D$SEfit/dfpred.D$predvalues
+dfpred.D$Depth_R <- factor(dfpred.D$tide_position2, levels = dfTides$tide_position2, labels = dfTides$tide_label)#levels = c(seq(-0.9,0.9,0.3)), labels = c("Early Flood","Mid Flood","Late Flood","High Slack","Early Ebb","Mid Ebb","Late Ebb"))#factor(dfpred.D$Depth_R, levels = c(0.2,0.6,1))
+dfpred.D$date <- as.Date(NA)
+dfpred.D$date<- as.Date(dfpred.D$DoY, origin = '2019-05-31')
+myPaletteContour <- colorRampPalette(rev(brewer.pal(6, "RdBu")))
+plo_deck <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = predvalues, fill = predvalues)) + 
+  geom_tile() + 
+  #geom_rug(data = dfWide.DECK[which(is.na(dfWide.DECK$Depth_R)==F),], mapping = aes(x = DoY, y = HM),sides="bl") +
+  geom_contour(binwidth = 1) + 
+  geom_text_contour(rotate = FALSE, binwidth = 1) +
+  scale_y_continuous(breaks = c(seq(0,24,8)))+
+  scale_fill_gradientn(colours = myPaletteContour(8),
+                       limits=c(range(dfpred.D$predvalues)),
+                       name = "Difference in temperature (Restoration - Adj. Waterbody)")  +
+  ylab("Hour")+
+  xlab("Day of Year")+
+  #guides(fill=guide_legend(title="Difference in temperature (Restoration - Adj. Waterbody)")) +
+  facet_grid(.~ Depth_R) +
+  theme_classic2()+
+  theme(legend.position = "top")
+plo_deck
+save(bD.3, file = here::here("working","Tide_24_10_10.rds"))
+ggsave(paste("GAM_TempTide_24_10_10",".png",sep = ""), path = here::here("figures","publication"), plo_deck, width = 1200, height = 900, dpi = 96, units = "px")
+
+plo_deck.fit <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = SEfit, fill = SEfit)) + 
+  geom_tile() + 
+  geom_contour(binwidth = 0.05) + 
+  geom_text_contour(rotate = FALSE, binwidth = 0.05) +
+  scale_y_continuous(breaks = c(seq(0,24,8)))+
+  scale_fill_gradientn(colours = myPaletteContour(3),
+                       name = "Standard Error of Difference in temperature (Restoration - Adj. Waterbody)")  +
+  ylab("Hour")+
+  xlab("Day of Year")+
+  #guides(fill=guide_legend(title="Difference in temperature (Restoration - Adj. Waterbody)")) +
+  facet_grid(.~ Depth_R) +
+  theme_classic2()+
+  theme(legend.position = "top")
+plo_deck.fit
+
+library(brms)
+fit2 <- brm(Difference ~ t2(DoY, HM),
+            data = dfWide.DECK, chains = 2)
+summary(fit2)
+plot(conditional_smooths(fit2), ask = FALSE)
+
+```
+
+# Model k-selection
+For Temperature (quarter-hourly) - now with tide position from preceding chunk
+```{r}
+library(plyr)
+library(ggplot2)
+library(scales)
+library(gridExtra)
+library(metR)
+library(ggpubr)
+library(RColorBrewer)
+library(mgcv)
+
+rm(list = ls())
+load(here::here("working", "Tides_4GAM.RData"))
+#load("AllLTM4Analysis_TidePosition_230214.RData")
+'%ni%' <- Negate('%in%')
+
+dfwideAll.Final <- depth_final.2
+
+dfwideAll.Final$date2 <- lubridate::date(dfwideAll.Final$dts2)
+dfwideAll.Final$year2 <- lubridate::year(dfwideAll.Final$dts2)
+dfwideAll.Final$DoY <- lubridate::yday(dfwideAll.Final$dts2)
+dfwideAll.Final$hr <- lubridate::hour(dfwideAll.Final$dts2)
+dfwideAll.Final$minute <- lubridate::minute(dfwideAll.Final$dts2)
+dfwideAll.Final$HM <- dfwideAll.Final$hr + dfwideAll.Final$minute/60
+
+
+
+
+dfWide.DECK <- dfwideAll.Final[which(is.na(dfwideAll.Final$diff_TempC) == F &
+                                       is.na(dfwideAll.Final$tide_position2) == F),]
+colnames(dfWide.DECK)[14] <- "Difference"
+#colnames(dfWide.DECK)[7] <- "tide_position2"
+dfWide.DECK$depth_tp <- NA
+dfWide.DECK$depth_tp <- ifelse(dfWide.DECK$tide_position2 >= -.95 & dfWide.DECK$tide_position2 < -0.85,
+                               -0.9,
+                               dfWide.DECK$depth_tp)
+dfWide.DECK$depth_tp <- ifelse(dfWide.DECK$tide_position2 >= -0.65 & dfWide.DECK$tide_position2 < -0.55,
+                               -0.6,
+                               dfWide.DECK$depth_tp)
+dfWide.DECK$depth_tp <- ifelse(dfWide.DECK$tide_position2 >= -0.35 & dfWide.DECK$tide_position2 < -0.25,
+                               -0.3,
+                               dfWide.DECK$depth_tp)
+dfWide.DECK$depth_tp <- ifelse(dfWide.DECK$tide_position2 >= -0.05 & dfWide.DECK$tide_position2 < 0.05,
+                               0,
+                               dfWide.DECK$depth_tp)
+dfWide.DECK$depth_tp <- ifelse(dfWide.DECK$tide_position2 >= 0.25 & dfWide.DECK$tide_position2 < 0.35,
+                               0.3,
+                               dfWide.DECK$depth_tp)
+dfWide.DECK$depth_tp <- ifelse(dfWide.DECK$tide_position2 >= 0.55 & dfWide.DECK$tide_position2 < 0.65,
+                               0.6,
+                               dfWide.DECK$depth_tp)
+dfWide.DECK$depth_tp <- ifelse(dfWide.DECK$tide_position2 >= 0.85 & dfWide.DECK$tide_position2 <= .95,
+                               0.9,
+                               dfWide.DECK$depth_tp)
+dfWide.DECK$Depth_R <- factor(dfWide.DECK$depth_tp, levels = c(-0.9,-0.6,-0.3,0,0.3,0.6,0.9), labels = c("Early Flood","Mid Flood","Late Flood","High Slack","Early Ebb","Mid Ebb","Late Ebb"))
+dfWide.DECK$predvalues <- dfWide.DECK$Difference
+
+#dfWide.DECK
+
+
+# k_DoY <- 24
+# k_HM <- seq(12,18,4)
+# k_tp <- seq(12,18,4)
+# df_k <- data.frame(expand.grid(k_DoY, k_HM, k_tp))
+# colnames(df_k) <- c("DoY","HM","tp")
+# 
+# list_k <- list()
+# for(i in 1:nrow(df_k)){
+#   bD.x <- bam(Difference ~ te(DoY, HM, tide_position2, k = c(df_k[i,1],df_k[i,2],df_k[i,3]), bs = c("cc","cc","cc")), data = dfWide.DECK)
+#   ch.gam <- capture.output(gam.check(bD.x))
+#   k_index <- strsplit(ch.gam[13], " ")[[1]][c(2,3,7)]
+#   k <- data.frame(k_prime = k_index[1],
+#                   edf = k_index[2],
+#                   k_ind = k_index[3],
+#                   devExp = summary(bD.x)$dev.expl)
+#   df_kcheck <- cbind.data.frame(df_k[i,], k)
+#   list_k[[i]] <- df_kcheck
+#   rm(ch.gam, k_index, k, df_kcheck, bD.x)
+# }
+# df_kAll <- do.call(rbind.data.frame, list_k)
+# save(df_kAll, file = here::here("working","Kselection4.RData"))
+#load(file = here::here("working","Kselection.RData"))
+
+bD.3 <- bam(Difference ~ te(DoY, HM, tide_position2, k = c(24,16,12), bs = c("cc","cc","cc")), data = dfWide.DECK)
+#vis.gam(bD.3,n.grid=50, theta=35, phi=32, zlab="", too.far=0.1) 
+#plot(bD.3)
+# ch.gam <- capture.output(gam.check(bD.3))
+gam.check(bD.3)
+summary(bD.3)
+# k_index <- strsplit(ch.gam[13], " ")[[1]][c(2,3,7,10)]
+
+
+acf(residuals.gam(bD.3), ylab="", xlab="", main="")
+dfpred.D <- expand.grid(DoY = seq(1,365,1),
+                        HM = seq(0,23.75,0.25),
+                        tide_position2 = seq(-0.9,0.9,0.3))#Depth_R = seq(0.2,1,0.4)
+dfpred.D2 = predict(bD.3, newdata = dfpred.D, se.fit = TRUE)
+dfpred.D$predvalues = predict(bD.3, newdata = dfpred.D)
+dfpred.D$predvalues <- dfpred.D2[["fit"]][as.character(c(1:245280))]
+dfpred.D$SEfit <- dfpred.D2[["se.fit"]][as.character(c(1:245280))]
+dfpred.D$assessFit <- dfpred.D$SEfit/dfpred.D$predvalues
+dfpred.D$Depth_R <- factor(dfpred.D$tide_position2, levels = c(seq(-0.9,0.9,0.3)), labels = c("Early Flood","Mid Flood","Late Flood","High Slack","Early Ebb","Mid Ebb","Late Ebb"))#factor(dfpred.D$Depth_R, levels = c(0.2,0.6,1))
+dfpred.D$date <- as.Date(NA)
+dfpred.D$date<- as.Date(dfpred.D$DoY, origin = '2019-05-31')
+myPaletteContour <- colorRampPalette(rev(brewer.pal(6, "RdBu")))
+plo_deck <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = predvalues, fill = predvalues)) + 
+  geom_tile() + 
+  #geom_rug(data = dfWide.DECK[which(is.na(dfWide.DECK$Depth_R)==F),], mapping = aes(x = DoY, y = HM),sides="bl") +
+  geom_contour(binwidth = 1) + 
+  geom_text_contour(rotate = FALSE, binwidth = 1) +
+  scale_y_continuous(breaks = c(seq(0,24,8)))+
+  scale_fill_gradientn(colours = myPaletteContour(11),
+                       limits=c(range(dfpred.D$predvalues)),
+                       name = "Difference in temperature (Restoration - Adj. Waterbody)")  +
+  ylab("Hour")+
+  xlab("Day of Year")+
+  #guides(fill=guide_legend(title="Difference in temperature (Restoration - Adj. Waterbody)")) +
+  facet_grid(.~ Depth_R) +
+  theme_classic2()+
+  theme(legend.position = "top")
+plo_deck
+
+ggsave(paste("GAM_TempTideBigK",".png",sep = ""), path = here::here("figures","publication"), plo_deck, width = 1200, height = 900, dpi = 168, units = "px")
+
+plo_deck.fit <- ggplot(dfpred.D, aes(x = DoY, y = HM, z = SEfit, fill = SEfit)) + 
+  geom_tile() + 
+  geom_contour(binwidth = 0.025) + 
+  geom_text_contour(rotate = FALSE, binwidth = 0.025) +
+  scale_y_continuous(breaks = c(seq(0,24,8)))+
+  scale_fill_gradientn(colours = myPaletteContour(11),
+                       name = "Standard Error of Difference in temperature (Restoration - Adj. Waterbody)")  +
+  ylab("Hour")+
+  xlab("Day of Year")+
+  #guides(fill=guide_legend(title="Difference in temperature (Restoration - Adj. Waterbody)")) +
+  facet_grid(.~ Depth_R) +
+  theme_classic2()+
+  theme(legend.position = "top")
+
+```

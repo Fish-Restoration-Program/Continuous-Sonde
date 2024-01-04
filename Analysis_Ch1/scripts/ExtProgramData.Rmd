@@ -40,6 +40,8 @@ df_DECKUSGS <- siteAll[,c(2,3,8,9, # 14 and 15 are DO and its QC status
 
 colnames(df_DECKUSGS)[3:10] <- c("DOmgL","DO_flag","TempC","TempC_flag","SPC","SPC_flag","Turb","Turb_flag")
 
+tz(df_DECKUSGS$dateTime) <- "UTC"
+
 save(df_DECKUSGS, file = here::here("working", "USGS_Decker.RData"))
 ```
 
@@ -84,6 +86,8 @@ df_Toland <- siteAll[,c(2,3,14,15, # 14 and 15 are DO and its QC status
                                   ))] 
 
 colnames(df_Toland)[3:10] <- c("DOmgL","DO_flag","TempC","TempC_flag","SPC","SPC_flag","Turb","Turb_flag")
+
+tz(df_Toland$dateTime) <- "UTC"
 
 save(df_Toland, file = here::here("working", "USGS_Toland.RData"))
 ```
@@ -130,6 +134,8 @@ df_ToeDrain <- siteAll[,c(2,3,12,13, # 12 and 13 are DO and its QC status
 
 colnames(df_ToeDrain)[3:10] <- c("DOmgL","DO_flag","TempC","TempC_flag","SPC","SPC_flag","Turb","Turb_flag")
 
+tz(df_ToeDrain$dateTime) <- "UTC"
+
 save(df_ToeDrain, file = here::here("working", "USGS_ToeDrain.RData"))
 ```
 
@@ -144,18 +150,18 @@ load(here::here("working","USGS_Toland.RData"))
 
 USGS_DECK <- rbind.data.frame(df_DECKUSGS,df_Toland)
 
-plo <- ggplot(USGS_DECK, aes(x = dateTime, y = tempC)) +
+plo <- ggplot(USGS_DECK, aes(x = dateTime, y = TempC)) +
   geom_point() +
   facet_grid(site_no ~.)
 
 range(df_Toland$dateTime, na.rm = T)
 
 #df_DECKUSGS.2 <- df_DECKUSGS[which(df_DECKUSGS$dateTime %ni% df_Toland$dateTime),]
-df_DECKUSGS.2 <- df_DECKUSGS[which(df_DECKUSGS$dateTime < as.POSIXct(strptime(range(df_Toland$dateTime, na.rm = T)[1], format = "%Y-%m-%d %H:%M:%S", tz = "America/Los_Angeles"))),]
+df_DECKUSGS.2 <- df_DECKUSGS[which(df_DECKUSGS$dateTime < as.POSIXct(strptime(range(df_Toland$dateTime, na.rm = T)[1], format = "%Y-%m-%d %H:%M:%S", tz = "UTC"))),]
 
 USGS_DECK.2 <- rbind.data.frame(df_DECKUSGS.2,df_Toland)
 
-plo <- ggplot(USGS_DECK.2, aes(x = dateTime, y = tempC)) +
+plo <- ggplot(USGS_DECK.2, aes(x = dateTime, y = TempC)) +
   geom_point() +
   facet_grid(site_no ~.)
 

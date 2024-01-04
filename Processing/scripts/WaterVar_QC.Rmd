@@ -40,12 +40,28 @@ rm(list = ls())
 #temp_H_0 <- readRDS("WaterTemp/data/Temp_all_H.rds")
 load(here::here("working","QCd_2022.RData"))
 
-xSite <- names(list_all_2022)[1:2]
-xVar <- c("TempC","DOmgL","SPC","ChlRFU","PCRFU","fDOMRFU","Turb")
+xSite <- names(list_all_2022)[-c(3,7)]
+xVar <- c("TempC","DOmgL","SPC","ChlRFU","PCRFU","fDOMRFU","Turb","pH")
+xCol_CDFW <- colnames(list_all_2022$FLYW$`19C101551 2022-05-04 2022-06-06`)
+xCol_DWR <- colnames(list_all_2022$TULE_Breach$`21L101264 2022-11-21 2023-01-19`)
+xCol_DWR <- xCol_DWR[which(xCol_DWR %in% c("Date","Time","tFracSec","Site","Depthm","DOsat","DOmgL","SPC","Turb","pH","TempC","Battery","dts","TempC_qcE","DOmgL_qcE","SPC_qcE","Turb_qcE"))]
+list_all_2022$ARNO_Exterior$`19C101658 2021-12-17 2022-01-26`$pH <- NA
+list_all_2022$ARNO_Exterior$`19C101659 2022-01-26 2022-03-01`$pH <- NA
+list_all_2022$ARNO_Exterior$`19C101658 2022-03-01 2022-04-07`$pH <- NA
+#result <- lapply(list_all_2022[["TULE_Breach"]], "[", xCol_DWR)
 
 list_all_qc <- list()
 for(i in 1:length(xSite)){
-  df_ts <- do.call(rbind.data.frame, list_all_2022[[xSite[i]]])
+  if(xSite[i] %in% c("FLYW","DECK_Pool","DECK_Breach")){
+    list_site <- lapply(list_all_2022[[xSite[i]]], "[", xCol_CDFW)
+    df_ts <- do.call(rbind.data.frame, list_site)
+    df_ts$pH <- NA
+  } else {
+    list_site <- lapply(list_all_2022[[xSite[i]]], "[", xCol_DWR)
+    df_ts <- do.call(rbind.data.frame, list_site)
+    df_ts[,c("ChlRFU","PCRFU","fDOMRFU")] <- NA
+  }
+  #df_ts <- do.call(rbind.data.frame, list_site)
   df_ts$date <- lubridate::date(df_ts$dts)
   df_ts$hour <- lubridate::hour(df_ts$dts)
   df_ts$minute <- lubridate::minute(df_ts$dts)
@@ -63,6 +79,7 @@ for(i in 1:length(xSite)){
     var_H_0 <- var_H[,c("Site","dts",xVar[j],"date","hour","minute")]
     colnames(var_H_0) <- c("Station","Datetime","Var","Date","Hour","Minute")
     var_H <- var_H_0
+    var_H$Var <- as.double(var_H$Var)
     var_H <- var_H %>%
       filter(!is.na(var_H$Datetime))
     list_qc[[j]] <- var_H
@@ -70,7 +87,7 @@ for(i in 1:length(xSite)){
   }
   names(list_qc) <- xVar
   list_all_qc[[i]] <- list_qc
-  rm(df_ts)
+  rm(df_ts, list_site)
 }
 names(list_all_qc) <- xSite
 
@@ -83,8 +100,8 @@ rm(list = ls())
 load(here::here("working","VarQC_initial.RData"))
 
 df_ranges <- data.frame(xVar = xVar,
-                        range_low = c(1,1,100,0.01,0.01,1,1),
-                        range_high = c(40,25,55000, 100,100,100,1000))
+                        range_low = c(1,1,100,0.01,0.01,1,1,4),
+                        range_high = c(40,25,55000, 100,100,100,1000,14))
 
 list_all_QC1 <- list()
 for(i in 1:length(xSite)){
@@ -226,7 +243,7 @@ rm(list = ls())
 load(here::here("working","VarQC_step3.RData"))
 
 df_Trend <- data.frame(xVar = xVar,
-                        xTrend = c("6 months","6 months","6 month","7 days","7 days","15 days","6 months"))
+                        xTrend = c("6 months","6 months","6 month","7 days","7 days","15 days","6 months","7 days"))
 
 list_all_QC4 <- list()
 for(i in 1:length(xSite)){
@@ -236,7 +253,7 @@ for(i in 1:length(xSite)){
     
     # Convert data frame to table 
     q4_a <- as_tbl_time(df, index = Datetime)
-    
+    if(nrow(q4_a) > 0){
     # Anomaly Detection
       # time_decompose: separates time series into seasonal, trend, and remainder components
       # stl: loess works well when long term trend is present
@@ -269,6 +286,10 @@ for(i in 1:length(xSite)){
     df_q4$Flag_QC4 <- "N"
     list_QC4[[j]] <- df_q4
     rm(df, df_q4, q4_a, q4_b, q4_c, q4_d)
+    } else {
+      df$Flag_QC4 <- df$Flag_QC3
+      list_QC4[[j]] <- df
+    }
   }
   names(list_QC4) <- xVar
   list_all_QC4[[i]] <- list_QC4
@@ -294,7 +315,7 @@ rm(list = ls())
 load(here::here("working","VarQC_step4.RData"))
 
 df_spike <-  data.frame(xVar = xVar,
-                        xSpike = c(5,5,250,5,5,25,25))
+                        xSpike = c(5,5,250,5,5,25,25,2))
 
 
 list_all_QC5 <- list()
@@ -342,14 +363,14 @@ rm(list = ls())
 load(here::here("working","VarQC_step5.RData"))
 
 df_Rate <-  data.frame(xVar = xVar,
-                        xSDth = c(5,5,5,5,5,5,5))
+                        xSDth = c(5,5,5,5,5,5,5,5))
 
 list_all_QC6 <- list()
 for(i in 1:length(xSite)){
   list_QC6 <- list()
   for(j in 1:length(xVar)){
     df <- list_all_QC5[[i]][[j]]
-    
+    if(nrow(df) > 0){
     df_q6 <- df %>%
       group_by(Station) %>%
       arrange(Station, Datetime) %>%
@@ -365,6 +386,11 @@ for(i in 1:length(xSite)){
       filter(Flag_QC6 == "Y")
     
     list_QC6[[j]] <- df_q6
+    } else {
+      df_q6 <- df
+      df_q6$Flag_QC6 <- df_q6$Flag_QC5
+      list_QC6[[j]] <- df_q6
+    }
     rm(df, df_q6, q6_b)
   }
   names(list_QC6) <- xVar
@@ -456,10 +482,17 @@ for(i in 1:length(xSite)){
     #rm(xPlo)
   }
   names(list_plo) <- xVar
-  multi_plo <- ggarrange(list_plo[[1]], list_plo[[2]], list_plo[[3]], list_plo[[4]], list_plo[[5]], list_plo[[6]], list_plo[[7]],
+  if(xSite[i] %in% c("FLYW", "DECK_Pool","DECK_Breach")){
+    multi_plo <- ggarrange(list_plo[[1]], list_plo[[2]], list_plo[[3]], list_plo[[4]], list_plo[[5]], list_plo[[6]], list_plo[[7]],
                          ncol = 1, nrow = 7)
                          #common.legend = TRUE, legend = "bottom")
-  ggsave(paste("ContinuousWQ_",xSite[i],".png",sep = ""), multi_plo, width = 625, height = 800, dpi = 96, units = "px")
+  ggsave(paste("ContinuousWQ_DWR_CDFW",xSite[i],".png",sep = ""), multi_plo, width = 625, height = 800, dpi = 96, units = "px")
+  } else {
+  multi_plo <- ggarrange(list_plo[[1]], list_plo[[2]], list_plo[[3]], list_plo[[7]], list_plo[[8]],
+                         ncol = 1, nrow = 5)
+                         #common.legend = TRUE, legend = "bottom")
+  ggsave(paste("ContinuousWQ_DWR_CDFW",xSite[i],".png",sep = ""), multi_plo, width = 625, height = 800, dpi = 96, units = "px")
+  }
   list_all_multi[[i]] <- multi_plo
   list_all_plo[[i]] <- list_plo
   rm(list_plo, multi_plo)
@@ -467,7 +500,7 @@ for(i in 1:length(xSite)){
 names(list_all_multi) <- xSite
 names(list_all_plo) <- xSite
 
-save(list_all_QC7, xSite, xVar, file = here::here("final","QCd2_Data_FRP.RData"))
+save(list_all_QC7, xSite, xVar, file = here::here("final","QCd2_Data_DWR_CDFW.RData"))
 ```
 
 
