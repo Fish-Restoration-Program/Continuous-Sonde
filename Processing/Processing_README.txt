@@ -1,5 +1,5 @@
-README for Processing project
-Author: Daniel Cox
+README for Processing Pipeline of Continuous Monitoring
+Authors: Daniel Cox (CDFW), Emma Mendonsa (DWR)
 Date: 230717
 
 
