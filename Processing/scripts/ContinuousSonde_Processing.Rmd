@@ -39,14 +39,14 @@ path2_TULE_Main <- here::here("raw","TULE","FRP_DWR","TULE_Main")
 path2_ARNO_Ext <- here::here("raw","ARNO","Exterior")
 path2_ARNO_Int <- here::here("raw","ARNO","Interior")
 path2_BRAD_Ext <- here::here("raw","BRAD","Exterior")
-path2_BRAD_Int <- here::here("raw","BRAD","Interior")
+#path2_BRAD_Int <- here::here("raw","BRAD","Interior")
 path2_LOWE_EastInt <- here::here("raw","LOWE","EastInterior")
 path2_WING <- here::here("raw","WING")
 path2_WINT <- here::here("raw","WINT")
 
-# Made a dataframe of the pathways
-pathnames <- data.frame(SiteName = c("FLYW","DECK_Pool","DECK_Breach","TULE_Breach","TULE_PondC", "TULE_Main","ARNO_Exterior","ARNO_Interior","BRAD_Exterior","BRAD_Interior","LOWE_EastInt","WING","WINT"), 
-                        pathname = c(path2_FLYW, path2_DECK_Pool, path2_DECK_Breach, path2_TULE_Breach, path2_TULE_PondC, path2_TULE_Main, path2_ARNO_Ext, path2_ARNO_Int, path2_BRAD_Ext, path2_BRAD_Int, path2_LOWE_EastInt, path2_WING, path2_WINT))
+# Made a dataframe of the pathways; need to wait until BRAD_Interior datasets are added
+pathnames <- data.frame(SiteName = c("FLYW","DECK_Pool","DECK_Breach","TULE_Breach","TULE_PondC", "TULE_Main","ARNO_Exterior","ARNO_Interior","BRAD_Exterior","LOWE_EastInt","WING","WINT"), #,"BRAD_Interior"
+                        pathname = c(path2_FLYW, path2_DECK_Pool, path2_DECK_Breach, path2_TULE_Breach, path2_TULE_PondC, path2_TULE_Main, path2_ARNO_Ext, path2_ARNO_Int, path2_BRAD_Ext, path2_LOWE_EastInt, path2_WING, path2_WINT)) #, path2_BRAD_Int
 
 
 # For loop nested with multiple for loops to: 
