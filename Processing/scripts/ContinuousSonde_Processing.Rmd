@@ -39,14 +39,14 @@ path2_TULE_Main <- here::here("raw","TULE","FRP_DWR","TULE_Main")
 path2_ARNO_Ext <- here::here("raw","ARNO","Exterior")
 path2_ARNO_Int <- here::here("raw","ARNO","Interior")
 path2_BRAD_Ext <- here::here("raw","BRAD","Exterior")
-#path2_BRAD_Int <- here::here("raw","BRAD","Interior")
+path2_BRAD_Int <- here::here("raw","BRAD","Interior")
 path2_LOWE_EastInt <- here::here("raw","LOWE","EastInterior")
 path2_WING <- here::here("raw","WING")
 path2_WINT <- here::here("raw","WINT")
 
 # Made a dataframe of the pathways; need to wait until BRAD_Interior datasets are added
-pathnames <- data.frame(SiteName = c("FLYW","DECK_Pool","DECK_Breach","TULE_Breach","TULE_PondC", "TULE_Main","ARNO_Exterior","ARNO_Interior","BRAD_Exterior","LOWE_EastInt","WING","WINT"), #,"BRAD_Interior"
-                        pathname = c(path2_FLYW, path2_DECK_Pool, path2_DECK_Breach, path2_TULE_Breach, path2_TULE_PondC, path2_TULE_Main, path2_ARNO_Ext, path2_ARNO_Int, path2_BRAD_Ext, path2_LOWE_EastInt, path2_WING, path2_WINT)) #, path2_BRAD_Int
+pathnames <- data.frame(SiteName = c("FLYW","DECK_Pool","DECK_Breach","TULE_Breach","TULE_PondC", "TULE_Main","ARNO_Exterior","ARNO_Interior","BRAD_Exterior","BRAD_Interior","LOWE_EastInt","WING","WINT"), 
+                        pathname = c(path2_FLYW, path2_DECK_Pool, path2_DECK_Breach, path2_TULE_Breach, path2_TULE_PondC, path2_TULE_Main, path2_ARNO_Ext, path2_ARNO_Int, path2_BRAD_Ext, path2_BRAD_Int, path2_LOWE_EastInt, path2_WING, path2_WINT))
 
 
 # For loop nested with multiple for loops to: 
@@ -213,6 +213,7 @@ rm(list = ls())
 
 load(here::here("working", "CDFW_DWR_Lists_Raw_Meta.RData"))
 load(here::here("working","CDFW_ExchangeTimes.RData"))
+load(here::here("working","DWR_startstop.Rda"))
 
 # create a new list of trimmed data frames
 list_all_trim1 <- list_all_raw
@@ -229,8 +230,14 @@ for(i in 1:length(list_all_trim1)){
       }
     }
     for(kz in 1:nrow(df_DeployTimes)){ # remove rows for observations recorded before arrival time
-      if(rtd_sondeID == df_RecoveryTimes$recovered_sonde_id[kz] & rtd_dateDeploy == as.character(df_RecoveryTimes$date2[kz])){
+      if(rtd_sondeID == df_RecoveryTimes$recovered_sonde_id[kz] & rtd_dateRecov == as.character(df_RecoveryTimes$date2[kz])){
         list_all_trim1[[i]][[j]] <- list_all_trim1[[i]][[j]][which(list_all_trim1[[i]][[j]]$dts < df_RecoveryTimes$arrival_time[kz]),]
+      }
+    }
+    for(d in 1:nrow(DWR.startstop)){
+      if(rtd_sondeID == DWR.startstop$sonde_id[d] & rtd_dateDeploy == as.character(as.Date(DWR.startstop$departure_time[d]))){
+        list_all_trim1[[i]][[j]] <- list_all_trim1[[i]][[j]][which(list_all_trim1[[i]][[j]]$dts >= DWR.startstop$departure_time[d] &
+                                                                     list_all_trim1[[i]][[j]]$dts <= as.POSIXct(strptime(paste(rtd_dateRecov, DWR.startstop$end2[1], sep = " "), format = "%Y-%m-%d %H:%M", tz = "UTC"))),]
       }
     }
     list_excess[[j]] <- suppressMessages(dplyr::anti_join(list_all_raw[[i]][[j]],list_all_trim1[[i]][[j]])) # suppressMessages prevents the console from being overtaken by anti_join messages
@@ -240,6 +247,10 @@ for(i in 1:length(list_all_trim1)){
   rm(list_excess, rtd_sondeID, rtd_dateDeploy, rtd_dateRecov)
 }
 names(list_all_excess) <- names(list_all_trim1)
+# Check that all data frames have less than or equal to the same number of rows and NOT more
+for(i in 1:length(list_all_trim1)){
+  print(sum(sapply(list_all_trim1[[i]], nrow)) <= sum(sapply(list_all_raw[[i]], nrow)))
+}
 
 save(list_all_trim1, file = here::here("working","RTD_Trim1.RData"))
 ```
@@ -302,6 +313,11 @@ for(i in 1:length(list_all_trim1)){
 }
 names(list_all_trim2) <- names(list_all_trim1) 
 names(list_all_excess2) <- names(list_all_trim1) 
+
+# Check that all data frames have less than or equal to the same number of rows and NOT more
+for(i in 1:length(list_all_trim2)){
+  print(sum(sapply(list_all_trim2[[i]], nrow)) <= sum(sapply(list_all_trim1[[i]], nrow)))
+}
 
 save(list_all_excess2, list_all_trim2, file = here::here("working","RTD_Trim2.RData"))
 ```

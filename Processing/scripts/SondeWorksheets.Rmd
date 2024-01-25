@@ -107,3 +107,81 @@ df_CalibMeta <- df_Calib[,c("GlobalID","sonde_id","sonde_other","discrete_or_con
 save(df_Calib, df_CalibData, df_CalibMeta, file = here::here("working","CDFW_CalibrationWorksheet.RData"))
 ```
 
+This chunk contains the crosswalk for DWR's sonde names and their corresponding sonde ID (i.e., serial number). Grabbed from the 'Master_LabInventory_BothLabs.xlsx' file in DWR's Water Quality Lab SharePoint
+```{r DWR sonde name crosswalk}
+library(readxl)
+
+rm(list = ls())
+'%ni%' = Negate('%in%')
+
+DWR_sondeID <- read_excel(here::here("Raw","Master_LabInventory_BothLabs.xlsx"), sheet = "Sonde Serial #s", col_types = c("text","text"))
+colnames(DWR_sondeID) <- c("sonde_id","SondeName")
+DWR_sondeID <- rbind.data.frame(DWR_sondeID, data.frame(sonde_id = "14J104011", SondeName = "Chamberlain"))
+
+
+save(DWR_sondeID, file = here::here("working","DWR_SondeID_crosswalk.Rda"))
+```
+
+
+This chunk imports the "SondeData_StartStopTimes.xlsx" from the DWR Water Quality Lab's SharePoint.
+```{r DWR start/stop times}
+library(readxl)
+
+rm(list = ls())
+'%ni%' = Negate('%in%')
+
+s <- excel_sheets(here::here("Raw","SondeData_StartStopTimes.xlsx"))
+s2 <- s[-1]
+list_s <- list()
+for(i in seq_along(s2)){
+  df <- read_excel(here::here("Raw","SondeData_StartStopTimes.xlsx"), sheet = s2[i], skip = 1, col_types = c("text","date",rep("text",8)))
+  list_s[[i]] <- df
+  rm(df)
+}
+
+SS <- do.call(rbind.data.frame, list_s)
+
+### There are some difficulties with the time colums so will standardize them for operability
+# First, convert to numeric and force NAs in rows that dont have numbers
+SS$start1 <- as.numeric(SS$`Start time`)
+SS$end1 <- as.numeric(SS$`end time`)
+
+# Look for early hours (before 10am) and add a colon
+SS$start2 <- ifelse(SS$start1 > 1 & SS$start1 <= 999,
+                    as.character(paste0(substr(SS$start1,0,1),":",substr(SS$start1,2,3))),
+                    NA)
+# Look for later hours (after 10am) and add a colon
+SS$start2 <- ifelse(SS$start1 > 999 & is.na(SS$start2)==T,
+                    as.character(paste0(substr(SS$start1,0,2),":",substr(SS$start1,3,4))),
+                    SS$start2)
+# Look for early hours (before 10am) and add a colon
+SS$end2 <- ifelse(SS$end1 > 1 & SS$end1 <= 999,
+                    as.character(paste0(substr(SS$end1,0,1),":",substr(SS$end1,2,3))),
+                    NA)
+# Look for later hours (after 10am) and add a colon
+SS$end2 <- ifelse(SS$end1 > 999 & is.na(SS$end2)==T,
+                    as.character(paste0(substr(SS$end1,0,2),":",substr(SS$end1,3,4))),
+                    SS$end2)
+
+### Some rows had HH:MM:SS in the excel file and that imported incorrectly
+# Manually add the times
+SS$start2[which(SS$Station=="TRC" & SS$Date == as.Date("2022-12-29"))] <- "11:43"
+SS$end2[which(SS$Station=="TRC" & SS$Date == as.Date("2022-12-29"))] <- "10:43"
+SS$start2[which(SS$Station=="WNG" & SS$Date == as.Date("2023-06-20"))] <- "14:00"
+SS$end2[which(SS$Station=="WNG" & SS$Date == as.Date("2023-06-20"))] <- "13:15"
+
+### Add the sonde ID to the data frame using the DWR sonde name crosswalk made in previous chunk
+load(here::here("working","DWR_SondeID_crosswalk.Rda"))
+SS.2 <- merge(SS, DWR_sondeID, by.x = "Installed Sonde", by.y = "SondeName", all.x = T)
+SS.2$sonde_id[which(SS.2$`Installed Sonde` == "19C101658")] <- "19C101658"
+
+SS.2$departure_time <- as.POSIXct(strptime(paste(as.character(SS.2$Date),SS.2$start2, sep = " "),
+                                           format = "%Y-%m-%d %H:%M", tz = "UTC"))
+SS.2$arrival_time <- as.POSIXct(strptime(paste(as.character(SS.2$Date),SS.2$end2, sep = " "),
+                                         format = "%Y-%m-%d %H:%M", tz = "UTC"))
+
+DWR.startstop <- SS.2[which(is.na(SS.2$sonde_id)==F & is.na(SS.2$departure_time)==F & is.na(SS.2$arrival_time)==F),
+                      c("sonde_id","departure_time","arrival_time","end2")]
+save(DWR.startstop, file = here::here("working","DWR_startstop.Rda"))
+```
+
