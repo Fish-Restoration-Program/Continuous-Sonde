@@ -17,7 +17,7 @@ df_VarNames <- data.frame(ExoVariable = c("Date..MM.DD.YYYY.", "Time..HH.mm.ss."
                           PortalName = c("Date","Time",NA,"Site","Chl",NA,NA,"Depth",NA,"fDOM",NA,"DOsat",NA,"DOconc",NA,NA,"SPC","PC",NA,NA,"Turb",NA,NA,"TempC",NA,"Battery",NA))#,
                           #keepTorF = c(T,T,F,T,T,F,T,F,T,F,T,F,T,F,F,T,T,F,T,F,T,T,F,T,F))
 
-save(df_VarNames, file = "working/CDFW_VarNamesConversion.RData")
+save(df_VarNames, file = here::here("working","CDFW_VarNamesConversion.RData"))
 ```
 
 First we are going to import each file into 2 pieces. The first piece will include the sonde metadata and the second piece will contain the continuous data.
@@ -203,7 +203,7 @@ for(i in 1:length(list_all_raw)){
   }
 }
 
-save(list_all_raw, list_all_meta, file = "working/CDFW_DWR_Lists_Raw_Meta.RData")
+save(list_all_raw, list_all_meta, file = here::here("working","CDFW_DWR_Lists_Raw_Meta.RData"))
 ```
 
 Trim datasets based on Start/Stop times of each deployment recorded in the Exchange Worksheet (See 'SondeWorksheets.Rmd')
