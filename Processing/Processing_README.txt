@@ -15,4 +15,4 @@ Finally, we return to 'ContinuousSonde_Processing.Rmd' to trim the datasets to t
 
 After the initial error QC, the data are then passed through a secondary QC script adopted from Catarina Pien used in the data cleaning code, WaterTemp_QC.Rmd, found in edi.591.2
 
-Figures are then generated to look at each constituent on a station-by-station basis. Original data are shown in red overlaid with data that passed QC checks shown in black.
+Figures are then generated to look at each constituent on a station-by-station basis. Original data are shown in black overlaid with data that passed QC checks shown in red.
