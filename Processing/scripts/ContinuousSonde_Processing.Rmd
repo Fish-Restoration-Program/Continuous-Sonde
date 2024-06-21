@@ -23,6 +23,7 @@ save(df_VarNames, file = "working/CDFW_VarNamesConversion.RData")
 
 Update GitHub with files located on shared storage 
 ```{r}
+library(svDialogs)
 rm(list = ls())
 '%ni%' = Negate('%in%') # new function that serves as the opposite of %in% operator
 
@@ -42,11 +43,16 @@ path2_LOWE_Stairsteps <- here::here("raw","LOWE","BreachStairsteps")
 path2_WING <- here::here("raw","WING")
 path2_WINT <- here::here("raw","WINT")
 
+path2_error <- here::here("raw","DWR_errorcalcs")
+
 # Make a data frame with potential users and their respective SharePoint folder locations on their hard drive
 dfUserPaths <- data.frame(userX = c("Danny Cox", "Emma Mendonsa", "Brian Armstrong"),
-                          pathX = c("C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Data Downloads", 
+                          pathData = c("C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Water Quality Lab/Data Downloads", 
                                     "C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Data Downloads", 
-                                    "C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Data Downloads"))
+                                    "C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Data Downloads"),
+                          pathError = c("C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Water Quality Lab/CalibrationRecords/DRIFT Calcs", 
+                                    "C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Water Quality Lab/CalibrationRecords/DRIFT Calcs", 
+                                    "C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Water Quality Lab/CalibrationRecords/DRIFT Calcs"))
 
 # Create a dialogue box that requires user to enter their name
 raw <- dlgInput("Which User are you?\nDaniel Cox (CDFW), Emma Mendonsa (DWR), or Brian Armstrong (DWR)",Sys.info()["raw"])$res
@@ -65,23 +71,34 @@ dlgMessage(paste("User identified as",username))
 pull2Git <- function(user){
   if(username %in% c("Danny Cox","Emma Mendonsa","Brian Armstrong")){print(paste("Hello",user))
     } else{print("Username not recognized. Please try again.")}# Greeting
-  pathX = dfUserPaths$pathX[which(dfUserPaths$userX == user)] # Chooses path based on user input
-  dirX <- data.frame(shared = list.files(path = pathX), # makes a data frame of paths for source and GitHub directory for each station
+  pathData = dfUserPaths$pathData[which(dfUserPaths$userX == user)] # Chooses path based on user input
+  dirData <- data.frame(shared = list.files(path = pathData), # makes a data frame of paths for source and GitHub directory for each station
                      gitX = NA)
   # The next line adds the GitHub paths. Note that this may change when Stations get added
-  dirX$gitX <- c(NA, path2_ARNO_Int, path2_ARNO_Ext, path2_BRAD_Int, path2_BRAD_Ext, path2_DECK_Breach, path2_DECK_Pool, path2_LOWE_EastInt, path2_LOWE_Stairsteps, NA, NA, path2_TULE_Breach, path2_TULE_Main, path2_TULE_PondC, path2_WING, path2_WINT, path2_FLYW)
+  dirData$gitX <- c(NA, path2_ARNO_Int, path2_ARNO_Ext, path2_BRAD_Int, path2_BRAD_Ext, path2_DECK_Breach, path2_DECK_Pool, path2_LOWE_EastInt, path2_LOWE_Stairsteps, NA, NA, path2_TULE_Breach, path2_TULE_Main, path2_TULE_PondC, path2_WING, path2_WINT, path2_FLYW)
   # This for loop adds each file that is not already present in the GitHub repository
-  for(i in 1:nrow(dirX)){
-    if(is.na(dirX$gitX[i])==F){ # Proceed if and only if there is a GitHub path
-      filesShare <- list.files(path = paste(pathX,dirX$shared[i],"CSV",sep = "/")) # make a list of files in SharePoint folder
-      filesGit <- list.files(dirX$gitX[i]) # make a list of files in GitHub folder
+  for(i in 1:nrow(dirData)){
+    if(is.na(dirData$gitX[i])==F){ # Proceed if and only if there is a GitHub path
+      filesShare <- list.files(path = paste(pathData,dirData$shared[i],"CSV",sep = "/")) # make a list of files in SharePoint folder
+      filesGit <- list.files(dirData$gitX[i]) # make a list of files in GitHub folder
       notGit <- filesShare[which(filesShare %ni% filesGit)] # subset list of files in SharePoint for those not present in GitHub
       if(length(notGit) > 0){ # Proceed if there are files that are missing
-        files2get <- paste(pathX,dirX$shared[i],"CSV",notGit,sep = "/") # make path for file in SharePoint
-        file.copy(file.path(files2get), dirX$gitX[i]) # copy the file over to GitHub
+        files2get <- paste(pathData,dirData$shared[i],"CSV",notGit,sep = "/") # make path for file in SharePoint
+        file.copy(file.path(files2get), dirData$gitX[i]) # copy the file over to GitHub
         print(paste("Copied over",notGit)) # Confirmation message that the file was copied over
-      } else (print(paste("No new files found in", dirX$shared[i]))) # This message appears if the GitHub repository is up-to-date with SharePoint
+      } else (print(paste("No new files found in", dirData$shared[i]))) # This message appears if the GitHub repository is up-to-date with SharePoint
     }
+  }
+  pathError <- dfUserPaths$pathError[which(dfUserPaths$userX == user)]
+  dirError <- data.frame(shared = list.files(path = pathError, recursive = TRUE),
+                         gitX = path2_error)
+  dirError$filesShare <- sub('.+/(.+)', '\\1', dirError$shared)
+  dirError$notGit_error <- ifelse(dirError$filesShare %ni% dirError$gitX, TRUE, FALSE)
+  for(j in 1:nrow(dirError)){
+    if(dirError$notGit_error[j] == TRUE){
+      file.copy(paste(pathError,file.path(dirError$shared[j]), sep = "/"), dirError$gitX[j])
+      print(paste("Copied over",dirError$filesShare[j]))
+    } else (print(paste("No new files found DRIFT Calcs")))
   }
 }
 
@@ -89,23 +106,35 @@ pull2Git <- function(user){
 pull2Git(username)
 
 ### The below if statement is old and requires repeating for more than 1 user (it is the same as in the above function)
+### it is to be used for developing the above function
 # if(username == "Danny Cox"){
 #   print("Hello Danny")
-#   pathX <- c("C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Data Downloads")
-#   dirX <- data.frame(shared = list.files(path = pathX),
+#   pathData <- c("C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Data Downloads")
+#   dirData <- data.frame(shared = list.files(path = pathData),
 #                      gitX = NA)
-#   dirX$gitX <- c(NA, path2_ARNO_Int, path2_ARNO_Ext, path2_BRAD_Int, path2_BRAD_Ext, path2_DECK_Breach, path2_DECK_Pool, path2_LOWE_EastInt, path2_LOWE_Stairsteps, NA, NA, path2_TULE_Breach, path2_TULE_Main, path2_TULE_PondC, path2_WING, path2_WINT, path2_FLYW)
-#   for(i in 1:nrow(dirX)){
-#     if(is.na(dirX$gitX[i])==F){
-#       filesShare <- list.files(path = paste(pathX,dirX$shared[i],"CSV",sep = "/"))
-#       filesGit <- list.files(dirX$gitX[i])
+#   dirData$gitX <- c(NA, path2_ARNO_Int, path2_ARNO_Ext, path2_BRAD_Int, path2_BRAD_Ext, path2_DECK_Breach, path2_DECK_Pool, path2_LOWE_EastInt, path2_LOWE_Stairsteps, NA, NA, path2_TULE_Breach, path2_TULE_Main, path2_TULE_PondC, path2_WING, path2_WINT, path2_FLYW)
+#   for(i in 1:nrow(dirData)){
+#     if(is.na(dirData$gitX[i])==F){
+#       filesShare <- list.files(path = paste(pathData,dirData$shared[i],"CSV",sep = "/"))
+#       filesGit <- list.files(dirData$gitX[i])
 #       notGit <- filesShare[which(filesShare %ni% filesGit)]
 #       if(length(notGit) > 0){
-#         files2get <- paste(pathX,dirX$shared[i],"CSV",notGit,sep = "/")
-#         file.copy(file.path(files2get), dirX$gitX[i])
+#         files2get <- paste(pathData,dirData$shared[i],"CSV",notGit,sep = "/")
+#         file.copy(file.path(files2get), dirData$gitX[i])
 #         print(paste("Copied over",notGit))
-#       } else (print(paste("No new files found in", dirX$shared[i])))
+#       } else (print(paste("No new files found in", dirData$shared[i])))
 #     }
+#   }
+#   pathError <- c("C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Water Quality Lab/CalibrationRecords/DRIFT Calcs")
+#   dirError <- data.frame(shared = list.files(path = pathError, recursive = TRUE),
+#                          gitX = path2_error)
+#   dirError$filesShare <- sub('.+/(.+)', '\\1', dirError$shared)
+#   dirError$notGit_error <- ifelse(dirError$filesShare %ni% dirError$gitX, TRUE, FALSE)
+#   for(j in 1:nrow(dirError)){
+#     if(dirError$notGit_error[j] == TRUE){
+#       file.copy(paste(pathError,file.path(dirError$shared[j]), sep = "/"), dirError$gitX[j])
+#       print(paste("Copied over",dirError$filesShare[j]))
+#     } else (print(paste("No new files found DRIFT Calcs")))
 #   }
 # } else (print("Not Danny"))
 
@@ -539,7 +568,7 @@ DECK <- do.call(rbind.data.frame, list_all_2022[[2]])
 Call in list_all_2022 into the scripts "WaterVAR_QC.Rmd" (where VAR is the variable of interest) to perform further quality control measures.
 
 
-```{r Subset all 2022 data}
+```{r Subset all 2023 data}
 rm(list = ls())
 load(here::here("working","QCd_Data_FRP.RData"))
 
