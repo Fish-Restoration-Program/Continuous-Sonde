@@ -174,7 +174,7 @@ list_ratings <- list()
 tic()
 for(i in 1:length(list_foul)){
   for(j in 1:length(list_drift)){
-    if(names(list_foul[i]) == names(list_drift)[j]){ # match up the two datasets by common name
+    if(names(list_foul)[i] == names(list_drift)[j]){ # match up the two datasets by common name
       df_TotalError <- data.frame(varX = c("temp","pH","DO","sc","chl","pc","fdom","turb"), # make a dataframe to populate
                                   TotalError_num = NA, 
                                   TotalError_perc = NA,
@@ -285,10 +285,11 @@ for(i in 1:length(list_foul)){
 toc()
 names(list_ratings) <- names(list_foul)#[1:22] # there are only 22 deployments with both Deployment and Recovery exchanges (needed times for first 2022 deployment)
 
-allRatings <- do.call(rbind.data.frame, list_ratings)
+allRatings.2 <- do.call(rbind.data.frame, list_ratings)
+allRatings <- allRatings.2[with(allRatings.2, order(varX, sondeID, dateRecov)),]
 rownames(allRatings) <- NULL
 
-save(allRatings, list_ratings, file = here::here("working","SensorRatings230714.RData"))
+save(allRatings, list_ratings, file = here::here("working","SensorRatings240701.RData"))
 ```
 
 This chunk calculates total error from sensor drift for just the discrete sondes
@@ -307,15 +308,15 @@ varFoul <- c("fdom","fdom","chl","chl","pc","pc","turb","turb","sc","pH","pH","p
 df_Variables <- data.frame(varFoul, varDrift) # create the dataframe
 
 uniqVar <- list_foul[[3]][[1]]$varX # make an object with unique variable names in fouling dataset
-j <- 81L
-k <- 1L
+#j <- 81L
+#k <- 1L
 
 # make a list to populate with total error calculations and ratings
 list_ratings <- list()
 tic()
 #for(i in 1:length(list_foul)){
   for(j in 1:length(list_drift)){
-    if(grepl("Discrete", names(list_drift)[j])){ # match up the two datasets by common name
+    if(grepl("Discrete", names(list_drift)[j])){ # Search for data frames with 'Discrete' in their name
       df_TotalError <- data.frame(varX = c("temp","pH","DO","sc","chl","pc","fdom","turb"), # make a dataframe to populate
                                   TotalError_num = NA, 
                                   TotalError_perc = NA,
@@ -339,11 +340,17 @@ tic()
                       na.rm = TRUE)),
           na.rm = TRUE)
         for(a in 3:ncol(df_Ratings_num)){ # attribute a rating if numerical error or percent error fall within the criteria establish in ratings tables
+          if(df_TotalError$TotalError_num[k] == 0){
+            df_TotalError$Rating_num[k] = colnames(df_Ratings_num)[3]
+          }
           if(df_TotalError$TotalError_num[k] > df_Ratings_num[which(df_Ratings_num$varX == varX_Foul),a-1] 
              & df_TotalError$TotalError_num[k] <= df_Ratings_num[which(df_Ratings_num$varX == varX_Foul),a]){
             df_TotalError$Rating_num[k] = colnames(df_Ratings_num)[a]
           }
           tryCatch({ # tryCatch necessary for forcing loop to skip if there is a NA in the percent variable
+            if(df_TotalError$TotalError_perc[k] == 0){
+              df_TotalError$Rating_perc[k] <- colnames(df_Ratings_perc)[3]
+            }
             if(df_TotalError$TotalError_perc[k] > df_Ratings_perc[which(df_Ratings_perc$varX == varX_Foul),a-1] 
                & df_TotalError$TotalError_perc[k] <= df_Ratings_perc[which(df_Ratings_perc$varX == varX_Foul),a]){
               df_TotalError$Rating_perc[k] = colnames(df_Ratings_perc)[a]
@@ -370,6 +377,9 @@ tic()
         list_drift[[j]][["drift_perc"]]$valueX[which(list_drift[[j]][["drift_perc"]]$varX %in% "DO_saturation")]
       for(a in 3:ncol(df_Ratings_perc)){ # attribute a rating if numerical error or percent error fall within the criteria establish in ratings tables
         tryCatch({ # tryCatch necessary for forcing loop to skip if there is a NA in the percent variable
+          if(as.numeric(df_TotalError$TotalError_perc[which(df_TotalError$varX == "DO_sat")]) == 0){
+            df_TotalError$Rating_perc[which(df_TotalError$varX == "DO_sat")] <- colnames(df_Ratings_perc)[3]
+            }
           if(abs(as.numeric(df_TotalError$TotalError_perc[which(df_TotalError$varX == "DO_sat")])) > df_Ratings_perc[which(df_Ratings_perc$varX == "DO_sat"),a-1] 
              & abs(as.numeric(df_TotalError$TotalError_perc[which(df_TotalError$varX == "DO_sat")])) <= df_Ratings_perc[which(df_Ratings_perc$varX == "DO_sat"),a]){
             df_TotalError$Rating_perc[which(df_TotalError$varX == "DO_sat")] = colnames(df_Ratings_perc)[a]
@@ -388,9 +398,12 @@ tic()
         list_drift[[j]][["drift_perc"]]$valueX[which(list_drift[[j]][["drift_perc"]]$varX %in% "sc_InAir0")]
       for(a in 3:ncol(df_Ratings_num)){ # attribute a rating if numerical error or percent error fall within the criteria establish in ratings tables
         tryCatch({ # tryCatch necessary for forcing loop to skip if there is a NA in the percent variable
+          if(as.numeric(df_TotalError$TotalError_num[which(df_TotalError$varX == "sc_InAir")]) == 0){
+            df_TotalError$Rating_num[which(df_TotalError$varX == "sc_InAir")] = colnames(df_Ratings_num)[3]
+            }
           if(abs(as.numeric(df_TotalError$TotalError_num[which(df_TotalError$varX == "sc_InAir")])) > df_Ratings_num[which(df_Ratings_num$varX == "sc_InAir"),a-1] 
              & abs(as.numeric(df_TotalError$TotalError_num[which(df_TotalError$varX == "sc_InAir")])) <= df_Ratings_num[which(df_Ratings_num$varX == "sc_InAir"),a]){
-            df_TotalError$Rating_perc[which(df_TotalError$varX == "sc_InAir")] = colnames(df_Ratings_num)[a]
+            df_TotalError$Rating_num[which(df_TotalError$varX == "sc_InAir")] = colnames(df_Ratings_num)[a]
             }
           } , 
           # when an error is encountered, the loop will be forced to continue and the warning(s) will be shown at the end
@@ -426,8 +439,9 @@ tic()
 toc()
 names(list_ratings) <- names(list_drift)#[1:22] # there are only 22 deployments with both Deployment and Recovery exchanges (needed times for first 2022 deployment)
 
-allRatings <- do.call(rbind.data.frame, list_ratings)
+allRatings.2 <- do.call(rbind.data.frame, list_ratings)
+allRatings <- allRatings.2[with(allRatings.2, order(varX, sondeID, dateRecov)),]
 rownames(allRatings) <- NULL
 
-save(allRatings, list_ratings, file = here::here("working","SensorRatings230714.RData"))
+save(allRatings, list_ratings, file = here::here("working","DiscreteSensorRatings240627.RData"))
 ```

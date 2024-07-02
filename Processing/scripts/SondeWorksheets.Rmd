@@ -22,7 +22,7 @@ df_Exch <- data.frame(read.csv(here::here("raw","Survey123", "Exchanges_v230630"
 colnames(df_Exch) <- cw_Exch$Var_Name
 
 # make a date variable that is in local timezone
-df_Exch$date2 <- as.Date(format(lubridate::mdy_hms(df_Exch$exchange_date), tz = "UTC"))
+df_Exch$date2 <- as.Date(format(lubridate::mdy_hms(df_Exch$exchange_date), tz = "America/Los_Angeles"))
 
 
 ### make datetime variable for the individual measurements
@@ -96,11 +96,12 @@ rm(list = ls())
 '%ni%' = Negate('%in%')
 cw_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibrations_v230612", "Calibration230612_ColumnCrosswalk.csv")))
 #df_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibrations_v230612", "Calibration230612_Export230706.csv"))) # this is for an older version now stored in the 'archive' folder
-df_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibrations_v230612", "Calibration230612_Export240206.csv")))
+#df_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibrations_v230612", "Calibration230612_Export240206.csv")))# this is for an older version now stored in the 'archive' folder
+df_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibrations_v230612", "Calibration230612_Export240701.csv")))
 colnames(df_Calib) <- cw_Calib$Var_Name
 
 # make a datetime object for the deployment start/stop time
-df_Calib$dts_startstop <- format(lubridate::mdy_hms(df_Calib$deployment_startstop_time), tz = "UTC")
+df_Calib$dts_startstop <- format(lubridate::mdy_hms(df_Calib$deployment_startstop_time), tz = "America/Los_Angeles")
 
 # make 2 separate dataframes (1 with just the data we are interested and 1 with the metadata)
 df_CalibData <- df_Calib[,c("GlobalID","sonde_id","sonde_other","discrete_or_continuous","pre_post","dts_startstop",colnames(df_Calib)[53:95])]
