@@ -104,6 +104,7 @@ for(i in 1:nrow(df_CalibData)){
   } else if(df_CalibData$discrete_or_continuous[i] == "Discrete"){
     sondeID <- ifelse(df_CalibData$sonde_id[i] == "Other", df_CalibData$sonde_other[i], df_CalibData$sonde_id[i]) # grab sondeID of sonde being recovered
     dateRecov <- as.Date(df_CalibData$dts_startstop[i]) # grab date of recovery
+    notes <- df_CalibMeta$Notes[i]
     #station <- df_CalibData$station[i]
     mat_pre <- as.matrix(data.frame(sapply(df_CalibData[i,c(pre_values)], function(x) as.numeric(as.character(x)))))# make a matrix of pre-calibration measurements for recovered sonde
     mat_post <- as.matrix(data.frame(sapply(df_CalibData[i,c(post_values)], function(x) as.numeric(as.character(x)))))# make a matrix of post-calibration measurements for recovered sonde (i.e. concentrations of standards)
@@ -120,10 +121,10 @@ for(i in 1:nrow(df_CalibData)){
     rownames(df_drift_num) <- NULL
     rownames(df_drift_perc) <- NULL
     df_drift_perc$valueX[which(df_drift_perc$varX %in% drift_postVar_NA)] <- NA # force percent values for zero-point calibrations to become NA
-    list_temp <- list(df_drift_num, df_drift_perc, sondeID, dateRecov)# store all drift calculations and metadata in temporary list
-    names(list_temp) <- c("drift_num","drift_perc","sondeID","dateRecov")
+    list_temp <- list(df_drift_num, df_drift_perc, sondeID, dateRecov, notes)# store all drift calculations and metadata in temporary list
+    names(list_temp) <- c("drift_num","drift_perc","sondeID","dateRecov", "notes")
     list_drift[[i]] <- list_temp# store temporary list in overarching list
-    rm(list_temp, mat_pre, mat_post, mat_drift_num, mat_drift_perc, df_drift_num, df_drift_perc, sondeID, dateRecov)
+    rm(list_temp, mat_pre, mat_post, mat_drift_num, mat_drift_perc, df_drift_num, df_drift_perc, sondeID, dateRecov,notes)
   }
 }
 names(list_drift) <- paste(ifelse(df_CalibData$sonde_id == "Other", df_CalibData$sonde_other, df_CalibData$sonde_id),
@@ -295,6 +296,8 @@ save(allRatings, list_ratings, file = here::here("working","SensorRatings240701.
 This chunk calculates total error from sensor drift for just the discrete sondes
 ```{r Total Error}
 library(tictoc)
+library(ggplot2)
+
 rm(list = ls())
 '%ni%' = Negate('%in%') # new function that serves as the opposite of %in% operator
 
@@ -397,7 +400,7 @@ tic()
       df_TotalError$TotalError_perc[which(df_TotalError$varX == "DO_sat")] <-
         list_drift[[j]][["drift_perc"]]$valueX[which(list_drift[[j]][["drift_perc"]]$varX %in% "sc_InAir0")]
       for(a in 3:ncol(df_Ratings_num)){ # attribute a rating if numerical error or percent error fall within the criteria establish in ratings tables
-        tryCatch({ # tryCatch necessary for forcing loop to skip if there is a NA in the percent variable
+        tryCatch({ # tryCatch necessary for forcing loop to skip if there is a NA in the numeric variable (no perc)
           if(as.numeric(df_TotalError$TotalError_num[which(df_TotalError$varX == "sc_InAir")]) == 0){
             df_TotalError$Rating_num[which(df_TotalError$varX == "sc_InAir")] = colnames(df_Ratings_num)[3]
             }
@@ -431,6 +434,10 @@ tic()
         ifelse(df_TotalError$Rating_final[which(df_TotalError$varX %in% c("DO"))] < df_TotalError$Rating_perc[which(df_TotalError$varX %in% c("DO_sat"))],
                as.character(df_TotalError$Rating_final[which(df_TotalError$varX %in% c("DO"))]),
                as.character(df_TotalError$Rating_perc[which(df_TotalError$varX %in% c("DO_sat"))]))
+      df_TotalError$notes <- list_drift[[j]]$notes
+      if(is.na(list_drift[[j]][["drift_num"]]$valueX[which(list_drift[[j]][["drift_num"]]$varX %in% varX_Drift)])[1]){
+        df_TotalError$Rating_final[which(df_TotalError$varX == varX_Foul)] <- NA
+      }
       # place data frame of ratings into list
       list_ratings[j] <- list(df_TotalError)
     }
@@ -442,6 +449,14 @@ names(list_ratings) <- names(list_drift)#[1:22] # there are only 22 deployments 
 allRatings.2 <- do.call(rbind.data.frame, list_ratings)
 allRatings <- allRatings.2[with(allRatings.2, order(varX, sondeID, dateRecov)),]
 rownames(allRatings) <- NULL
+allRatings$Rating_final2 <- factor(allRatings$Rating_final, levels = c("Excellent","Good","Fair","Poor","MaxLimit"))
+allRatings$varX2 <- factor(allRatings$varX, levels = c("temp","sc","DO","turb","pH","chl","pc","fdom"))
+
+plo_ratings <- ggplot(allRatings[-which(is.na(allRatings$Rating_final)==TRUE),], aes(x = dateRecov, y = Rating_final2)) + 
+  geom_point() + 
+  facet_grid(varX2~sondeID) +
+  scale_y_discrete(limits=rev)
+plo_ratings
 
 save(allRatings, list_ratings, file = here::here("working","DiscreteSensorRatings240627.RData"))
 ```

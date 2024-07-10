@@ -105,7 +105,7 @@ df_Calib$dts_startstop <- format(lubridate::mdy_hms(df_Calib$deployment_startsto
 
 # make 2 separate dataframes (1 with just the data we are interested and 1 with the metadata)
 df_CalibData <- df_Calib[,c("GlobalID","sonde_id","sonde_other","discrete_or_continuous","pre_post","dts_startstop",colnames(df_Calib)[53:95])]
-df_CalibMeta <- df_Calib[,c("GlobalID","sonde_id","sonde_other","discrete_or_continuous","pre_post","dts_startstop",colnames(df_Calib)[7:52])]
+df_CalibMeta <- df_Calib[,c("GlobalID","sonde_id","sonde_other","discrete_or_continuous","pre_post","dts_startstop",colnames(df_Calib)[c(7:52,99)])]
 
 save(df_Calib, df_CalibData, df_CalibMeta, file = here::here("working","CDFW_CalibrationWorksheet.RData"))
 ```
