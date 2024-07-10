@@ -447,16 +447,18 @@ toc()
 names(list_ratings) <- names(list_drift)#[1:22] # there are only 22 deployments with both Deployment and Recovery exchanges (needed times for first 2022 deployment)
 
 allRatings.2 <- do.call(rbind.data.frame, list_ratings)
-allRatings <- allRatings.2[with(allRatings.2, order(varX, sondeID, dateRecov)),]
+allRatings.2b <- allRatings.2[-which(is.na(allRatings.2$Rating_final)==TRUE),]
+allRatings <- allRatings.2b[with(allRatings.2b, order(varX, sondeID, dateRecov)),]
 rownames(allRatings) <- NULL
 allRatings$Rating_final2 <- factor(allRatings$Rating_final, levels = c("Excellent","Good","Fair","Poor","MaxLimit"))
 allRatings$varX2 <- factor(allRatings$varX, levels = c("temp","sc","DO","turb","pH","chl","pc","fdom"))
 
-plo_ratings <- ggplot(allRatings[-which(is.na(allRatings$Rating_final)==TRUE),], aes(x = dateRecov, y = Rating_final2)) + 
+plo_ratings <- ggplot(allRatings, aes(x = dateRecov, y = Rating_final2)) + 
   geom_point() + 
   facet_grid(varX2~sondeID) +
   scale_y_discrete(limits=rev)
 plo_ratings
+ggsave(paste("DiscreteRatings_2022",".png",sep = ""), path = here::here("figures"), plo_ratings, width = 1200, height = 900, dpi = 96, units = "px")
 
 save(allRatings, list_ratings, file = here::here("working","DiscreteSensorRatings240627.RData"))
 ```
