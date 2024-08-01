@@ -461,7 +461,7 @@ Now, we will bring in the sensor ratings and associate them with each dataset. R
 rm(list = ls())
 '%ni%' = Negate('%in%')
 load(here::here("working","RTD_Trim2.RData"))
-load(here::here("working","SensorRatings230714.RData"))
+load(here::here("working","SensorRatings240725.RData"))
 load(here::here("working","DWRtranscribed_Ratings.RData"))
 load(here::here("working","CDFW_VarNamesConversion.RData"))
 rm(list_all_excess2)
@@ -522,19 +522,21 @@ names(list_all_qc) <- names(list_all_trim2)
 
 ### summarise the data for each variable based on Quality Score and then plot them to see proportion of data that is satisfactory
 library(plyr)
-summ_2022 <- ddply(allRatings[-which(allRatings$varX %in% c("DO_sat","sc_InAir")),], c("varX","Rating_final"), summarise,
-                   v = sum(nObs, na.rm = TRUE))
-tot_2022 <- ddply(allRatings[which(is.na(allRatings$nObs)==F),], c("sondeID","dateRecov"), summarise,
-                   v = sum(nObs, na.rm = TRUE),
-                   t = mean(nObs, na.rm = TRUE))
-allObs <- sum(tot_2022$t)
+allRatings$year <- lubridate::year(allRatings$dateRecov)
+summ_2023.2 <- ddply(allRatings[which(allRatings$varX %ni% c("DO_sat","sc_InAir") & allRatings$year == 2023),], c("varX","Rating_final"), summarise,
+                     v = sum(nObs, na.rm = TRUE))
+tot_2023 <- ddply(allRatings[which(is.na(allRatings$nObs)==F & allRatings$year == 2023),], c("varX"), summarise,
+                   tot = sum(nObs, na.rm = TRUE))#,
+                   #t = mean(nObs, na.rm = TRUE))
+#allObs <- sum(tot_2023$t)
 
-summ_2022$propX <- summ_2022$v/allObs
-summ_2022$Rating_finalF <- factor(summ_2022$Rating_final, levels = c("Excellent","Good","Fair","Poor","MaxLimit","NA"))
-summ_2022$varX_F <- factor(summ_2022$varX, levels = c("temp","sc","DO","turb","chl","pc","fdom","pH"))
+summ_2023 <- merge(summ_2023.2, tot_2023, by = "varX", all.x = TRUE)
+summ_2023$propX <- summ_2023$v/summ_2023$tot
+summ_2023$Rating_finalF <- factor(summ_2023$Rating_final, levels = c("Excellent","Good","Fair","Poor","MaxLimit","NA"))
+summ_2023$varX_F <- factor(summ_2023$varX, levels = c("temp","sc","DO","turb","chl","pc","fdom","pH"))
 
 library(ggplot2)
-plo_summ <- ggplot(summ_2022, aes(varX_F, propX)) + geom_bar(aes(fill = Rating_finalF), stat = "identity")
+plo_summ <- ggplot(summ_2023, aes(varX_F, propX)) + geom_bar(aes(fill = Rating_finalF), stat = "identity")
 plo_summ
 
 save(list_all_qc, file = here::here("working","QCd_Data_FRP.RData"))
@@ -588,8 +590,10 @@ for(i in 1:length(list_all_qc)){
   }
 }
 
-#save(list_all_2022, file = here::here("working","QCd_2022.RData"))
+save(list_all_2023, file = here::here("working","QCd_2023.RData"))
 FLYW <- do.call(rbind.data.frame, list_all_2023[[1]])
 DECK <- do.call(rbind.data.frame, list_all_2023[[2]])
 WINT <- do.call(rbind.data.frame, list_all_2023[[14]])
 ```
+
+Call in list_all_2023 into the scripts "WaterVAR_QC.Rmd" (where VAR is the variable of interest) to perform further quality control measures.

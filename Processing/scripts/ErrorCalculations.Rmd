@@ -133,7 +133,7 @@ names(list_drift) <- paste(ifelse(df_CalibData$sonde_id == "Other", df_CalibData
 save(list_drift, file = here::here("working","DriftError.RData"))
 ```
 
-This chunk makes tables of criteria to base quality scores (ratings). Based mostly from DWR calculation sheet and the biological sensors critera are from the FRP QAPP
+This chunk makes tables of criteria to base quality scores (ratings). Based mostly from DWR calculation sheet and the biological sensors criteria are from the FRP QAPP. As of 20240725, the criteria turbidity scores were adjusted to match the new DWR criteria in DWR-1-FRM-029_v1.1_RTD Drift Error Calculation Form.xlsx
 ```{r Error ratings}
 rm(list = ls())
 
@@ -146,10 +146,10 @@ df_Ratings_num <- data.frame(varX = c("temp","sc","DO","pH","turb","chl","pc","f
                          MaxLimit = c(999))# important for making logical statement further downstream
 df_Ratings_perc <- data.frame(varX = c("temp","sc","DO","pH","turb","chl","pc","fdom","DO_sat"),
                               zed = c(NA,0,0,NA,0,0,0,0,0),# important for making logical statement further downstream
-                         Excellent = c(NA, 0.03, 0.05, NA, 0.05, 0.05, 0.05, 0.05,0.05),
-                         Good = c(NA, 0.1, 0.1, NA, 0.1, 0.1, 0.1, 0.1,0.1),
-                         Fair = c(NA, 0.15, 0.15, NA, 0.15, 0.15, 0.15, 0.15, 0.15),
-                         Poor = c(NA, 0.3, 0.2, NA, 0.3, 0.2, 0.2, 0.2, 0.2),
+                         Excellent = c(NA, 0.03, 0.05, NA, 0.15, 0.05, 0.05, 0.05,0.05),
+                         Good = c(NA, 0.1, 0.1, NA, 0.2, 0.1, 0.1, 0.1,0.1),
+                         Fair = c(NA, 0.15, 0.15, NA, 0.25, 0.15, 0.15, 0.15, 0.15),
+                         Poor = c(NA, 0.3, 0.2, NA, 0.4, 0.2, 0.2, 0.2, 0.2),
                          MaxLimit = c(NA,999,999,NA,999,999,999,999,999))# important for making logical statement further downstream
 
 save(df_Ratings_num, df_Ratings_perc, file = here::here("working","ErrorRating_Thresholds.RData"))
@@ -290,7 +290,7 @@ allRatings.2 <- do.call(rbind.data.frame, list_ratings)
 allRatings <- allRatings.2[with(allRatings.2, order(varX, sondeID, dateRecov)),]
 rownames(allRatings) <- NULL
 
-save(allRatings, list_ratings, file = here::here("working","SensorRatings240701.RData"))
+save(allRatings, list_ratings, file = here::here("working","SensorRatings240725.RData"))
 ```
 
 This chunk calculates total error from sensor drift for just the discrete sondes

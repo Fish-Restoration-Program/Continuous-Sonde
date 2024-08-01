@@ -137,7 +137,7 @@ s <- excel_sheets(here::here("Raw","SondeData_StartStopTimes.xlsx"))
 s2 <- s[-1]
 list_s <- list()
 for(i in seq_along(s2)){
-  df <- read_excel(here::here("Raw","SondeData_StartStopTimes.xlsx"), sheet = s2[i], skip = 1, col_types = c("text","date",rep("text",8)))
+  df <- read_excel(here::here("Raw","SondeData_StartStopTimes.xlsx"), sheet = s2[i], skip = 1, col_types = c("text","date",rep("text",9)))
   list_s[[i]] <- df
   rm(df)
 }
