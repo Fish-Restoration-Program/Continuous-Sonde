@@ -254,6 +254,13 @@ library(CDECRetrieve)
 rm(list = ls())
 
 BDL_DO <- cdec_query("BDL", "61", "E", "2023-01-01", "2023-12-31")
+BDL_temp <- cdec_query("BDL", "25", "E", "2023-01-01", "2023-12-31")
+BDL_sc <- cdec_query("BDL", "100", "E", "2023-01-01", "2023-12-31")
+BDL_chl <- cdec_query("BDL", "28", "E", "2023-01-01", "2023-12-31")
+BDL_ph <- cdec_query("BDL", "62", "E", "2023-01-01", "2023-12-31")
+BDL_turb <- cdec_query("BDL", "27", "E", "2023-01-01", "2023-12-31")
+
+save(BDL_DO, BDL_temp, BDL_sc, BDL_chl, BDL_ph, BDL_turb, file = here::here("working", "ExtPrograms", "ExtProg_2023", "DWR_BDL.RData"))
 
 siteNumber <- "381142122015801"
 parameterCd <- "00065" # Discharge
