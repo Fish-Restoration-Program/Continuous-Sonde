@@ -1,0 +1,1 @@
+The file saved .RData files in this 'archive' folder were used in the Annual Report for 2022. It contains data passed through old Turbidity rating and data that was not removed for Error Ratings of "MaxLimit" or "Poor" prior to the secondary QC performed in the script "WaterVarQC_2022.Rmd'.

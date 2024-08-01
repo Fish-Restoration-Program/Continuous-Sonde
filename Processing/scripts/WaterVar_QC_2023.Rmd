@@ -40,7 +40,9 @@ rm(list = ls())
 #temp_H_0 <- readRDS("WaterTemp/data/Temp_all_H.rds")
 load(here::here("working","QCd_2023.RData"))
 
-xSite <- names(list_all_2023)[-c(3,4,12)]
+# Check which datasets have data
+names(list_all_2023)
+xSite <- names(list_all_2023)[-c(3,4,12)] # Do not have data so will not include in the downstream processes
 xVar <- c("TempC","DOmgL","SPC","ChlRFU","PCRFU","fDOMRFU","Turb","pH")
 # xCol_CDFW <- colnames(list_all_2022$FLYW$`19C101551 2022-05-04 2022-06-06`)
 # xCol_DWR <- colnames(list_all_2022$TULE_Breach$`21L101264 2022-11-21 2023-01-19`)
@@ -73,10 +75,11 @@ for(i in 1:length(xSite)){
   df_ts$fDOMRFU[which(df_ts$fDOMRFU_qcE %in% c("MaxLimit","Poor"))] <- NA
   df_ts$Turb[which(df_ts$Turb_qcE %in% c("MaxLimit","Poor"))] <- NA
   df_ts$pH[which(df_ts$pHmgL_qcE %in% c("MaxLimit","Poor"))] <- NA
-  #varFlags <- data.frame(xVar, xFlag = c(unique(df_ts$TempC_qcE), unique(df_ts$DOmgL_qcE), unique(df_ts$SPC_qcE), unique(df_ts$ChlRFU_qcE), unique(df_ts$PCRFU_qcE), unique(df_ts$fDOMRFU_qcE),unique(df_ts$TurbRFU_qcE),unique(df_ts$pHRFU_qcE)))
+  # Make variables for date, hour, minute
   df_ts$date <- lubridate::date(df_ts$dts)
   df_ts$hour <- lubridate::hour(df_ts$dts)
   df_ts$minute <- lubridate::minute(df_ts$dts)
+  # subset for 2022 data only
   df_ts <- df_ts[-which(df_ts$Depthm <0 | 
                           df_ts$SPC < 100 | 
                           (df_ts$dts < as.POSIXct(strptime("2023-01-01 00:00:00", format = "%Y-%m-%d %H:%M:%S"))|
@@ -494,6 +497,7 @@ for(i in 1:length(xSite)){
     #rm(xPlo)
   }
   names(list_plo) <- xVar
+  # This ifelse statement allows CDFW sites to plot all variables except pH while DWR sites plot all variables except Chl, PC, and fDOM. Starting in 2024, DWR sites will have Chl and PC
   if(xSite[i] %in% c("FLYW", "DECK_Pool","DECK_Breach")){
     multi_plo <- ggarrange(list_plo[[1]], list_plo[[2]], list_plo[[3]], list_plo[[4]], list_plo[[5]], list_plo[[6]], list_plo[[7]],
                          ncol = 1, nrow = 7)
