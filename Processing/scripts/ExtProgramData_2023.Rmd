@@ -5,102 +5,6 @@ date: "8/1/2024"
 output: html_document
 ---
 
-For 2023 data from USGS Toland station near Decker Island
-```{r}
-library(tidyverse)
-library(dataRetrieval)
-rm(list = ls())
-
-siteNumber <- "11455485"
-parameterCd <- "00065" # Discharge
-startDate <- "2023-01-01T00:00"
-endDate <- "2023-12-31T23:45"
-timezone <- "America/Los_Angeles"
-
-parameterQ <- read.csv(here::here("raw","ExtPrograms","USGS","USGS_parameters.csv"))
-
-dailyDataAvailable <- whatNWISdata(
- siteNumber = siteNumber,
- service = "iv"
-)
-dailyDataAvailable$parameter <- NA
-dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
-siteINFO <- readNWISsite(siteNumber)
-siteAll <- readNWISdata(sites = siteNumber, service = "iv", startDate = startDate, endDate = endDate,tz = timezone)
-
-#save(siteAll, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_11455485.RData"))
-
-#load(here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_11455485.RData"))
-
-col2get <- data.frame(colnames(siteAll),NA)
-col2get[,2] <- stringr::str_match(col2get[,1], "_\\d+")
-col2get$parm_cd <- substr(col2get[,2],2,nchar(col2get[,2]))
-colnames(col2get) <- c("colsNames","num1","parm_cd")
-col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
-
-df_Toland <- siteAll[,c(2,3,14,15, # 14 and 15 are DO and its QC status
-                        which(colnames(siteAll) %in% col2get2[c(3,4, #temperature of upper sonde and its QC status
-                                                                    8,10,# SC of upper sonde and its QC status
-                                                                    13,14,# fdom of upper sonde and its QC status
-                                                                    15,16,# chl of upper sonde and its QC status
-                                                                    17,18) # turb of upper sonde and its QC status
-                                                                  ,"colsNames"] 
-                                  ))] 
-
-colnames(df_Toland)[3:14] <- c("do","do_flag","tempC","tempC_flag","sc","sc_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag")
-
-save(df_Toland, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_Toland.RData"))
-```
-
-For 2023 data from USGS Van Sickle station near Winter Island
-```{r}
-library(tidyverse)
-library(dataRetrieval)
-rm(list = ls())
-
-siteNumber <- "11455508"
-parameterCd <- "00065" # Discharge
-startDate <- "2023-01-01T00:00"
-endDate <- "2023-12-31T23:45"
-timezone <- "America/Los_Angeles"
-
-parameterQ <- read.csv(here::here("raw","ExtPrograms","USGS","USGS_parameters.csv"))
-
-dailyDataAvailable <- whatNWISdata(
- siteNumber = siteNumber,
- service = "iv"
-)
-dailyDataAvailable$parameter <- NA
-dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
-siteINFO <- readNWISsite(siteNumber)
-siteAll <- readNWISdata(sites = siteNumber, service = "iv", startDate = startDate, endDate = endDate,tz = timezone)
-
-#save(siteAll, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_11455508.RData"))
-
-#load(here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_11455140.RData"))
-
-col2get <- data.frame(colnames(siteAll),NA)
-col2get[,2] <- stringr::str_match(col2get[,1], "_\\d+")
-col2get$parm_cd <- substr(col2get[,2],2,nchar(col2get[,2]))
-colnames(col2get) <- c("colsNames","num1","parm_cd")
-col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
-
-df_VanSickle <- siteAll[,c(2,3,12,13, # 12 and 13 are DO and its QC status
-                          which(colnames(siteAll) %in% col2get2[c(1,2, #temperature of upper sonde and its QC status
-                                                                    7,8,# SC of upper sonde and its QC status
-                                                                    13,14,# fdom of upper sonde and its QC status
-                                                                    16,15,# chl of upper sonde and its QC status
-                                                                    17,18,# turb of upper sonde and its QC status
-                                                                    9,10,# pH and its QC status
-                                                                    5,6) # gage height and its QC status
-                                                                  ,"colsNames"] 
-                                  ))] 
-
-colnames(df_VanSickle)[3:18] <- c("do","do_flag","tempC","tempC_flag","sc","sc_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag", "pH","pH_flag","gage","gage_flag")
-
-save(df_VanSickle, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_VanSickle.RData"))
-```
-
 For 2023 data from USGS Toe Drain station near Yolo Flyway Farms
 ```{r}
 library(tidyverse)
@@ -115,18 +19,18 @@ timezone <- "America/Los_Angeles"
 
 parameterQ <- read.csv(here::here("raw","ExtPrograms","USGS","USGS_parameters.csv"))
 
-dailyDataAvailable <- whatNWISdata(
- siteNumber = siteNumber,
- service = "iv"
-)
-dailyDataAvailable$parameter <- NA
-dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
-siteINFO <- readNWISsite(siteNumber)
-siteAll <- readNWISdata(sites = siteNumber, service = "iv", startDate = startDate, endDate = endDate,tz = timezone)
+# dailyDataAvailable <- whatNWISdata(
+#  siteNumber = siteNumber,
+#  service = "iv"
+# )
+# dailyDataAvailable$parameter <- NA
+# dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
+# siteINFO <- readNWISsite(siteNumber)
+# siteAll <- readNWISdata(sites = siteNumber, service = "iv", startDate = startDate, endDate = endDate,tz = timezone)
 
 #save(siteAll, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_11455140.RData"))
 
-#load(here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_11455140.RData"))
+load(here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_11455140.RData"))
 
 col2get <- data.frame(colnames(siteAll),NA)
 col2get[,2] <- stringr::str_match(col2get[,1], "_\\d+")
@@ -145,7 +49,8 @@ df_ToeDrain <- siteAll[,c(2,3,12,13, # 12 and 13 are DO and its QC status
                                                                   ,"colsNames"] 
                                   ))] 
 
-colnames(df_ToeDrain)[3:18] <- c("do","do_flag","tempC","tempC_flag","sc","sc_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag", "pH","pH_flag","gage","gage_flag")
+col2get2$parm_nm
+colnames(df_ToeDrain)[3:18] <- c("do","do_flag","tempC","tempC_flag","gage","gage_flag","sc","sc_flag","pH","pH_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag")
 
 save(df_ToeDrain, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_ToeDrain.RData"))
 ```
@@ -164,18 +69,18 @@ timezone <- "America/Los_Angeles"
 
 parameterQ <- read.csv(here::here("raw","ExtPrograms","USGS","USGS_parameters.csv"))
 
-dailyDataAvailable <- whatNWISdata(
- siteNumber = siteNumber,
- service = "iv"
-)
-dailyDataAvailable$parameter <- NA
-dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
-siteINFO <- readNWISsite(siteNumber)
-siteAll <- readNWISdata(sites = siteNumber, service = "iv", startDate = startDate, endDate = endDate,tz = timezone)
+# dailyDataAvailable <- whatNWISdata(
+#  siteNumber = siteNumber,
+#  service = "iv"
+# )
+# dailyDataAvailable$parameter <- NA
+# dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
+# siteINFO <- readNWISsite(siteNumber)
+# siteAll <- readNWISdata(sites = siteNumber, service = "iv", startDate = startDate, endDate = endDate,tz = timezone)
 
 #save(siteAll, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_11455315.RData"))
 
-#load(here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_11455315.RData"))
+load(here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_11455315.RData"))
 
 col2get <- data.frame(colnames(siteAll),NA)
 col2get[,2] <- stringr::str_match(col2get[,1], "_\\d+")
@@ -185,18 +90,119 @@ col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
 
 df_Liberty <- siteAll[,c(2,3,12,13,# 12 and 13 are DO and its QC status
                          which(colnames(siteAll) %in% col2get2[c(1,2, #temperature of upper sonde and its QC status
-                                                                    8,7,# SC of upper sonde and its QC status
-                                                                    13,14,# fdom of upper sonde and its QC status
-                                                                    16,15,# chl of upper sonde and its QC status
-                                                                    19,20,# turb of upper sonde and its QC status
-                                                                    9,10,# pH and its QC status
-                                                                    5,6) # gage height and its QC status
-                                                                  ,"colsNames"] 
-                                  ))] 
+                                                                 8,7,# SC of upper sonde and its QC status
+                                                                 13,14,# fdom of upper sonde and its QC status
+                                                                 16,15,# chl of upper sonde and its QC status
+                                                                 19,20,# turb of upper sonde and its QC status
+                                                                 9,10,# pH and its QC status
+                                                                 5,6) # gage height and its QC status
+                                                               ,"colsNames"]
+                               ))] 
 
-colnames(df_Liberty)[3:18] <- c("do","do_flag","tempC","tempC_flag","sc","sc_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag", "pH","pH_flag","gage","gage_flag")
+col2get2$parm_nm
+colnames(df_Liberty)[3:18] <- c("do","do_flag","tempC","tempC_flag","gage","gage_flag","sc","sc_flag","pH","pH_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag")
 
 save(df_Liberty, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_Liberty.RData"))
+```
+
+For 2023 data from USGS Toland station near Decker Island
+```{r}
+library(tidyverse)
+library(dataRetrieval)
+rm(list = ls())
+
+siteNumber <- "11455485"
+parameterCd <- "00065" # Discharge
+startDate <- "2023-01-01T00:00"
+endDate <- "2023-12-31T23:45"
+timezone <- "America/Los_Angeles"
+
+parameterQ <- read.csv(here::here("raw","ExtPrograms","USGS","USGS_parameters.csv"))
+
+# dailyDataAvailable <- whatNWISdata(
+#  siteNumber = siteNumber,
+#  service = "iv"
+# )
+# dailyDataAvailable$parameter <- NA
+# dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
+# siteINFO <- readNWISsite(siteNumber)
+# siteAll <- readNWISdata(sites = siteNumber, service = "iv", startDate = startDate, endDate = endDate,tz = timezone)
+
+#save(siteAll, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_11455485.RData"))
+
+load(here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_11455485.RData"))
+
+col2get <- data.frame(colnames(siteAll),NA)
+col2get[,2] <- stringr::str_match(col2get[,1], "_\\d+")
+col2get$parm_cd <- substr(col2get[,2],2,nchar(col2get[,2]))
+colnames(col2get) <- c("colsNames","num1","parm_cd")
+col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
+
+df_Toland <- siteAll[,c(2,3,14,15, # 14 and 15 are DO and its QC status
+                        which(colnames(siteAll) %in% col2get2[c(3,4, #temperature of upper sonde and its QC status,
+                                                                5,6, #gage height and its QC status
+                                                                8,10,# SC of upper sonde and its QC status
+                                                                11,12, # pH and its QC status
+                                                                13,14,# fdom of upper sonde and its QC status
+                                                                15,16,# chl of upper sonde and its QC status
+                                                                17,18) # turb of upper sonde and its QC status
+                                                              ,"colsNames"] 
+                              ))] 
+
+col2get2$parm_nm
+colnames(df_Toland)[3:18] <- c("do","do_flag","tempC","tempC_flag","gage","gage_flage","sc","sc_flag","pH","pH_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag")
+
+save(df_Toland, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_Toland.RData"))
+```
+
+For 2023 data from USGS Van Sickle station near Winter Island
+```{r}
+library(tidyverse)
+library(dataRetrieval)
+rm(list = ls())
+
+siteNumber <- "11455508"
+parameterCd <- "00065" # Discharge
+startDate <- "2023-01-01T00:00"
+endDate <- "2023-12-31T23:45"
+timezone <- "America/Los_Angeles"
+
+parameterQ <- read.csv(here::here("raw","ExtPrograms","USGS","USGS_parameters.csv"))
+
+# dailyDataAvailable <- whatNWISdata(
+#  siteNumber = siteNumber,
+#  service = "iv"
+# )
+# dailyDataAvailable$parameter <- NA
+# dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
+# siteINFO <- readNWISsite(siteNumber)
+# siteAll <- readNWISdata(sites = siteNumber, service = "iv", startDate = startDate, endDate = endDate,tz = timezone)
+
+#save(siteAll, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_11455508.RData"))
+
+load(here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_11455140.RData"))
+
+col2get <- data.frame(colnames(siteAll),NA)
+col2get[,2] <- stringr::str_match(col2get[,1], "_\\d+")
+col2get$parm_cd <- substr(col2get[,2],2,nchar(col2get[,2]))
+colnames(col2get) <- c("colsNames","num1","parm_cd")
+col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
+
+df_VanSickle <- siteAll[,c(2,3,12,13, # 12 and 13 are DO and its QC status
+                          which(colnames(siteAll) %in% col2get2[c(1,2, #temperature of upper sonde and its QC status
+                                                                  7,8,# SC of upper sonde and its QC status
+                                                                  13,14,# fdom of upper sonde and its QC status
+                                                                  16,15,# chl of upper sonde and its QC status
+                                                                  17,18,# turb of upper sonde and its QC status
+                                                                  9,10,# pH and its QC status
+                                                                  5,6) # gage height and its QC status
+                                                                ,"colsNames"] 
+                                ))] 
+
+col2get2$parm_nm
+colnames(df_VanSickle)[3:18] <- c("do","do_flag","tempC","tempC_flag","gage","gage_flag","sc","sc_flag","pH","pH_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag")
+
+save(df_VanSickle, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_VanSickle.RData"))
 ```
 
 For 2023 data from USGS Grizzly Bay station near Tule Red
@@ -213,18 +219,18 @@ timezone <- "America/Los_Angeles"
 
 parameterQ <- read.csv(here::here("raw","ExtPrograms","USGS","USGS_parameters.csv"))
 
-dailyDataAvailable <- whatNWISdata(
- siteNumber = siteNumber,
- service = "iv"
-)
-dailyDataAvailable$parameter <- NA
-dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
-siteINFO <- readNWISsite(siteNumber)
-siteAll <- readNWISdata(sites = siteNumber, service = "iv", startDate = startDate, endDate = endDate,tz = timezone)
+# dailyDataAvailable <- whatNWISdata(
+#  siteNumber = siteNumber,
+#  service = "iv"
+# )
+# dailyDataAvailable$parameter <- NA
+# dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
+# siteINFO <- readNWISsite(siteNumber)
+# siteAll <- readNWISdata(sites = siteNumber, service = "iv", startDate = startDate, endDate = endDate,tz = timezone)
 
 #save(siteAll, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_380631122032201.RData"))
 
-#load(here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_380631122032201.RData"))
+load(here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_380631122032201.RData"))
 
 col2get <- data.frame(colnames(siteAll),NA)
 col2get[,2] <- stringr::str_match(col2get[,1], "_\\d+")
@@ -234,77 +240,20 @@ col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
 
 df_Grizzly <- siteAll[,c(2,3,8,9, # 8 and 9 are DO and its QC status
                          which(colnames(siteAll) %in% col2get2[c(2,1, #temperature of upper sonde and its QC status
-                                                                    3,4,# SC of upper sonde and its QC status
-                                                                    10,9,# fdom of upper sonde and its QC status
-                                                                    11,12,# chl of upper sonde and its QC status
-                                                                    14,13,# turb of upper sonde and its QC status
-                                                                    6,5)# pH and its QC status
-                                                                  ,"colsNames"] 
-                                  ))] 
+                                                                 3,4,# SC of upper sonde and its QC status
+                                                                 10,9,# fdom of upper sonde and its QC status
+                                                                 11,12,# chl of upper sonde and its QC status
+                                                                 14,13,# turb of upper sonde and its QC status
+                                                                 6,5)# pH and its QC status
+                                                               ,"colsNames"]
+                               ))] 
 
-colnames(df_Grizzly)[3:16] <- c("do","do_flag","tempC","tempC_flag","sc","sc_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag", "pH","pH_flag")
+col2get2$parm_nm
+colnames(df_Grizzly)[3:16] <- c("do","do_flag","tempC","tempC_flag","sc","sc_flag","pH","pH_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag")
 
 save(df_Grizzly, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_Grizzly.RData"))
 ```
 
-For 2023 data from DWR Beldens station near Wings
-```{r}
-library(tidyverse)
-library(CDECRetrieve)
-rm(list = ls())
-
-BDL_DO <- cdec_query("BDL", "61", "E", "2023-01-01", "2023-12-31")
-BDL_temp <- cdec_query("BDL", "25", "E", "2023-01-01", "2023-12-31")
-BDL_sc <- cdec_query("BDL", "100", "E", "2023-01-01", "2023-12-31")
-BDL_chl <- cdec_query("BDL", "28", "E", "2023-01-01", "2023-12-31")
-BDL_ph <- cdec_query("BDL", "62", "E", "2023-01-01", "2023-12-31")
-BDL_turb <- cdec_query("BDL", "27", "E", "2023-01-01", "2023-12-31")
-
-save(BDL_DO, BDL_temp, BDL_sc, BDL_chl, BDL_ph, BDL_turb, file = here::here("working", "ExtPrograms", "ExtProg_2023", "DWR_BDL.RData"))
-
-siteNumber <- "381142122015801"
-parameterCd <- "00065" # Discharge
-startDate <- "2023-01-01T00:00"
-endDate <- "2023-12-31T23:45"
-timezone <- "America/Los_Angeles"
-
-parameterQ <- read.csv(here::here("raw","ExtPrograms","USGS","USGS_parameters.csv"))
-
-dailyDataAvailable <- whatNWISdata(
- siteNumber = siteNumber,
- service = "iv"
-)
-dailyDataAvailable$parameter <- NA
-dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
-siteINFO <- readNWISsite(siteNumber)
-siteAll <- readNWISdata(sites = siteNumber, service = "iv", startDate = startDate, endDate = endDate,tz = timezone)
-
-#save(siteAll, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_381142122015801.RData"))
-
-#load(here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_381142122015801.RData"))
-
-col2get <- data.frame(colnames(siteAll),NA)
-col2get[,2] <- stringr::str_match(col2get[,1], "_\\d+")
-col2get$parm_cd <- substr(col2get[,2],2,nchar(col2get[,2]))
-colnames(col2get) <- c("colsNames","num1","parm_cd")
-col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
-
-df_RushRanch <- siteAll[,c(2,3,12,13, # 12 and 13 are DO and its QC status
-                         which(colnames(siteAll) %in% col2get2[c(1,2, #temperature of upper sonde and its QC status
-                                                                    8,7,# SC of upper sonde and its QC status
-                                                                    13,14,# fdom of upper sonde and its QC status
-                                                                    16,15,# chl of upper sonde and its QC status
-                                                                    17,18,# turb of upper sonde and its QC status
-                                                                    9,10,# pH and its QC status
-         
-        5,6)# gage height and its QC status
-                                                                  ,"colsNames"] 
-                                  ))] 
-
-colnames(df_RushRanch)[3:18] <- c("do","do_flag","tempC","tempC_flag","sc","sc_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag", "pH","pH_flag","gage","gage_flag")
-
-save(df_Beldens, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_RushRanch.RData"))
-```
 
 For 2023 data from USGS Rush Ranch station near Wings
 ```{r}
@@ -320,18 +269,18 @@ timezone <- "America/Los_Angeles"
 
 parameterQ <- read.csv(here::here("raw","ExtPrograms","USGS","USGS_parameters.csv"))
 
-dailyDataAvailable <- whatNWISdata(
- siteNumber = siteNumber,
- service = "iv"
-)
-dailyDataAvailable$parameter <- NA
-dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
-siteINFO <- readNWISsite(siteNumber)
-siteAll <- readNWISdata(sites = siteNumber, service = "iv", startDate = startDate, endDate = endDate,tz = timezone)
+# dailyDataAvailable <- whatNWISdata(
+#  siteNumber = siteNumber,
+#  service = "iv"
+# )
+# dailyDataAvailable$parameter <- NA
+# dailyDataAvailable2 <- merge(dailyDataAvailable, parameterQ[,c(1,3)], by = "parm_cd")
+# siteINFO <- readNWISsite(siteNumber)
+# siteAll <- readNWISdata(sites = siteNumber, service = "iv", startDate = startDate, endDate = endDate,tz = timezone)
 
 #save(siteAll, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_381142122015801.RData"))
 
-#load(here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_381142122015801.RData"))
+load(here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_381142122015801.RData"))
 
 col2get <- data.frame(colnames(siteAll),NA)
 col2get[,2] <- stringr::str_match(col2get[,1], "_\\d+")
@@ -341,19 +290,61 @@ col2get2 <- merge(col2get,parameterQ[,c(1,3)],by = "parm_cd")
 
 df_RushRanch <- siteAll[,c(2,3,12,13, # 12 and 13 are DO and its QC status
                          which(colnames(siteAll) %in% col2get2[c(1,2, #temperature of upper sonde and its QC status
-                                                                    8,7,# SC of upper sonde and its QC status
-                                                                    13,14,# fdom of upper sonde and its QC status
-                                                                    16,15,# chl of upper sonde and its QC status
-                                                                    17,18,# turb of upper sonde and its QC status
-                                                                    9,10,# pH and its QC status
-         
-        5,6)# gage height and its QC status
-                                                                  ,"colsNames"] 
-                                  ))] 
+                                                                 8,7,# SC of upper sonde and its QC status
+                                                                 13,14,# fdom of upper sonde and its QC status
+                                                                 16,15,# chl of upper sonde and its QC status
+                                                                 17,18,# turb of upper sonde and its QC status
+                                                                 9,10,# pH and its QC status
+                                                                 5,6)# gage height and its QC status
+                                                               ,"colsNames"]
+                               ))] 
 
-colnames(df_RushRanch)[3:18] <- c("do","do_flag","tempC","tempC_flag","sc","sc_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag", "pH","pH_flag","gage","gage_flag")
+col2get2$parm_nm
+colnames(df_RushRanch)[3:18] <- c("do","do_flag","tempC","tempC_flag","gage","gage_flag","sc","sc_flag","pH","pH_flag","fdom","fdom_flag","chl","chl_flag","turb","turb_flag")
 
 save(df_RushRanch, file = here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_RushRanch.RData"))
+```
+
+For 2023 data from DWR Beldens station near Wings
+```{r}
+library(tidyverse)
+library(CDECRetrieve)
+rm(list = ls())
+
+BDL_DO <- cdec_query("BDL", "61", "E", "2023-01-01", "2023-12-31")
+BDL_temp <- cdec_query("BDL", "25", "E", "2023-01-01", "2023-12-31")
+BDL_sc <- cdec_query("BDL", "100", "E", "2023-01-01", "2023-12-31")
+BDL_chl <- cdec_query("BDL", "28", "E", "2023-01-01", "2023-12-31")
+BDL_ph <- cdec_query("BDL", "62", "E", "2023-01-01", "2023-12-31")
+BDL_turb <- cdec_query("BDL", "27", "E", "2023-01-01", "2023-12-31")
+
+#save(BDL_DO, BDL_temp, BDL_sc, BDL_chl, BDL_ph, BDL_turb, file = here::here("working", "ExtPrograms", "ExtProg_2023", "DWR_BDL.RData"))
+#load(here::here("working", "ExtPrograms", "ExtProg_2023", "DWR_BDL.RData"))
+
+BDL_DO$do <- as.numeric(BDL_DO$parameter_value)
+BDL_temp$tempC <- (as.numeric(BDL_temp$parameter_value)-32)*5/9
+BDL_sc$sc <- as.numeric(BDL_sc$parameter_value)
+BDL_chl$chl <- as.numeric(BDL_chl$parameter_value)
+BDL_turb$turb <- as.numeric(BDL_turb$parameter_value)
+BDL_ph$ph <- as.numeric(BDL_ph$parameter_value)
+
+df_Beldens <- cbind.data.frame(BDL_DO[,c("location_id","datetime","do")],
+                           BDL_temp[,c("tempC")],
+                           BDL_sc[,c("sc")],
+                           BDL_chl[,c("chl")],
+                           BDL_turb[,c("turb")],
+                           BDL_ph[,c("ph")])
+
+colnames(df_Beldens) <- c("site_no","dateTime","do","tempC","sc","chl","turb","pH")
+
+df_Beldens$do_flag <- "P"
+df_Beldens$tempC_flag <- "P"
+df_Beldens$sc_flag <- "P"
+df_Beldens$chl_flag <- "P"
+df_Beldens$turb_flag <- "P"
+df_Beldens$pH_flag <- "P"
+
+save(df_Beldens, file = here::here("working", "ExtPrograms", "ExtProg_2023", "DWR_Beldens.RData"))
 ```
 
 Check the coverage of Accepted vs Provisional data
@@ -368,9 +359,10 @@ load(here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_Toland.RData"))
 load(here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_VanSickle.RData"))
 load(here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_Grizzly.RData"))
 load(here::here("working", "ExtPrograms", "ExtProg_2023", "USGS_RushRanch.RData"))
+load(here::here("working", "ExtPrograms", "ExtProg_2023", "DWR_Beldens.RData"))
 
-list_all <- list(df_ToeDrain, df_Liberty, df_Toland, df_VanSickle, df_RushRanch, df_Grizzly)
-names(list_all) <- c("Toe Drain","Liberty Island","Toland Landing", "Van Sickle", "Rush Ranch", "Grizzly Bay")
+list_all <- list(df_ToeDrain, df_Liberty, df_Toland, df_VanSickle, df_RushRanch, df_Grizzly, df_Beldens)
+names(list_all) <- c("Toe Drain","Liberty Island","Toland Landing", "Van Sickle", "Rush Ranch", "Grizzly Bay", "Beldens Landing")
 
 dat2subset <- c("dateTime","do","tempC","sc","pH","fdom","chl","turb")
 flag2subset <- c("dateTime","do_flag","tempC_flag","sc_flag","pH_flag","fdom_flag","chl_flag","turb_flag")
@@ -392,8 +384,8 @@ for(i in 1:length(list_all)){
 }
 names(list_plo) <- names(list_all)
 names(list_long) <- names(list_all)
-multi_plo <- ggarrange(list_plo[[1]], list_plo[[2]], list_plo[[3]], list_plo[[4]], list_plo[[5]], list_plo[[6]],
-                         ncol = 6, nrow = 1,
+multi_plo <- ggarrange(list_plo[[1]], list_plo[[2]], list_plo[[3]], list_plo[[4]], list_plo[[5]], list_plo[[6]], list_plo[[7]],
+                         ncol = 7, nrow = 1,
                          common.legend = FALSE, legend = "bottom")
 ggsave(paste("ExtPrograms_2023",".png",sep = ""), multi_plo, width = 1920, height = 1080, dpi = 150, units = "px", path = here::here("working","ExtPrograms","ExtProg_2023"))
 
