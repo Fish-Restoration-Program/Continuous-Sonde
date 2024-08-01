@@ -16,3 +16,7 @@ Finally, we return to 'ContinuousSonde_Processing.Rmd' to trim the datasets to t
 After the initial error QC, the data are then passed through a secondary QC script adopted from Catarina Pien used in the data cleaning code, WaterTemp_QC.Rmd, found in edi.591.2
 
 Figures are then generated to look at each constituent on a station-by-station basis. Original data are shown in red overlaid with data that passed QC checks shown in black.
+
+The 'raw' folder contains "DWR_ErrorTransferWorksheet_Kiana.xlsx", which is manually updated in GitHub by grabbing it from DWR's SharePoint (C:\Users\DCox\California Department of Water Resources\DWR - Fish Restoration Program - Water Quality Lab\Data Processing\DriftCals_toCDFW)
+
+The 'raw' folder contains "SondeData_StartStopTimes.xlsx", which is manually updated in GitHub by grabbing it from DWR's SharePoint (C:\Users\DCox\California Department of Water Resources\DWR - Fish Restoration Program - Water Quality Lab\Data Processing)

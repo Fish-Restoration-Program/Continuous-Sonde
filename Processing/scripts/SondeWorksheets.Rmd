@@ -12,16 +12,17 @@ First, we'll import the Exchange Worksheets and their crosswalk (these were gene
 rm(list = ls())
 
 # read in the crosswalk file for renaming columns of raw Survey123 export file (Must make sure version matches)
-cw_Exch <- data.frame(read.csv(here::here("raw","Survey123", "Exchanges230630_ColumnCrosswalk.csv")))
+cw_Exch <- data.frame(read.csv(here::here("raw","Survey123", "Exchanges_v230630", "Exchanges230630_ColumnCrosswalk.csv")))
 
 # read in the export frile from Survey123
-df_Exch <- data.frame(read.csv(here::here("raw","Survey123", "Exchanges230630_Export230703.csv")))
+#df_Exch <- data.frame(read.csv(here::here("raw","Survey123", "Exchanges230630_Export230703.csv"))) # this is for an older version now stored in the 'archive' folder
+df_Exch <- data.frame(read.csv(here::here("raw","Survey123", "Exchanges_v230630", "Exchanges230630_Export240602.csv")))
 
 # rename the columns of the export data
 colnames(df_Exch) <- cw_Exch$Var_Name
 
 # make a date variable that is in local timezone
-df_Exch$date2 <- as.Date(format(lubridate::mdy_hms(df_Exch$exchange_date), tz = "UTC"))
+df_Exch$date2 <- as.Date(format(lubridate::mdy_hms(df_Exch$exchange_date), tz = "America/Los_Angeles"))
 
 
 ### make datetime variable for the individual measurements
@@ -93,16 +94,18 @@ Now, let's import the Calibration Worksheets and their crosswalk (these were gen
 ```{r}
 rm(list = ls())
 '%ni%' = Negate('%in%')
-cw_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibration230612_ColumnCrosswalk.csv")))
-df_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibration230612_Export230706.csv")))
+cw_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibrations_v230612", "Calibration230612_ColumnCrosswalk.csv")))
+#df_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibrations_v230612", "Calibration230612_Export230706.csv"))) # this is for an older version now stored in the 'archive' folder
+#df_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibrations_v230612", "Calibration230612_Export240206.csv")))# this is for an older version now stored in the 'archive' folder
+df_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibrations_v230612", "Calibration230612_Export240701.csv")))
 colnames(df_Calib) <- cw_Calib$Var_Name
 
 # make a datetime object for the deployment start/stop time
-df_Calib$dts_startstop <- format(lubridate::mdy_hms(df_Calib$deployment_startstop_time), tz = "UTC")
+df_Calib$dts_startstop <- format(lubridate::mdy_hms(df_Calib$deployment_startstop_time), tz = "America/Los_Angeles")
 
 # make 2 separate dataframes (1 with just the data we are interested and 1 with the metadata)
 df_CalibData <- df_Calib[,c("GlobalID","sonde_id","sonde_other","discrete_or_continuous","pre_post","dts_startstop",colnames(df_Calib)[53:95])]
-df_CalibMeta <- df_Calib[,c("GlobalID","sonde_id","sonde_other","discrete_or_continuous","pre_post","dts_startstop",colnames(df_Calib)[7:52])]
+df_CalibMeta <- df_Calib[,c("GlobalID","sonde_id","sonde_other","discrete_or_continuous","pre_post","dts_startstop",colnames(df_Calib)[c(7:52,99)])]
 
 save(df_Calib, df_CalibData, df_CalibMeta, file = here::here("working","CDFW_CalibrationWorksheet.RData"))
 ```
@@ -134,14 +137,14 @@ s <- excel_sheets(here::here("Raw","SondeData_StartStopTimes.xlsx"))
 s2 <- s[-1]
 list_s <- list()
 for(i in seq_along(s2)){
-  df <- read_excel(here::here("Raw","SondeData_StartStopTimes.xlsx"), sheet = s2[i], skip = 1, col_types = c("text","date",rep("text",8)))
+  df <- read_excel(here::here("Raw","SondeData_StartStopTimes.xlsx"), sheet = s2[i], skip = 1, col_types = c("text","date",rep("text",9)))
   list_s[[i]] <- df
   rm(df)
 }
 
 SS <- do.call(rbind.data.frame, list_s)
 
-### There are some difficulties with the time colums so will standardize them for operability
+### There are some difficulties with the time columns so will standardize them for operability
 # First, convert to numeric and force NAs in rows that dont have numbers
 SS$start1 <- as.numeric(SS$`Start time`)
 SS$end1 <- as.numeric(SS$`end time`)
@@ -183,5 +186,130 @@ SS.2$arrival_time <- as.POSIXct(strptime(paste(as.character(SS.2$Date),SS.2$end2
 DWR.startstop <- SS.2[which(is.na(SS.2$sonde_id)==F & is.na(SS.2$departure_time)==F & is.na(SS.2$arrival_time)==F),
                       c("sonde_id","departure_time","arrival_time","end2")]
 save(DWR.startstop, file = here::here("working","DWR_startstop.Rda"))
+```
+
+This chunk reads in all of the Drift Error Calculation Worksheets for DWR deployments that are stored on the SharePoint site. This replaces the need for DWR_transcribed_ErrorRatings.Rmd
+```{r}
+rm(list = ls())
+# Load in the crosswalk between DWR naming scheme and SondeID
+load(here::here("working","DWR_SondeID_crosswalk.Rda"))
+# Add one more line since there is one Worksheet with CDFW as the informal name
+DWR_sondeID <- rbind.data.frame(DWR_sondeID,
+                                data.frame(sonde_id = "19C101659",
+                                           SondeName = "CDFW"))
+# Make lists to store each individual portion of the worksheet
+list_all_foul <- list() # fouling data
+list_all_drift <- list() # sensor drift data
+list_all_meta <- list() # metadata
+list_all_names <- list() # names to later store each list with
+
+# Make a vector with each file name
+files2import <- list.files(here::here("raw","DWR_errorcalcs"))
+
+# This for loop imports 1 Worksheet three different times so that the pertinent information is stored correctly. This is required since the Excel file is not very well designed for R import
+for(i in 1:length(files2import)){
+  # import the fouling section
+  foul <- data.frame(readxl::read_xlsx(paste(here::here("raw","DWR_errorcalcs"),files2import[i], sep = "/"), range = c("D12:I18"), col_names = F))
+  # rename the columns
+  colnames(foul) <- c("varX","units","preclean_deployed","preclean_verif","postclean_deployed","postclean_verif")
+  # remove empty rows
+  foul.2 <- foul[-c(4,7),]
+  # store fouling data frame as list item
+  list_all_foul[[i]] <- foul.2
+  
+  # import the sensor drift section
+  drift <- data.frame(readxl::read_xlsx(paste(here::here("raw","DWR_errorcalcs"),files2import[i], sep = "/"), range = c("D22:G29"), col_names = F))
+  # rename the columns
+  colnames(drift) <- c("varX","units","standard","sonde")
+  # remove the empty row
+  drift.2 <- drift[-c(4),]
+  # fill in empty cells
+  drift.2$varX[c(4:7)] <- c("ph_7","ph_10","turb_low","turb_high")
+  drift.2$units[which(drift.2$varX == "ph_10")] <- "Units"
+  drift.2$units[which(drift.2$varX == "turb_high")] <- "NTU"
+  # store sensor drift data as list item
+  list_all_drift[[i]] <- drift.2
+  
+  # import metadata section
+  meta <- data.frame(readxl::read_excel(paste(here::here("raw","DWR_errorcalcs"),files2import[i], sep = "/"), range = c("M10:O19"), col_names = F))
+  # rename columns
+  colnames(meta) <- c("meta_variable","remove","meta_value")
+  # remove empty columns and rows
+  meta.2 <- meta[-c(7),-c(2)]
+  # fix the date
+  meta.2$dateFix <- as.numeric(meta.2$meta_value)
+  # fix the date part2
+  meta.2$dateTime <- meta.2$dateFix
+  # fix the date part3
+  meta.2$dateTime[which(meta.2$meta_variable== "Field Date:")] <- paste(as.numeric(meta.2$meta_value[which(meta.2$meta_variable== "Field Date:")])+ as.numeric(meta.2$meta_value[which(meta.2$meta_variable== "Exchange Time:")]))
+  meta.2$dateTime[which(meta.2$meta_variable== "Post-Deployment Date:")] <- paste(as.numeric(meta.2$meta_value[which(meta.2$meta_variable== "Post-Deployment Date:")])+ as.numeric(meta.2$meta_value[which(meta.2$meta_variable== "Post-Deployment Time:")]))
+  # fix the date part4
+  meta.2$dts <- round(as.POSIXct(as.numeric(meta.2$dateTime) * (60 * 60 * 24), origin = "1899-12-30", tz = "UTC"), units = c("mins"))
+  # remove old date fix columns and unnecessary rows that store Time
+  meta.3 <- meta.2[-c(6,8),-which(colnames(meta.2) %in% c("dateFix","dateTime"))]
+  # replace the poorly formatted Excel date with R preferred date
+  meta.3$meta_value[which(meta.3$meta_variable == "Field Date:")] <- substr(as.character(meta.3$dts[which(meta.3$meta_variable == "Field Date:")]),0,19)
+  meta.3$meta_value[which(meta.3$meta_variable == "Post-Deployment Date:")] <- substr(as.character(meta.3$dts[which(meta.3$meta_variable == "Post-Deployment Date:")]),0,19)
+  # remove the old date column
+  meta.4 <- meta.3[,-which(colnames(meta.3) %in% c("dts"))]
+  # store  metadata as a list item
+  list_all_meta[[i]] <- meta.4
+  
+  # make a data frame that holds info to name each list item
+  df_name <- data.frame(sondename = meta.4$meta_value[which(meta.4$meta_variable == "Sonde ID:")],
+                        station = meta.4$meta_value[which(meta.4$meta_variable == "Removed From:")],
+                        date_recovery = substr(meta.4$meta_value[which(meta.4$meta_variable == "Field Date:")],0,10),
+                        sondeID = NA)
+  # determine sondeID for each line based on matching informal name
+  df_name$sondeID <- DWR_sondeID$sonde_id[which(df_name$sondename == DWR_sondeID$SondeName)]
+  # store naming info as a list item
+  list_all_names[[i]] <- df_name
+
+  # remove temporary items
+  rm(foul, foul.2, drift, drift.2, meta, meta.2, meta.3, meta.4, df_name)
+}
+
+# make long data frame from the list_all_names
+df_names <- do.call(rbind.data.frame, list_all_names)
+# fix incorrect dates (had to look at list_all_meta and find the corresponding item and then open that Excel file)
+df_names$date_recovery[which(df_names$sondeID == "21L101256" & df_names$date_recovery == "0")] <- "2022-06-30" # was missing Exchange Time so the date was set to 0
+df_names$date_recovery[which(df_names$sondeID == "23H107030" & df_names$date_recovery == "0")] <- "2023-11-21" # was missing Exchange Time so the date was set to 0
+df_names$date_recovery[which(df_names$sondeID == "19C101658" & df_names$date_recovery == "2024-06-01")] <- "2021-08-26" # was missing Exchange Time so the date was set to 0
+
+# set the names for each item in each list
+names(list_all_foul) <- paste(df_names$sondeID, df_names$date_recovery, sep = " ")
+names(list_all_drift) <- paste(df_names$sondeID, df_names$date_recovery, sep = " ")
+names(list_all_meta) <- paste(df_names$sondeID, df_names$date_recovery, sep = " ")
+
+save(list_all_foul, list_all_drift, list_all_meta, file = here::here("working","DWR_ErrorWorksheets.RData"))
+
+# foul <- readxl::read_xlsx(here::here("raw","2023-04-06_DRIFT_Wings.xlsx"), range = c("D12:I18"), col_names = F)
+# drift <- readxl::read_xlsx(here::here("raw","2023-04-06_DRIFT_Wings.xlsx"), range = c("D22:G29"), col_names = F)
+# meta <- readxl::read_excel(here::here("raw","2023-04-06_DRIFT_Wings.xlsx"), range = c("M10:O19"), col_names = F)
+# 
+# colnames(foul) <- c("varX","units","preclean_deployed","preclean_verif","postclean_deployed","postclean_verif")
+# foul.2 <- foul[-c(4,7),]
+# 
+# colnames(drift) <- c("varX","units","standard","sonde")
+# drift.2 <- drift[-c(4),]
+# drift.2$varX[c(4:7)] <- c("ph_7","ph_10","turb_low","turb_high")
+# drift.2$units[which(drift.2$varX == "ph_10")] <- "Units"
+# drift.2$units[which(drift.2$varX == "turb_high")] <- "NTU"
+# 
+# colnames(meta) <- c("meta_variable","remove","meta_value")
+# meta.2 <- meta[-c(7),-c(2)]
+# meta.2$dateFix <- as.numeric(meta.2$meta_value)
+# meta.2$dateTime <- meta.2$dateFix
+# meta.2$dateTime[which(meta.2$meta_variable== "Field Date:")] <- paste(as.numeric(meta.2$meta_value[which(meta.2$meta_variable== "Field Date:")])+ as.numeric(meta.2$meta_value[which(meta.2$meta_variable== "Exchange Time:")]))
+# meta.2$dateTime[which(meta.2$meta_variable== "Post-Deployment Date:")] <- paste(as.numeric(meta.2$meta_value[which(meta.2$meta_variable== "Post-Deployment Date:")])+ as.numeric(meta.2$meta_value[which(meta.2$meta_variable== "Post-Deployment Time:")]))
+# #meta.2$meta_value[which(meta.2$meta_variable== "Field Date:")] <- as.Date(as.numeric(meta.2$meta_value[which(meta.2$meta_variable== "Field Date:")]), origin = "1900-01-01")
+# #meta.2$dateFix2 <- as.Date(as.numeric(meta.2$dateFix), origin = "1899-12-30")
+# meta.2$dts <- as.POSIXct(as.numeric(meta.2$dateTime) * (60 * 60 * 24), origin = "1899-12-30", tz = "UTC")
+# 
+# meta.3 <- meta.2[-c(6,8),-which(colnames(meta.2) %in% c("dateFix","dateTime"))]
+# meta.3$meta_value[which(meta.3$meta_variable == "Field Date:")] <- substr(as.character(meta.3$dts[which(meta.3$meta_variable == "Field Date:")]),0,19)
+# meta.3$meta_value[which(meta.3$meta_variable == "Post-Deployment Date:")] <- substr(as.character(meta.3$dts[which(meta.3$meta_variable == "Post-Deployment Date:")]),0,19)
+# 
+# meta.4 <- meta.3[,-which(colnames(meta.3) %in% c("dts"))]
 ```
 
