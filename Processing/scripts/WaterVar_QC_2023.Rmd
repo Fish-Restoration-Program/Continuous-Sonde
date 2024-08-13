@@ -497,13 +497,20 @@ for(i in 1:length(xSite)){
     #rm(xPlo)
   }
   names(list_plo) <- xVar
-  # This ifelse statement allows CDFW sites to plot all variables except pH while DWR sites plot all variables except Chl, PC, and fDOM. Starting in 2024, DWR sites will have Chl and PC
-  if(xSite[i] %in% c("FLYW", "DECK_Pool","DECK_Breach")){
+  # This ifelse statement allows CDFW sites to plot all variables except pH while DWR sites plot all variables except fDOM. Starting in 2023, DWR sites will have Chl and PC (except exterior station for Arnold)
+  if(xSite[i] %in% c("FLYW", "DECK_Pool")){
     multi_plo <- ggarrange(list_plo[[1]], list_plo[[2]], list_plo[[3]], list_plo[[4]], list_plo[[5]], list_plo[[6]], list_plo[[7]],
                          ncol = 1, nrow = 7)
                          #common.legend = TRUE, legend = "bottom")
   ggsave(paste("ContinuousWQ_2023_",xSite[i],".png",sep = ""), multi_plo, width = 625, height = 800, dpi = 96, units = "px", path = here::here("figures","VarQC_2023"))
-  } else {
+  } 
+  if(xSite[i] %in% c("TULE_PondC","TULE_Main","ARNO_Interior","BRAD_Exterior","BRAD_Interior","LOWE_EastInt","WING","WINT")){
+  multi_plo <- ggarrange(list_plo[[1]], list_plo[[2]], list_plo[[3]], list_plo[[4]], list_plo[[5]], list_plo[[7]], list_plo[[8]],
+                         ncol = 1, nrow = 7)
+                         #common.legend = TRUE, legend = "bottom")
+  ggsave(paste("ContinuousWQ_2023_",xSite[i],".png",sep = ""), multi_plo, width = 625, height = 800, dpi = 96, units = "px", path = here::here("figures","VarQC_2023"))
+  }
+  if(xSite[i] %in% c("ARNO_Exterior")){
   multi_plo <- ggarrange(list_plo[[1]], list_plo[[2]], list_plo[[3]], list_plo[[7]], list_plo[[8]],
                          ncol = 1, nrow = 5)
                          #common.legend = TRUE, legend = "bottom")
