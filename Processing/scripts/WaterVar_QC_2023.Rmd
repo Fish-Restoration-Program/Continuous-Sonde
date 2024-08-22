@@ -1,0 +1,528 @@
+---
+title: "WaterVar_QC"
+author: "Daniel Cox"
+date: "July 25, 2024"
+output: html_document
+description: QC Steps for FRP data
+editor_options: 
+chunk_output_type: console
+---
+Modified by Daniel Cox, CDFW in July 2024 from original script written by Catarina Pien May 2020.
+
+---------------------------------------------------------------------------------
+In this file, we take the raw quarter-hourly FRP data compiled from the script "ContinuousSonde_Processing.Rmd". We then run the data through numerous QC tests that were informed by NOAA's Manual for Real-Time Quality Control of In-situ Temperature and Salinity Data:
+https://cdn.ioos.noaa.gov/media/2017/12/qartod_temperature_salinity_manual.pdf
+
+Two files are written, one that has suspect data flagged, one that has all suspect data filtered out. You can change the settings of the QC filters to fit your needs, and use the accompanying RShiny app to visualize how changing filters affects what data gets flagged. 
+------------------------------------------------------------------------------------
+
+
+Start by clearing the environment and loading packages.
+
+```{r setup, include = FALSE}
+rm(list=ls(all=TRUE))
+
+library(tidyverse)
+library(readr)
+library(lubridate)
+library(TTR) # rate of change
+library(caTools) # rate of change
+```
+
+## Load files, edit variable names
+
+* Filter out those that are not contiguous/ not active
+* Add datetime sorting variables
+```{r data, message = FALSE, warning = FALSE}
+rm(list = ls())
+#setwd("C:/Users/cpien/OneDrive - California Department of Water Resources/Work/ClimateChange/R_code/")
+#### Read files ###
+#temp_H_0 <- readRDS("WaterTemp/data/Temp_all_H.rds")
+load(here::here("working","QCd_2023.RData"))
+
+# Check which datasets have data
+names(list_all_2023)
+xSite <- names(list_all_2023)[-c(3,4,12)] # Do not have data so will not include in the downstream processes
+xVar <- c("TempC","DOmgL","SPC","ChlRFU","PCRFU","fDOMRFU","Turb","pH")
+# xCol_CDFW <- colnames(list_all_2022$FLYW$`19C101551 2022-05-04 2022-06-06`)
+# xCol_DWR <- colnames(list_all_2022$TULE_Breach$`21L101264 2022-11-21 2023-01-19`)
+# xCol_DWR <- xCol_DWR[which(xCol_DWR %in% c("Date","Time","tFracSec","Site","Depthm","DOsat","DOmgL","SPC","Turb","pH","TempC","Battery","dts","TempC_qcE","DOmgL_qcE","SPC_qcE","Turb_qcE"))]
+# list_all_2022$ARNO_Exterior$`19C101658 2021-12-17 2022-01-26`$pH <- NA
+# list_all_2022$ARNO_Exterior$`19C101659 2022-01-26 2022-03-01`$pH <- NA
+# list_all_2022$ARNO_Exterior$`19C101658 2022-03-01 2022-04-07`$pH <- NA
+# #result <- lapply(list_all_2022[["TULE_Breach"]], "[", xCol_DWR)
+
+list_all_qc <- list()
+for(i in 1:length(xSite)){
+  # if(xSite[i] %in% c("FLYW","DECK_Pool","DECK_Breach")){
+  #   list_site <- lapply(list_all_2022[[xSite[i]]], "[", xCol_CDFW)
+  #   df_ts <- do.call(rbind.data.frame, list_site)
+  #   df_ts$pH <- NA
+  # } else {
+  #   list_site <- lapply(list_all_2022[[xSite[i]]], "[", xCol_DWR)
+  #   df_ts <- do.call(rbind.data.frame, list_site)
+  #   df_ts[,c("ChlRFU","PCRFU","fDOMRFU")] <- NA
+  # }
+  #df_ts <- do.call(rbind.data.frame, list_site)
+  list_site <- list_all_2023[[xSite[i]]]
+  df_ts <- do.call(rbind.data.frame, list_site)
+  # remove values with the ratings "MaxLimit" and "Poor"
+  df_ts$TempC[which(df_ts$TempC_qcE %in% c("MaxLimit","Poor"))] <- NA
+  df_ts$DOmgL[which(df_ts$DOmgL_qcE %in% c("MaxLimit","Poor"))] <- NA
+  df_ts$SPC[which(df_ts$SPC_qcE %in% c("MaxLimit","Poor"))] <- NA
+  df_ts$ChlRFU[which(df_ts$ChlRFU_qcE %in% c("MaxLimit","Poor"))] <- NA
+  df_ts$PCRFU[which(df_ts$PC_qcE %in% c("MaxLimit","Poor"))] <- NA
+  df_ts$fDOMRFU[which(df_ts$fDOMRFU_qcE %in% c("MaxLimit","Poor"))] <- NA
+  df_ts$Turb[which(df_ts$Turb_qcE %in% c("MaxLimit","Poor"))] <- NA
+  df_ts$pH[which(df_ts$pHmgL_qcE %in% c("MaxLimit","Poor"))] <- NA
+  # Make variables for date, hour, minute
+  df_ts$date <- lubridate::date(df_ts$dts)
+  df_ts$hour <- lubridate::hour(df_ts$dts)
+  df_ts$minute <- lubridate::minute(df_ts$dts)
+  # subset for 2022 data only
+  df_ts <- df_ts[-which(df_ts$Depthm <0 | 
+                          df_ts$SPC < 100 | 
+                          (df_ts$dts < as.POSIXct(strptime("2023-01-01 00:00:00", format = "%Y-%m-%d %H:%M:%S"))|
+                             df_ts$dts > as.POSIXct(strptime("2023-12-31 23:59:59", format = "%Y-%m-%d %H:%M:%S")))),]
+  list_qc <- list()
+  for(j in 1:length(xVar)){
+    var_H <- df_ts %>%
+      group_by(Site, date, hour) %>% #group (calculations) by these vars
+      arrange(Site, date, hour, minute) %>% #arrange in order of these vars to visualize duplication
+      #slice(1) %>% #keep only the first value for each station, date, hour group so 1 value/hour
+      ungroup()
+    var_H_0 <- var_H[,c("Site","dts",xVar[j],"date","hour","minute")]
+    colnames(var_H_0) <- c("Station","Datetime","Var","Date","Hour","Minute")
+    var_H <- var_H_0
+    var_H$Var <- as.double(var_H$Var)
+    var_H <- var_H %>%
+      filter(!is.na(var_H$Datetime))
+    list_qc[[j]] <- var_H
+    rm(var_H, var_H_0)
+  }
+  names(list_qc) <- xVar
+  list_all_qc[[i]] <- list_qc
+  rm(df_ts, list_site)
+}
+names(list_all_qc) <- xSite
+
+save(list_all_qc, xSite, xVar, file = here::here("working","VarQC_2023","VarQC_initial.RData"))
+```
+
+## QC1) Flag data outside of reasonable temperature range (1-40C)
+```{r 0-40, message = FALSE}
+rm(list = ls())
+load(here::here("working","VarQC_2023","VarQC_initial.RData"))
+
+df_ranges <- data.frame(xVar = xVar,
+                        range_low = c(1,1,100,0.01,0.01,1,1,4),
+                        range_high = c(40,25,55000, 100,100,100,1000,14))
+
+list_all_QC1 <- list()
+for(i in 1:length(xSite)){
+  list_QC1 <- list()
+  for(j in 1:length(xVar)){
+    df_q1 <- list_all_qc[[i]][[j]]
+    df_q1$Flag_QC1 <- ifelse(df_q1$Var < df_ranges$range_low[j] |
+                               df_q1$Var > df_ranges$range_high[j],
+                             "Y","N")
+    #df_q1flagged <- df_q1[which(df_q1$Flag_QC1 == "Y"),]
+    list_QC1[[j]] <- df_q1
+    rm(df_q1)
+  }
+  names(list_QC1) <- xVar
+  list_all_QC1[[i]] <- list_QC1
+  rm(list_QC1)
+}
+names(list_all_QC1) <- xSite
+
+save(list_all_QC1, xSite, xVar, file = here::here("working","VarQC_2023","VarQC_step1.RData"))
+```
+
+## QC2) Missing values: Flag days with less than n(20) values 
+
+1. Count the number of rows per station, date group. (There should only be one row per date)
+2. Flag days where there are less than 20 values (out of 24 - hourly data).
+3. Use leftjoin to add flags to the original data.
+
+```{r Missing Values, message = FALSE}
+rm(list = ls())
+load(here::here("working","VarQC_2023","VarQC_step1.RData"))
+
+list_all_QC2 <- list()
+for(i in 1:length(xSite)){
+  list_QC2 <- list()
+  for(j in 1:length(xVar)){
+    df <- list_all_QC1[[i]][[j]]
+    # This data frame contains all the dates with less than 20 values. 
+    temp_q2_a <- df %>%
+      filter(Flag_QC1 == "N") %>% # only running on data that have not been flagged by the above to be consistent with rest of QC steps
+      group_by(Station, Date) %>%
+      arrange(Station, Date, Hour, Minute) %>% # use 'Minute' for quarterly-hour, remove for hourly
+      summarise(total = n()) %>%
+      mutate(Flag_QC2 = ifelse(total < 80, "Y", "N")) %>% # 20 for hourly, 80 for quarter-hourly
+      select(-total) %>%
+      ungroup()
+    # Flagged values
+    temp_q2_b <- temp_q2_a %>%
+      filter(Flag_QC2 == "Y")
+    #Join original dataframe with flagged values based on values NOT in common. 
+    #based on station and date
+    df_q2 <- df %>%
+      left_join(temp_q2_a, by = c("Station", "Date")) %>%
+      filter(Flag_QC1 == "N") # This part is important for QC5 and QC6. Basically removes all values that are not within range (QC1) 
+    # for BET (maybe other stations) there were some alternately repeating values near 0 that were causing lots of spike QCs to be positive.
+    #filter(Flag_QC1 == "N") 
+    list_QC2[[j]] <- df_q2
+    rm(df_q2, temp_q2_a, temp_q2_b)
+  }
+  names(list_QC2) <- xVar
+  list_all_QC2[[i]] <- list_QC2
+  rm(list_QC2)
+}
+names(list_all_QC2) <- xSite
+
+save(list_all_QC2, xSite, xVar, file = here::here("working","VarQC_2023","VarQC_step2.RData"))
+```
+
+## QC3) Flag if there are 18+ repeating values in a row
+
+1. Create new columns indicating whether the temperature at x hour is the same as that of x-1 hours.
+2. Take a cumulative sum of all the rows where temperatures are different
+3. Group by the sum and count up the number of rows where the temperature is the same.
+4. Flag the rows where number of repeated values is above our cut-off
+
+```{r repeating values, message = FALSE}
+rm(list = ls())
+load(here::here("working","VarQC_2023","VarQC_step2.RData"))
+#########################################################
+# Significant help from Michael Koohafkan and Rosie Hartman
+
+# Function to determine whether values are repeating by each station
+# Inputs are data frame and x (number of repeating values you want to check for)
+# Check if number is same as previous number. If yes, 1. If no, 0.
+# Cumulative sum so each time a value repeats, cumulative sum goes up
+# Count the number in a row that are the same
+# Flag if that number > threshold 
+
+repeating_vals = function(df, x){
+  df$same = ifelse(df$Var == lag(df$Var, 1, default = 0), 1L, 0L)
+  df = df %>%
+    mutate(issame = cumsum(df$same == 0L)) %>%
+    group_by(Station, issame) %>%
+    mutate(flag = sum(same)+1 ) %>%
+    ungroup() %>%
+    mutate(Flag_repeats = ifelse(flag > x, "Y", "N"))
+  return(df)
+}
+###########################################################
+
+
+list_all_QC3 <- list()
+for(i in 1:length(xSite)){
+  list_QC3 <- list()
+  for(j in 1:length(xVar)){
+    df <- list_all_QC2[[i]][[j]]
+    # Run function repeating values and get rid of the columns we don't need
+    df_q3 <- repeating_vals(df = df, x = 72) %>% # 18 for hourly, 72 for quarter-hourly
+      select(-flag, -issame, -same) %>%
+      rename(Flag_QC3 = Flag_repeats) 
+    # Flagged values
+    q3_b <- df_q3 %>%
+      filter(Flag_QC3 == "Y")
+    list_QC3[[j]] <- df_q3
+    rm(df_q3, q3_b)
+  }
+  names(list_QC3) <- xVar
+  list_all_QC3[[i]] <- list_QC3
+  rm(list_QC3)
+}
+names(list_all_QC3) <- xSite
+
+save(list_all_QC3, xSite, xVar, file = here::here("working","VarQC_2023","VarQC_step3.RData"))
+```
+
+
+## QC4) Use the anomalize package to flag anomalies
+* This is slow!!
+* Twitter + GESD is for more for highly seasonal data (however, GESD is extremely slow because it is iterative)
+* STL + IQR if seasonality is not a major factor
+* Trend period depends on personal knowledge of data, we analyzed a subset of data to see what worked best
+
+```{r anomalize}
+library(anomalize)
+library(tibbletime)
+# see https://business-science.github.io/anomalize/articles/anomalize_methods.html
+
+rm(list = ls())
+load(here::here("working","VarQC_2023","VarQC_step3.RData"))
+
+df_Trend <- data.frame(xVar = xVar,
+                        xTrend = c("6 months","6 months","6 month","7 days","7 days","15 days","6 months","7 days"))
+
+list_all_QC4 <- list()
+for(i in 1:length(xSite)){
+  list_QC4 <- list()
+  for(j in 1:length(xVar)){
+    df <- list_all_QC3[[i]][[j]]
+    
+    # Convert data frame to table 
+    q4_a <- as_tbl_time(df, index = Datetime)
+    if(nrow(q4_a) > 0){
+    # Anomaly Detection
+      # time_decompose: separates time series into seasonal, trend, and remainder components
+      # stl: loess works well when long term trend is present
+      # twitter: (removes median rather than fitting smoother) - when long-term trend is less dominant than short-term seasonal component
+      # anomalize: applies anomaly detection methods to remainder component
+      # time_recompose: calculate limits to separate "normal" data from anomalies
+    q4_c <- q4_a %>%
+      group_by(Station) %>%
+      time_decompose(Var, method = "stl", trend = df_Trend$xTrend[j]) %>%
+      anomalize(remainder, method = "iqr", alpha = 0.05) %>%
+      time_recompose() %>% 
+      select(c(Datetime, anomaly)) %>%
+      as_tibble() 
+
+    # Join "anomaly" with rest of the data
+    q4_d <- inner_join(df, q4_c, by = c( "Datetime", "Station"))
+    
+    # Rename "anomaly" Flag_QC4 for consistency, change No to N and Yes to Y
+    df_q4 <- q4_d %>%
+      mutate(anomaly = factor(anomaly)) %>%
+      mutate(anomaly = recode(anomaly, No = "N", Yes = "Y"))  %>%
+      rename(Flag_QC4 = anomaly)
+    
+    df_q4$Flag_QC4 <- as.character(df_q4$Flag_QC4)
+    
+    # Flagged values
+    q4_b <- df_q4 %>%
+      filter(Flag_QC4 == "Y")
+    
+    df_q4$Flag_QC4 <- "N"
+    list_QC4[[j]] <- df_q4
+    rm(df, df_q4, q4_a, q4_b, q4_c, q4_d)
+    } else {
+      df$Flag_QC4 <- df$Flag_QC3
+      list_QC4[[j]] <- df
+    }
+  }
+  names(list_QC4) <- xVar
+  list_all_QC4[[i]] <- list_QC4
+  rm(list_QC4)
+}
+names(list_all_QC4) <- xSite
+
+save(list_all_QC4, xSite, xVar, file = here::here("working","VarQC_2023","VarQC_step4.RData"))
+```
+
+### QC5) Spike test
+- Modified from https://github.com/SuisunMarshBranch/wqptools/blob/master/R/rtqc.r
+
+Anomalize is pretty good, but there are a few single points here and there that don't get detected. 
+1. If |temp(t) - mean(temp(t-1) + temp(t+1))| > 5, it is flagged.
+
+```{r Spike test}
+### ---------------------------------------------
+# Q5: Temp - Temp@time-1
+# Additionally, if Q5 > 5 (5 degree change in 1 hour), flag. 
+
+rm(list = ls())
+load(here::here("working","VarQC_2023","VarQC_step4.RData"))
+
+df_spike <-  data.frame(xVar = xVar,
+                        xSpike = c(5,5,250,5,5,25,25,2))
+
+
+list_all_QC5 <- list()
+for(i in 1:length(xSite)){
+  list_QC5 <- list()
+  for(j in 1:length(xVar)){
+    df <- list_all_QC4[[i]][[j]]
+    
+    df_q5 <- df %>%
+      group_by(Station) %>%
+      arrange(Station, Datetime) %>%
+      mutate(QC5 = abs(Var- 0.5 * (lag(Var, n = 4, default = 0) + lead(Var, n=4, default = 0))))%>% # n = 1 for hourly, n = 4 for quarter-hourly
+      mutate(Flag_QC5 = ifelse((QC5 > df_spike$xSpike[j]), "Y", "N"))  %>%
+      mutate(Flag_QC5 = replace(Flag_QC5, is.na(Flag_QC5), "N")) %>% # Replace NA with No
+      select(-QC5) %>%
+      ungroup()
+    # Flagged values
+    q5_b <- df_q5 %>%
+      filter(Flag_QC5 == "Y")
+    
+    list_QC5[[j]] <- df_q5
+    rm(df, df_q5, q5_b)
+  }
+  names(list_QC5) <- xVar
+  list_all_QC5[[i]] <- list_QC5
+  rm(list_QC5)
+}
+names(list_all_QC5) <- xSite
+
+save(list_all_QC5, xSite, xVar, file = here::here("working","VarQC_2023","VarQC_step5.RData"))
+```
+
+
+### QC6) Rate of Change Test
+1. Group by Station, Datetime
+2. Define standard deviation threshold (e.g. 5 * sd(last 50 hours)) - could change it to be greater or lesser
+3. If difference between value and the value before it > threshold, it is flagged.
+
+```{r Rate of Change}
+# Q6 = Temp - Temp@time-1
+# sdev_th: Determined threshold for too high of a rate of change (5 * SD(Temp) over 50 hours or 2 tidal cycles)
+# If Q6 > sdev_th, flag.
+
+rm(list = ls())
+load(here::here("working","VarQC_2023","VarQC_step5.RData"))
+
+df_Rate <-  data.frame(xVar = xVar,
+                        xSDth = c(5,5,5,5,5,5,5,5))
+
+list_all_QC6 <- list()
+for(i in 1:length(xSite)){
+  list_QC6 <- list()
+  for(j in 1:length(xVar)){
+    df <- list_all_QC5[[i]][[j]]
+    if(nrow(df) > 0){
+    df_q6 <- df %>%
+      group_by(Station) %>%
+      arrange(Station, Datetime) %>%
+      mutate(QC6 = abs(Var- lag(Var, n = 4, default = 0)))%>% # n = 1 for hourly, n = 4 for quarter-hourly
+      mutate(sdev_th = df_Rate$xSDth[j] * runSD(Var, 200))%>% # n = 50 for hourly, n = 200 for quarter-hourly
+      mutate(Flag_QC6 = ifelse((QC6 > sdev_th), "Y", "N"))  %>%
+      mutate(Flag_QC6 = replace(Flag_QC6, is.na(Flag_QC6), "N")) %>% # Replace NA with No
+      select(-c(QC6, sdev_th)) %>%
+      ungroup()
+
+    # Flagged values
+    q6_b <- df_q6 %>%
+      filter(Flag_QC6 == "Y")
+    
+    list_QC6[[j]] <- df_q6
+    } else {
+      df_q6 <- df
+      df_q6$Flag_QC6 <- df_q6$Flag_QC5
+      list_QC6[[j]] <- df_q6
+    }
+    rm(df, df_q6, q6_b)
+  }
+  names(list_QC6) <- xVar
+  list_all_QC6[[i]] <- list_QC6
+  rm(list_QC6)
+}
+names(list_all_QC6) <- xSite
+
+save(list_all_QC6, xSite, xVar, file = here::here("working","VarQC_2023","VarQC_step6.RData"))
+```
+
+## Filter final 
+1. Add back in flagged data from QC1
+2. Combine flags in one column
+3. Create flagged dataset and filtered dataset
+
+```{r final dataset}
+
+rm(list = ls())
+load(here::here("working","VarQC_2023","VarQC_step1.RData"))
+load(here::here("working","VarQC_2023","VarQC_step6.RData"))
+
+list_all_QC7 <- list()
+for(i in 1:length(xSite)){
+  list_QC7 <- list()
+  for(j in 1:length(xVar)){
+    df_q1 <- list_all_QC1[[i]][[j]]
+    df_q6 <- list_all_QC6[[i]][[j]]
+    # Merge back in q1 data since these were removed
+    # Data that were filtered out were not subsequently run under other QC tests, so NA
+    q1_table <- df_q1 %>%
+      filter(Flag_QC1 == "Y") %>%
+            mutate(Flag_QC2 = "NA",
+                   Flag_QC3 = "NA", 
+                   Flag_QC4 = "NA",
+                   Flag_QC5 = "NA",
+                   Flag_QC6 = "NA")
+    
+    # Combine Flags from QC1 with rest of flags
+    flags <- rbind(df_q6, q1_table) %>%
+      ungroup() %>%
+      mutate(AllFlags = paste0(Flag_QC1, ",", Flag_QC2, ",", Flag_QC3, ",", Flag_QC4, ",", Flag_QC5, ",", Flag_QC6)) %>%
+      #left_join(latlonmin, by = "Station") %>%
+      select(-Hour) %>%
+      select(Station, Datetime, Date, everything())#, StationName
+    
+    # Filtered dataset - only rows that do not have any flag
+    df_q7 <- flags %>%
+      filter(grepl("N,N,N,N,N,N", AllFlags)) %>%
+      select(-c(contains("Flag"))) %>%
+      select(Station,  Datetime, Date, everything())#StationName,
+    
+    list_QC7[[j]] <- df_q7
+    rm(df_q1, df_q6, df_q7, q1_table)
+  }
+  names(list_QC7) <- xVar
+  list_all_QC7[[i]] <- list_QC7
+  rm(list_QC7)
+}
+names(list_all_QC7) <- xSite
+
+save(list_all_QC7, xSite, xVar, file = here::here("working","VarQC_2023","VarQC_step7.RData"))
+#ggplot(temp_q6, aes(x = Datetime, y = Temp)) + geom_point() + facet_grid(Station ~., scales = "free_y")
+
+#save(temp_final, file = "AllLTM4AnalysisQC_TempQH_221230.RData")
+```
+
+```{r Plotting filtered over unfiltered}
+library(ggplot2)
+library(ggpubr)
+rm(list = ls())
+load(here::here("working","VarQC_2023","VarQC_step1.RData"))
+load(here::here("working","VarQC_2023","VarQC_step7.RData"))
+
+list_all_plo <- list()
+list_all_multi <- list()
+for(i in 1:length(xSite)){
+  list_plo <- list()
+  for(j in 1:length(xVar)){
+    df_q1 <- list_all_QC1[[i]][[j]]
+    df_q7 <- list_all_QC7[[i]][[j]]
+    
+    xPlo <- ggplot(df_q7, aes(x = Datetime, y = Var)) +
+      geom_point(color = "red") +
+      geom_point(data = df_q1, aes(Datetime, y = Var), color = "black", alpha = 0.3, size = 0.2) +
+      ggtitle(xVar[j])
+    
+    list_plo[[j]] <- xPlo
+    #rm(xPlo)
+  }
+  names(list_plo) <- xVar
+  # This ifelse statement allows CDFW sites to plot all variables except pH while DWR sites plot all variables except fDOM. Starting in 2023, DWR sites will have Chl and PC (except exterior station for Arnold)
+  if(xSite[i] %in% c("FLYW", "DECK_Pool")){
+    multi_plo <- ggarrange(list_plo[[1]], list_plo[[2]], list_plo[[3]], list_plo[[4]], list_plo[[5]], list_plo[[6]], list_plo[[7]],
+                         ncol = 1, nrow = 7)
+                         #common.legend = TRUE, legend = "bottom")
+  ggsave(paste("ContinuousWQ_2023_",xSite[i],".png",sep = ""), multi_plo, width = 625, height = 800, dpi = 96, units = "px", path = here::here("figures","VarQC_2023"))
+  } 
+  if(xSite[i] %in% c("TULE_PondC","TULE_Main","ARNO_Interior","BRAD_Exterior","BRAD_Interior","LOWE_EastInt","WING","WINT")){
+  multi_plo <- ggarrange(list_plo[[1]], list_plo[[2]], list_plo[[3]], list_plo[[4]], list_plo[[5]], list_plo[[7]], list_plo[[8]],
+                         ncol = 1, nrow = 7)
+                         #common.legend = TRUE, legend = "bottom")
+  ggsave(paste("ContinuousWQ_2023_",xSite[i],".png",sep = ""), multi_plo, width = 625, height = 800, dpi = 96, units = "px", path = here::here("figures","VarQC_2023"))
+  }
+  if(xSite[i] %in% c("ARNO_Exterior")){
+  multi_plo <- ggarrange(list_plo[[1]], list_plo[[2]], list_plo[[3]], list_plo[[7]], list_plo[[8]],
+                         ncol = 1, nrow = 5)
+                         #common.legend = TRUE, legend = "bottom")
+  ggsave(paste("ContinuousWQ_2023_",xSite[i],".png",sep = ""), multi_plo, width = 625, height = 800, dpi = 96, units = "px", path = here::here("figures","VarQC_2023"))
+  }
+  list_all_multi[[i]] <- multi_plo
+  list_all_plo[[i]] <- list_plo
+  rm(list_plo, multi_plo)
+}
+names(list_all_multi) <- xSite
+names(list_all_plo) <- xSite
+
+save(list_all_QC7, xSite, xVar, file = here::here("final","QCd2_Data_2023.RData"))
+```
+

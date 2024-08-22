@@ -48,7 +48,7 @@ for(i in 1:nrow(df_Exch)){
   rm(list_temp, mat_recov_pre, mat_recov_post, mat_recov_diff, mat_verif_pre, mat_verif_post, mat_verif_diff, mat_foul_num, mat_foul_perc, df_foul_num, df_foul_perc, sondeID, station, dateRecov)
 }
 names(list_foul) <- paste(ifelse(df_Exch$recovered_sonde_id == "Other", df_Exch$recovered_sonde_other, df_Exch$recovered_sonde_id),
-                          df_Exch$date2, sep = " ") # name list items by sondeID and recovery date
+                          df_Exch$date2, "Continuous", sep = " ") # name list items by sondeID and recovery date
 
 save(list_foul, file = here::here("working","FoulingError.RData"))
 ```
@@ -101,33 +101,55 @@ for(i in 1:nrow(df_CalibData)){
     names(list_temp) <- c("drift_num","drift_perc","sondeID","dateRecov")
     list_drift[[i]] <- list_temp# store temporary list in overarching list
     rm(list_temp, mat_pre, mat_post, mat_drift_num, mat_drift_perc, df_drift_num, df_drift_perc, sondeID, dateRecov)
-  } else {
-    list_drift[[i]] <- NULL
+  } else if(df_CalibData$discrete_or_continuous[i] == "Discrete"){
+    sondeID <- ifelse(df_CalibData$sonde_id[i] == "Other", df_CalibData$sonde_other[i], df_CalibData$sonde_id[i]) # grab sondeID of sonde being recovered
+    dateRecov <- as.Date(df_CalibData$dts_startstop[i]) # grab date of recovery
+    notes <- df_CalibMeta$Notes[i]
+    #station <- df_CalibData$station[i]
+    mat_pre <- as.matrix(data.frame(sapply(df_CalibData[i,c(pre_values)], function(x) as.numeric(as.character(x)))))# make a matrix of pre-calibration measurements for recovered sonde
+    mat_post <- as.matrix(data.frame(sapply(df_CalibData[i,c(post_values)], function(x) as.numeric(as.character(x)))))# make a matrix of post-calibration measurements for recovered sonde (i.e. concentrations of standards)
+    mat_drift_num <- mat_post - mat_pre # find difference between matrices for sensor drift
+    mat_drift_perc <- (mat_drift_num/mat_pre)#*100 # find drift error in percent -> proportion really
+    df_drift_num <- data.frame(mat_drift_num)# make a dataframe of numeric error
+    df_drift_num$varX <- rownames(df_drift_num)# make variable to store metrics
+    df_drift_num$varX <- gsub("_post","",df_drift_num$varX, fixed = TRUE)# remove unnecessary part of name
+    df_drift_perc <- data.frame(mat_drift_perc)# make a dataframe of percent error
+    df_drift_perc$varX <- rownames(df_drift_perc)# make variable to store metrics
+    df_drift_perc$varX <- gsub("_post","",df_drift_perc$varX, fixed = TRUE)# remove unnecessary part of name
+    colnames(df_drift_num) <- c("valueX","varX")
+    colnames(df_drift_perc) <- c("valueX","varX")
+    rownames(df_drift_num) <- NULL
+    rownames(df_drift_perc) <- NULL
+    df_drift_perc$valueX[which(df_drift_perc$varX %in% drift_postVar_NA)] <- NA # force percent values for zero-point calibrations to become NA
+    list_temp <- list(df_drift_num, df_drift_perc, sondeID, dateRecov, notes)# store all drift calculations and metadata in temporary list
+    names(list_temp) <- c("drift_num","drift_perc","sondeID","dateRecov", "notes")
+    list_drift[[i]] <- list_temp# store temporary list in overarching list
+    rm(list_temp, mat_pre, mat_post, mat_drift_num, mat_drift_perc, df_drift_num, df_drift_perc, sondeID, dateRecov,notes)
   }
 }
 names(list_drift) <- paste(ifelse(df_CalibData$sonde_id == "Other", df_CalibData$sonde_other, df_CalibData$sonde_id),
-                          as.Date(df_CalibData$dts_startstop), sep = " ")# name list items by sondeID and recovery date
+                          as.Date(df_CalibData$dts_startstop), df_CalibData$discrete_or_continuous, sep = " ")# name list items by sondeID and recovery date
 
 save(list_drift, file = here::here("working","DriftError.RData"))
 ```
 
-This chunk makes tables of criteria to base quality scores (ratings). Based mostly from DWR calculation sheet and the biological sensors critera are from the FRP QAPP
+This chunk makes tables of criteria to base quality scores (ratings). Based mostly from DWR calculation sheet and the biological sensors criteria are from the FRP QAPP. As of 20240725, the criteria turbidity scores were adjusted to match the new DWR criteria in DWR-1-FRM-029_v1.1_RTD Drift Error Calculation Form.xlsx
 ```{r Error ratings}
 rm(list = ls())
 
 df_Ratings_num <- data.frame(varX = c("temp","sc","DO","pH","turb","chl","pc","fdom","sc_InAir"),
                              zed = c(0),# important for making logical statement further downstream
                          Excellent = c(0.2, 2, 0.3, 0.2, 0.5, 0.125, 0.125, 0.166, 0.2),
-                         Good = c(0.5, 4, 0.5, 0.5, 1, 0.25, 0.5, 0.333, 0.5),
+                         Good = c(0.5, 4, 0.5, 0.5, 1, 0.25, 0.25, 0.333, 0.5),
                          Fair = c(0.8, 6, 0.8, 0.8, 1.5, 0.5, 0.5, 0.666, 0.8),
                          Poor = c(2, 8, 2, 2, 3, 0.75, 0.75, 1, 2),
                          MaxLimit = c(999))# important for making logical statement further downstream
 df_Ratings_perc <- data.frame(varX = c("temp","sc","DO","pH","turb","chl","pc","fdom","DO_sat"),
                               zed = c(NA,0,0,NA,0,0,0,0,0),# important for making logical statement further downstream
-                         Excellent = c(NA, 0.03, 0.05, NA, 0.05, 0.05, 0.05, 0.05,0.05),
-                         Good = c(NA, 0.1, 0.1, NA, 0.1, 0.1, 0.1, 0.1,0.1),
-                         Fair = c(NA, 0.15, 0.15, NA, 0.15, 0.15, 0.15, 0.15, 0.15),
-                         Poor = c(NA, 0.3, 0.2, NA, 0.3, 0.2, 0.2, 0.2, 0.2),
+                         Excellent = c(NA, 0.03, 0.05, NA, 0.15, 0.05, 0.05, 0.05,0.05),
+                         Good = c(NA, 0.1, 0.1, NA, 0.2, 0.1, 0.1, 0.1,0.1),
+                         Fair = c(NA, 0.15, 0.15, NA, 0.25, 0.15, 0.15, 0.15, 0.15),
+                         Poor = c(NA, 0.3, 0.2, NA, 0.4, 0.2, 0.2, 0.2, 0.2),
                          MaxLimit = c(NA,999,999,NA,999,999,999,999,999))# important for making logical statement further downstream
 
 save(df_Ratings_num, df_Ratings_perc, file = here::here("working","ErrorRating_Thresholds.RData"))
@@ -153,7 +175,7 @@ list_ratings <- list()
 tic()
 for(i in 1:length(list_foul)){
   for(j in 1:length(list_drift)){
-    if(names(list_foul[i]) == names(list_drift)[j]){ # match up the two datasets by common name
+    if(names(list_foul)[i] == names(list_drift)[j]){ # match up the two datasets by common name
       df_TotalError <- data.frame(varX = c("temp","pH","DO","sc","chl","pc","fdom","turb"), # make a dataframe to populate
                                   TotalError_num = NA, 
                                   TotalError_perc = NA,
@@ -262,11 +284,181 @@ for(i in 1:length(list_foul)){
   }
 }
 toc()
-names(list_ratings) <- names(list_foul)[1:22] # there are only 22 deployments with both Deployment and Recovery exchanges (needed times for fir st 2022 deployment)
+names(list_ratings) <- names(list_foul)#[1:22] # there are only 22 deployments with both Deployment and Recovery exchanges (needed times for first 2022 deployment)
 
-allRatings <- do.call(rbind.data.frame, list_ratings)
+allRatings.2 <- do.call(rbind.data.frame, list_ratings)
+allRatings <- allRatings.2[with(allRatings.2, order(varX, sondeID, dateRecov)),]
 rownames(allRatings) <- NULL
 
-save(allRatings, list_ratings, file = here::here("working","SensorRatings230714.RData"))
+save(allRatings, list_ratings, file = here::here("working","SensorRatings240725.RData"))
 ```
 
+This chunk calculates total error from sensor drift for just the discrete sondes
+```{r Total Error}
+library(tictoc)
+library(ggplot2)
+
+rm(list = ls())
+'%ni%' = Negate('%in%') # new function that serves as the opposite of %in% operator
+
+load(here::here("working","FoulingError.RData"))
+load(here::here("working","DriftError.RData"))
+load(here::here("working","ErrorRating_Thresholds.RData"))
+
+### We need to make a expanded dataframe to establish relationships between fouling and sensor drift values
+varDrift <- list_drift[[3]][[1]]$varX[c(1:12,14,15)] # grabs the first 12 variables from sensor drift
+varFoul <- c("fdom","fdom","chl","chl","pc","pc","turb","turb","sc","pH","pH","pH","DO","temp") # write out matching variable names for fouling datasets
+df_Variables <- data.frame(varFoul, varDrift) # create the dataframe
+
+uniqVar <- list_foul[[3]][[1]]$varX # make an object with unique variable names in fouling dataset
+#j <- 81L
+#k <- 1L
+
+# make a list to populate with total error calculations and ratings
+list_ratings <- list()
+tic()
+#for(i in 1:length(list_foul)){
+  for(j in 1:length(list_drift)){
+    if(grepl("Discrete", names(list_drift)[j])){ # Search for data frames with 'Discrete' in their name
+      df_TotalError <- data.frame(varX = c("temp","pH","DO","sc","chl","pc","fdom","turb"), # make a dataframe to populate
+                                  TotalError_num = NA, 
+                                  TotalError_perc = NA,
+                                  Rating_num = NA,
+                                  Rating_perc = NA)
+      for(k in 1:nrow(df_TotalError)){
+        varX_Foul <- df_TotalError$varX[k] # variable of interest in fouling dataset
+        varX_Drift <- df_Variables$varDrift[which(df_Variables$varFoul == varX_Foul)] # variable of interest in drift dataset
+        df_TotalError$TotalError_num[k] <- sum( # add the fouling error plus the error found with calibration standards (average of standards if 2 or more are used)
+          #abs(list_foul[[i]][["foul_num"]]$valueX[which(list_foul[[i]][["foul_num"]]$varX == varX_Foul)]),
+          ifelse(is.na(list_drift[[j]][["drift_num"]]$valueX[which(list_drift[[j]][["drift_num"]]$varX %in% varX_Drift)]),
+                 abs(list_drift[[j]][["drift_num"]]$valueX[which(list_drift[[j]][["drift_num"]]$varX %in% varX_Drift[1])]),
+                 mean(abs(list_drift[[j]][["drift_num"]]$valueX[which(list_drift[[j]][["drift_num"]]$varX %in% varX_Drift)]),
+                      na.rm = TRUE)),
+          na.rm = TRUE)
+        df_TotalError$TotalError_perc[k] <- sum( # add the fouling error plus the error found with calibration standards (average of standards if 2 or more are used)
+          #abs(list_foul[[i]][["foul_perc"]]$valueX[which(list_foul[[i]][["foul_perc"]]$varX == varX_Foul)]),
+          ifelse(is.na(list_drift[[j]][["drift_perc"]]$valueX[which(list_drift[[j]][["drift_perc"]]$varX %in% varX_Drift)]),
+                 abs(list_drift[[j]][["drift_perc"]]$valueX[which(list_drift[[j]][["drift_perc"]]$varX %in% varX_Drift[1])]),
+                 mean(abs(list_drift[[j]][["drift_perc"]]$valueX[which(list_drift[[j]][["drift_perc"]]$varX %in% varX_Drift)]),
+                      na.rm = TRUE)),
+          na.rm = TRUE)
+        for(a in 3:ncol(df_Ratings_num)){ # attribute a rating if numerical error or percent error fall within the criteria establish in ratings tables
+          if(df_TotalError$TotalError_num[k] == 0){
+            df_TotalError$Rating_num[k] = colnames(df_Ratings_num)[3]
+          }
+          if(df_TotalError$TotalError_num[k] > df_Ratings_num[which(df_Ratings_num$varX == varX_Foul),a-1] 
+             & df_TotalError$TotalError_num[k] <= df_Ratings_num[which(df_Ratings_num$varX == varX_Foul),a]){
+            df_TotalError$Rating_num[k] = colnames(df_Ratings_num)[a]
+          }
+          tryCatch({ # tryCatch necessary for forcing loop to skip if there is a NA in the percent variable
+            if(df_TotalError$TotalError_perc[k] == 0){
+              df_TotalError$Rating_perc[k] <- colnames(df_Ratings_perc)[3]
+            }
+            if(df_TotalError$TotalError_perc[k] > df_Ratings_perc[which(df_Ratings_perc$varX == varX_Foul),a-1] 
+               & df_TotalError$TotalError_perc[k] <= df_Ratings_perc[which(df_Ratings_perc$varX == varX_Foul),a]){
+              df_TotalError$Rating_perc[k] = colnames(df_Ratings_perc)[a]
+              }
+            } , 
+            # when an error is encountered, the loop will be forced to continue and the warning(s) will be shown at the end
+            error = function(e){ skip_to_next <<- TRUE})
+          if(skip_to_next) {next}
+        }
+        
+        df_TotalError$sondeID <- list_drift[[j]]$sondeID
+        df_TotalError$dateRecov <- list_drift[[j]]$dateRecov
+        rownames(df_TotalError) <- NULL
+        df_TotalError$Rating_num[which(df_TotalError$varX == "sc")] <- NA # specific conductivity is only assessed via percent error
+        df_TotalError$Rating_perc[which(df_TotalError$varX %in% c("chl","pc","fdom"))] <- NA # chl, pc, fdom only use zero-point calibration so % error is not applicable
+        
+      }
+      # need to add a row for DO_saturation since there is only error for drift (percent) and no fouling error
+      df_TotalError[nrow(df_TotalError)+1,] <- c("DO_sat",NA,NA,NA,NA,list_drift[[j]]$sondeID,NA)
+      df_TotalError$dateRecov[nrow(df_TotalError)] <- list_drift[[j]]$dateRecov
+      df_TotalError$TotalError_num[which(df_TotalError$varX == "DO_sat")] <-
+        list_drift[[j]][["drift_num"]]$valueX[which(list_drift[[j]][["drift_num"]]$varX %in% "DO_saturation")]
+      df_TotalError$TotalError_perc[which(df_TotalError$varX == "DO_sat")] <-
+        list_drift[[j]][["drift_perc"]]$valueX[which(list_drift[[j]][["drift_perc"]]$varX %in% "DO_saturation")]
+      for(a in 3:ncol(df_Ratings_perc)){ # attribute a rating if numerical error or percent error fall within the criteria establish in ratings tables
+        tryCatch({ # tryCatch necessary for forcing loop to skip if there is a NA in the percent variable
+          if(as.numeric(df_TotalError$TotalError_perc[which(df_TotalError$varX == "DO_sat")]) == 0){
+            df_TotalError$Rating_perc[which(df_TotalError$varX == "DO_sat")] <- colnames(df_Ratings_perc)[3]
+            }
+          if(abs(as.numeric(df_TotalError$TotalError_perc[which(df_TotalError$varX == "DO_sat")])) > df_Ratings_perc[which(df_Ratings_perc$varX == "DO_sat"),a-1] 
+             & abs(as.numeric(df_TotalError$TotalError_perc[which(df_TotalError$varX == "DO_sat")])) <= df_Ratings_perc[which(df_Ratings_perc$varX == "DO_sat"),a]){
+            df_TotalError$Rating_perc[which(df_TotalError$varX == "DO_sat")] = colnames(df_Ratings_perc)[a]
+            }
+          } , 
+          # when an error is encountered, the loop will be forced to continue and the warning(s) will be shown at the end
+          error = function(e){ skip_to_next <<- TRUE})
+        if(skip_to_next) {next}
+      }
+      # need to add a row for sc_InAir since there is only error for drift (numeric) and no fouling error
+      df_TotalError[nrow(df_TotalError)+1,] <- c("sc_InAir",NA,NA,NA,NA,list_drift[[j]]$sondeID,NA)
+      df_TotalError$dateRecov[nrow(df_TotalError)] <- list_drift[[j]]$dateRecov
+      df_TotalError$TotalError_num[which(df_TotalError$varX == "sc_InAir")] <-
+        list_drift[[j]][["drift_num"]]$valueX[which(list_drift[[j]][["drift_num"]]$varX %in% "sc_InAir0")]
+      df_TotalError$TotalError_perc[which(df_TotalError$varX == "DO_sat")] <-
+        list_drift[[j]][["drift_perc"]]$valueX[which(list_drift[[j]][["drift_perc"]]$varX %in% "sc_InAir0")]
+      for(a in 3:ncol(df_Ratings_num)){ # attribute a rating if numerical error or percent error fall within the criteria establish in ratings tables
+        tryCatch({ # tryCatch necessary for forcing loop to skip if there is a NA in the numeric variable (no perc)
+          if(as.numeric(df_TotalError$TotalError_num[which(df_TotalError$varX == "sc_InAir")]) == 0){
+            df_TotalError$Rating_num[which(df_TotalError$varX == "sc_InAir")] = colnames(df_Ratings_num)[3]
+            }
+          if(abs(as.numeric(df_TotalError$TotalError_num[which(df_TotalError$varX == "sc_InAir")])) > df_Ratings_num[which(df_Ratings_num$varX == "sc_InAir"),a-1] 
+             & abs(as.numeric(df_TotalError$TotalError_num[which(df_TotalError$varX == "sc_InAir")])) <= df_Ratings_num[which(df_Ratings_num$varX == "sc_InAir"),a]){
+            df_TotalError$Rating_num[which(df_TotalError$varX == "sc_InAir")] = colnames(df_Ratings_num)[a]
+            }
+          } , 
+          # when an error is encountered, the loop will be forced to continue and the warning(s) will be shown at the end
+          error = function(e){ skip_to_next <<- TRUE})
+        if(skip_to_next) {next}
+      }
+      # this next part assigns a Final Rating. some variables need just one of the two ratings (numeric or percent) while others need to account for both types (assign the lower score). DO uses both and then we also compare it with 
+      # first, order the variable so that you can compare between ratings
+      df_TotalError$Rating_num <- ordered(df_TotalError$Rating_num, levels = rev(colnames(df_Ratings_num)[3:7]))
+      df_TotalError$Rating_perc <- ordered(df_TotalError$Rating_perc, levels = rev(colnames(df_Ratings_num)[3:7]))
+      df_TotalError$Rating_final <- NA
+      # assign numeric rating for the Final Rating of these variables
+      df_TotalError$Rating_final[which(df_TotalError$varX %in% c("temp","pH","chl","pc","fdom"))] <-
+        as.character(df_TotalError$Rating_num[which(df_TotalError$varX %in% c("temp","pH","chl","pc","fdom"))])
+      # assign percent rating for the Final Rating of these variables
+      df_TotalError$Rating_final[which(df_TotalError$varX %in% c("sc"))] <-
+        as.character(df_TotalError$Rating_perc[which(df_TotalError$varX %in% c("sc"))])
+      # Assign lowest rating between percent and numeric for these variables
+      df_TotalError$Rating_final[which(df_TotalError$varX %in% c("turb","DO"))] <-
+        ifelse(df_TotalError$Rating_perc[which(df_TotalError$varX %in% c("turb","DO"))] < df_TotalError$Rating_num[which(df_TotalError$varX %in% c("turb","DO"))],
+               as.character(df_TotalError$Rating_perc[which(df_TotalError$varX %in% c("turb","DO"))]),
+               as.character(df_TotalError$Rating_num[which(df_TotalError$varX %in% c("turb","DO"))]))
+      # Assign lowest rating between this final rating of DOmg/L with the rating for DO_saturation
+      df_TotalError$Rating_final[which(df_TotalError$varX %in% c("DO"))] <-
+        ifelse(df_TotalError$Rating_final[which(df_TotalError$varX %in% c("DO"))] < df_TotalError$Rating_perc[which(df_TotalError$varX %in% c("DO_sat"))],
+               as.character(df_TotalError$Rating_final[which(df_TotalError$varX %in% c("DO"))]),
+               as.character(df_TotalError$Rating_perc[which(df_TotalError$varX %in% c("DO_sat"))]))
+      df_TotalError$notes <- list_drift[[j]]$notes
+      if(is.na(list_drift[[j]][["drift_num"]]$valueX[which(list_drift[[j]][["drift_num"]]$varX %in% varX_Drift)])[1]){
+        df_TotalError$Rating_final[which(df_TotalError$varX == varX_Foul)] <- NA
+      }
+      # place data frame of ratings into list
+      list_ratings[j] <- list(df_TotalError)
+    }
+  }
+#}
+toc()
+names(list_ratings) <- names(list_drift)#[1:22] # there are only 22 deployments with both Deployment and Recovery exchanges (needed times for first 2022 deployment)
+
+allRatings.2 <- do.call(rbind.data.frame, list_ratings)
+allRatings.2b <- allRatings.2[-which(is.na(allRatings.2$Rating_final)==TRUE),]
+allRatings <- allRatings.2b[with(allRatings.2b, order(varX, sondeID, dateRecov)),]
+rownames(allRatings) <- NULL
+allRatings$Rating_final2 <- factor(allRatings$Rating_final, levels = c("Excellent","Good","Fair","Poor","MaxLimit"))
+allRatings$varX2 <- factor(allRatings$varX, levels = c("temp","sc","DO","turb","pH","chl","pc","fdom"))
+
+plo_ratings <- ggplot(allRatings, aes(x = dateRecov, y = Rating_final2)) + 
+  geom_point() + 
+  facet_grid(varX2~sondeID) +
+  scale_y_discrete(limits=rev)
+plo_ratings
+ggsave(paste("DiscreteRatings_2022",".png",sep = ""), path = here::here("figures"), plo_ratings, width = 1200, height = 900, dpi = 96, units = "px")
+
+save(allRatings, list_ratings, file = here::here("working","DiscreteSensorRatings240627.RData"))
+```

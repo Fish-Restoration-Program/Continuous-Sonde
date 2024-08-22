@@ -10,15 +10,136 @@ The goal of this file is to make all data processing of raw EXO2 exports happen 
 This chunk makes a dataframe with all the potential column names for CDFW FRP sondes so that we can replace them with simple versions
 
 ```{r column naming}
-df_VarNames <- data.frame(ExoVariable = c("Date..MM.DD.YYYY.", "Time..HH.mm.ss.", "Time..Fract..Sec.", "Site.Name", "Chlorophyll.RFU", "Chlorophyll.ug.L", "Cond.µS.cm", "Depth.m", "fDOM.QSU", "fDOM.RFU", "nLF.Cond.µS.cm", "ODO...sat", "ODO...CB", "ODO.mg.L", "Pressure.psi.a", "Sal.psu", "SpCond.µS.cm", "BGA.PC.RFU", "BGA.PC.ug.L", "TDS.mg.L", "Turbidity.FNU", "TSS.mg.L", "Wiper.Position.volt", "Temp..C", "Vertical.Position.m", "Battery.V", "Cable.Pwr.V"),
-                          ExoVariable_v2 = c("Date (MM/DD/YYYY)", "Time (HH:mm:ss)", "Time (Fract. Sec)", "Site Name", "Chlorophyll RFU", "Chlorophyll ug/L", "Cond \xb5S/cm", "Depth m", "fDOM QSU", "fDOM RFU", "nLF Cond \xb5S/cm", "ODO % sat", "ODO % local", "ODO mg/L", "Pressure psi a", "Sal psu", "SpCond \xb5S/cm", "BGA PC RFU", "BGA PC ug/L", "TDS mg/L", "Turbidity FNU", "TSS mg/L", "Wiper Position volt", "Temp \xb0C", "Vertical Position m", "Battery V", "Cable Pwr V"), 
-                          ExoVariable_v3 = c("Date..MM.DD.YYYY.", "Time..HH.mm.ss.", "Time..Fract..Sec.", "Site.Name", "Chlorophyll.RFU", "Chlorophyll.ug.L", "Cond.µS.cm", "Depth.m", "fDOM.QSU", "fDOM.RFU", "nLF.Cond.µS.cm", "ODO...sat", "ODO...CB", "ODO.mg.L", "Pressure.psi.a", "Sal.psu", "SpCond.µS.cm", "TAL.PC.RFU", "BGA.PC.ug.L", "TDS.mg.L", "Turbidity.FNU", "TSS.mg.L", "Wiper.Position.volt", "Temp..C", "Vertical.Position.m", "Battery.V", "Cable.Pwr.V"),
-                          VarName = c("Date", "Time", "tFracSec", "Site", "ChlRFU","ChlugL","Cond", "Depthm", "fDOMQSU", "fDOMRFU", "nCond", "DOsat", "DOcb", "DOmgL", "PressurePSI", "SalPSU", "SPC", "PCRFU", "PCugL", "TDSmgL", "Turb", "TSSmgL", "WiperPos", "TempC", "VertPositionm", "Battery", "CablePwr"),
-                          PortalName = c("Date","Time",NA,"Site","Chl",NA,NA,"Depth",NA,"fDOM",NA,"DOsat",NA,"DOconc",NA,NA,"SPC","PC",NA,NA,"Turb",NA,NA,"TempC",NA,"Battery",NA))#,
+df_VarNames <- data.frame(ExoVariable = c("Date..MM.DD.YYYY.", "Time..HH.mm.ss.", "Time..Fract..Sec.", "Site.Name", "Chlorophyll.RFU", "Chlorophyll.ug.L", "Cond.µS.cm", "Depth.m", "fDOM.QSU", "fDOM.RFU", "nLF.Cond.µS.cm", "ODO...sat", "ODO...CB", "ODO.mg.L", "Pressure.psi.a", "Sal.psu", "SpCond.µS.cm", "BGA.PC.RFU", "BGA.PC.ug.L", "TDS.mg.L", "Turbidity.FNU", "TSS.mg.L", "Wiper.Position.volt", "pH", "pH.mV", "Temp..C", "Vertical.Position.m", "Battery.V", "Cable.Pwr.V"),
+                          ExoVariable_v2 = c("Date (MM/DD/YYYY)", "Time (HH:mm:ss)", "Time (Fract. Sec)", "Site Name", "Chlorophyll RFU", "Chlorophyll ug/L", "Cond \xb5S/cm", "Depth m", "fDOM QSU", "fDOM RFU", "nLF Cond \xb5S/cm", "ODO % sat", "ODO % local", "ODO mg/L", "Pressure psi a", "Sal psu", "SpCond \xb5S/cm", "BGA PC RFU", "BGA PC ug/L", "TDS mg/L", "Turbidity FNU", "TSS mg/L", "Wiper Position volt", "pH", "pH.mV", "Temp \xb0C", "Vertical Position m", "Battery V", "Cable Pwr V"), 
+                          ExoVariable_v3 = c("Date..MM.DD.YYYY.", "Time..HH.mm.ss.", "Time..Fract..Sec.", "Site.Name", "Chlorophyll.RFU", "Chlorophyll.ug.L", "Cond.µS.cm", "Depth.m", "fDOM.QSU", "fDOM.RFU", "nLF.Cond.µS.cm", "ODO...sat", "ODO...CB", "ODO.mg.L", "Pressure.psi.a", "Sal.psu", "SpCond.µS.cm", "TAL.PC.RFU", "BGA.PC.ug.L", "TDS.mg.L", "Turbidity.FNU", "TSS.mg.L", "Wiper.Position.volt", "pH", "pH.mV", "Temp..C", "Vertical.Position.m", "Battery.V", "Cable.Pwr.V"),
+                          ExoVariable_v4 = c("Date..MM.DD.YYYY.", "Time..HH.mm.ss.", "Time..Fract..Sec.", "Site.Name", "Chlorophyll.RFU", "Chlorophyll.µg.L", "Cond.µS.cm", "Depth.m", "fDOM.QSU", "fDOM.RFU", "nLF.Cond.µS.cm", "ODO...sat", "ODO...CB", "ODO.mg.L", "Pressure.psi.a", "Sal.psu", "SpCond.µS.cm", "TAL.PC.RFU", "TAL.PC.µg.L", "TDS.mg.L", "Turbidity.FNU", "TSS.mg.L", "Wiper.Position.volt", "pH", "pH.mV", "Temp..C", "Vertical.Position.m", "Battery.V", "Cable.Pwr.V"),
+                          VarName = c("Date", "Time", "tFracSec", "Site", "ChlRFU","ChlugL","Cond", "Depthm", "fDOMQSU", "fDOMRFU", "nCond", "DOsat", "DOcb", "DOmgL", "PressurePSI", "SalPSU", "SPC", "PCRFU", "PCugL", "TDSmgL", "Turb", "TSSmgL", "WiperPos", "pH", "pHmV", "TempC", "VertPositionm", "Battery", "CablePwr"),
+                          PortalName = c("Date","Time",NA,"Site","Chl",NA,NA,"Depth",NA,"fDOM",NA,"DOsat",NA,"DOconc",NA,NA,"SPC","PC",NA,NA,"Turb",NA,NA,"pH","pH.mV","TempC",NA,"Battery",NA))#,
                           #keepTorF = c(T,T,F,T,T,F,T,F,T,F,T,F,T,F,F,T,T,F,T,F,T,T,F,T,F))
 
 save(df_VarNames, file = "working/CDFW_VarNamesConversion.RData")
 ```
+
+Update GitHub with files located on shared storage 
+```{r}
+library(svDialogs)
+rm(list = ls())
+'%ni%' = Negate('%in%') # new function that serves as the opposite of %in% operator
+
+# Dictate each pathway for the different sites
+path2_DECK_Pool <- here::here("raw","DECK", "Pool")
+path2_DECK_Breach <- here::here("raw","DECK", "Breach")
+path2_FLYW <- here::here("raw","FLYW")
+path2_TULE_Breach <- here::here("raw","TULE","FRP_DWR","TULE_Breach")
+path2_TULE_PondC <- here::here("raw","TULE","FRP_DWR","TULE_PondC")
+path2_TULE_Main <- here::here("raw","TULE","FRP_DWR","TULE_Main")
+path2_ARNO_Ext <- here::here("raw","ARNO","Exterior")
+path2_ARNO_Int <- here::here("raw","ARNO","Interior")
+path2_BRAD_Ext <- here::here("raw","BRAD","Exterior")
+path2_BRAD_Int <- here::here("raw","BRAD","Interior")
+path2_LOWE_EastInt <- here::here("raw","LOWE","EastInterior")
+path2_LOWE_Stairsteps <- here::here("raw","LOWE","BreachStairsteps")
+path2_WING <- here::here("raw","WING")
+path2_WINT <- here::here("raw","WINT")
+
+path2_error <- here::here("raw","DWR_errorcalcs")
+
+# Make a data frame with potential users and their respective SharePoint folder locations on their hard drive
+dfUserPaths <- data.frame(userX = c("Danny Cox", "Emma Mendonsa", "Brian Armstrong"),
+                          pathData = c("C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Water Quality Lab/Data Downloads", 
+                                    "C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Data Downloads", 
+                                    "C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Data Downloads"),
+                          pathError = c("C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Water Quality Lab/CalibrationRecords/DRIFT Calcs", 
+                                    "C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Water Quality Lab/CalibrationRecords/DRIFT Calcs", 
+                                    "C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Water Quality Lab/CalibrationRecords/DRIFT Calcs"))
+
+# Create a dialogue box that requires user to enter their name
+raw <- dlgInput("Which User are you?\nDaniel Cox (CDFW), Emma Mendonsa (DWR), or Brian Armstrong (DWR)",Sys.info()["raw"])$res
+if (raw %in% c("DMC","D","Danny","Danny Cox","Daniel Cox","Daniel")){
+  username = c("Danny Cox")
+  } else if(raw %in% c("EM","Emma","Emma Mendonsa")){
+    username = "Emma Mendonsa"
+    } else if(raw %in% c("BA","Brian","Brian Armstrong")){
+      username = "Brian Armstrong"
+      } else (username = "Did not recognize user")
+rm(raw)
+# Create a dialogue box confirming the identity of user
+dlgMessage(paste("User identified as",username))
+
+### Create a function that pulls in new data from SharePoint into GitHub based on the username supplied
+pull2Git <- function(user){
+  if(username %in% c("Danny Cox","Emma Mendonsa","Brian Armstrong")){print(paste("Hello",user))
+    } else{print("Username not recognized. Please try again.")}# Greeting
+  pathData = dfUserPaths$pathData[which(dfUserPaths$userX == user)] # Chooses path based on user input
+  dirData <- data.frame(shared = list.files(path = pathData), # makes a data frame of paths for source and GitHub directory for each station
+                     gitX = NA)
+  # The next line adds the GitHub paths. Note that this may change when Stations get added
+  dirData$gitX <- c(NA, path2_ARNO_Int, path2_ARNO_Ext, path2_BRAD_Int, path2_BRAD_Ext, path2_DECK_Breach, path2_DECK_Pool, path2_LOWE_EastInt, path2_LOWE_Stairsteps, NA, NA, path2_TULE_Breach, path2_TULE_Main, path2_TULE_PondC, path2_WING, path2_WINT, path2_FLYW)
+  # This for loop adds each file that is not already present in the GitHub repository
+  for(i in 1:nrow(dirData)){
+    if(is.na(dirData$gitX[i])==F){ # Proceed if and only if there is a GitHub path
+      filesShare <- list.files(path = paste(pathData,dirData$shared[i],"CSV",sep = "/")) # make a list of files in SharePoint folder
+      filesGit <- list.files(dirData$gitX[i]) # make a list of files in GitHub folder
+      notGit <- filesShare[which(filesShare %ni% filesGit)] # subset list of files in SharePoint for those not present in GitHub
+      if(length(notGit) > 0){ # Proceed if there are files that are missing
+        files2get <- paste(pathData,dirData$shared[i],"CSV",notGit,sep = "/") # make path for file in SharePoint
+        file.copy(file.path(files2get), dirData$gitX[i]) # copy the file over to GitHub
+        print(paste("Copied over",notGit)) # Confirmation message that the file was copied over
+      } else (print(paste("No new files found in", dirData$shared[i]))) # This message appears if the GitHub repository is up-to-date with SharePoint
+    }
+  }
+  pathError <- dfUserPaths$pathError[which(dfUserPaths$userX == user)]
+  dirError <- data.frame(shared = list.files(path = pathError, recursive = TRUE),
+                         gitX = path2_error)
+  dirError$filesShare <- sub('.+/(.+)', '\\1', dirError$shared)
+  dirError$notGit_error <- ifelse(dirError$filesShare %ni% dirError$gitX, TRUE, FALSE)
+  for(j in 1:nrow(dirError)){
+    if(dirError$notGit_error[j] == TRUE){
+      file.copy(paste(pathError,file.path(dirError$shared[j]), sep = "/"), dirError$gitX[j])
+      print(paste("Copied over",dirError$filesShare[j]))
+    } else (print(paste("No new files found DRIFT Calcs")))
+  }
+}
+
+# The following runs the function based on the input from the dialogue box
+pull2Git(username)
+
+### The below if statement is old and requires repeating for more than 1 user (it is the same as in the above function)
+### it is to be used for developing the above function
+# if(username == "Danny Cox"){
+#   print("Hello Danny")
+#   pathData <- c("C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Data Downloads")
+#   dirData <- data.frame(shared = list.files(path = pathData),
+#                      gitX = NA)
+#   dirData$gitX <- c(NA, path2_ARNO_Int, path2_ARNO_Ext, path2_BRAD_Int, path2_BRAD_Ext, path2_DECK_Breach, path2_DECK_Pool, path2_LOWE_EastInt, path2_LOWE_Stairsteps, NA, NA, path2_TULE_Breach, path2_TULE_Main, path2_TULE_PondC, path2_WING, path2_WINT, path2_FLYW)
+#   for(i in 1:nrow(dirData)){
+#     if(is.na(dirData$gitX[i])==F){
+#       filesShare <- list.files(path = paste(pathData,dirData$shared[i],"CSV",sep = "/"))
+#       filesGit <- list.files(dirData$gitX[i])
+#       notGit <- filesShare[which(filesShare %ni% filesGit)]
+#       if(length(notGit) > 0){
+#         files2get <- paste(pathData,dirData$shared[i],"CSV",notGit,sep = "/")
+#         file.copy(file.path(files2get), dirData$gitX[i])
+#         print(paste("Copied over",notGit))
+#       } else (print(paste("No new files found in", dirData$shared[i])))
+#     }
+#   }
+#   pathError <- c("C:/Users/DCox/California Department of Water Resources/DWR - Fish Restoration Program - Water Quality Lab/CalibrationRecords/DRIFT Calcs")
+#   dirError <- data.frame(shared = list.files(path = pathError, recursive = TRUE),
+#                          gitX = path2_error)
+#   dirError$filesShare <- sub('.+/(.+)', '\\1', dirError$shared)
+#   dirError$notGit_error <- ifelse(dirError$filesShare %ni% dirError$gitX, TRUE, FALSE)
+#   for(j in 1:nrow(dirError)){
+#     if(dirError$notGit_error[j] == TRUE){
+#       file.copy(paste(pathError,file.path(dirError$shared[j]), sep = "/"), dirError$gitX[j])
+#       print(paste("Copied over",dirError$filesShare[j]))
+#     } else (print(paste("No new files found DRIFT Calcs")))
+#   }
+# } else (print("Not Danny"))
+
+```
+
 
 First we are going to import each file into 2 pieces. The first piece will include the sonde metadata and the second piece will contain the continuous data.
 
@@ -41,12 +162,13 @@ path2_ARNO_Int <- here::here("raw","ARNO","Interior")
 path2_BRAD_Ext <- here::here("raw","BRAD","Exterior")
 path2_BRAD_Int <- here::here("raw","BRAD","Interior")
 path2_LOWE_EastInt <- here::here("raw","LOWE","EastInterior")
+path2_LOWE_Stairsteps <- here::here("raw","LOWE","BreachStairsteps")
 path2_WING <- here::here("raw","WING")
 path2_WINT <- here::here("raw","WINT")
 
 # Made a dataframe of the pathways; need to wait until BRAD_Interior datasets are added
-pathnames <- data.frame(SiteName = c("FLYW","DECK_Pool","DECK_Breach","TULE_Breach","TULE_PondC", "TULE_Main","ARNO_Exterior","ARNO_Interior","BRAD_Exterior","BRAD_Interior","LOWE_EastInt","WING","WINT"), 
-                        pathname = c(path2_FLYW, path2_DECK_Pool, path2_DECK_Breach, path2_TULE_Breach, path2_TULE_PondC, path2_TULE_Main, path2_ARNO_Ext, path2_ARNO_Int, path2_BRAD_Ext, path2_BRAD_Int, path2_LOWE_EastInt, path2_WING, path2_WINT))
+pathnames <- data.frame(SiteName = c("FLYW","DECK_Pool","DECK_Breach","TULE_Breach","TULE_PondC", "TULE_Main","ARNO_Exterior","ARNO_Interior","BRAD_Exterior","BRAD_Interior","LOWE_EastInt","LOWE_Stairsteps","WING","WINT"), 
+                        pathname = c(path2_FLYW, path2_DECK_Pool, path2_DECK_Breach, path2_TULE_Breach, path2_TULE_PondC, path2_TULE_Main, path2_ARNO_Ext, path2_ARNO_Int, path2_BRAD_Ext, path2_BRAD_Int, path2_LOWE_EastInt, path2_LOWE_Stairsteps, path2_WING, path2_WINT))
 
 
 # For loop nested with multiple for loops to: 
@@ -137,11 +259,17 @@ for(x in 1:nrow(pathnames)){
     # use a for loop to change the column name based on the CDFW_VarNamesConversion
     for(j in 1:length(colnames(rawdf))){
       for(k in 1:nrow(df_VarNames)){
-        if(colnames(rawdf)[j] == df_VarNames$ExoVariable[k] | colnames(rawdf)[j] == df_VarNames$ExoVariable_v2[k] | colnames(rawdf)[j] == df_VarNames$ExoVariable_v3[k]){
+        if(colnames(rawdf)[j] == df_VarNames$ExoVariable[k] | colnames(rawdf)[j] == df_VarNames$ExoVariable_v2[k] | colnames(rawdf)[j] == df_VarNames$ExoVariable_v3[k] | colnames(rawdf)[j] == df_VarNames$ExoVariable_v4[k]){
           colnames(rawdf)[j] = df_VarNames$VarName[k]
         }
       }
     }
+    # Create a vector of missing column names
+    Missing <- setdiff(df_VarNames$VarName, names(rawdf))
+    # Make new columns in data frame for the ones that were missing and populate with NA
+    rawdf[Missing] <- NA
+    # re-order the columns to make each data frame the same size for downstream rbind
+    rawdf <- rawdf[df_VarNames$VarName]
     # store the data frame as a list object
     list_rawdata[[i]] <- rawdf
     # remove temporary objects from memory
@@ -165,11 +293,17 @@ for(x in 1:nrow(pathnames)){
     # use a for loop to change the column name based on the CDFW_VarNamesConversion
     for(j in 1:length(colnames(rawdf))){
       for(k in 1:nrow(df_VarNames)){
-        if(colnames(rawdf)[j] == df_VarNames$ExoVariable_v2[k] | colnames(rawdf)[j] == df_VarNames$ExoVariable_v2[k] | colnames(rawdf)[j] == df_VarNames$ExoVariable_v3[k]){
+        if(colnames(rawdf)[j] == df_VarNames$ExoVariable[k] | colnames(rawdf)[j] == df_VarNames$ExoVariable_v2[k] | colnames(rawdf)[j] == df_VarNames$ExoVariable_v3[k] | colnames(rawdf)[j] == df_VarNames$ExoVariable_v4[k]){
           colnames(rawdf)[j] = df_VarNames$VarName[k]
         }
       }
     }
+    # Create a vector of missing column names
+    Missing <- setdiff(df_VarNames$VarName, names(rawdf))
+    # Make new columns in data frame for the ones that were missing and populate with NA
+    rawdf[Missing] <- NA
+    # re-order the columns to make each data frame the same size for downstream rbind
+    rawdf <- rawdf[df_VarNames$VarName]
     # store the data frame as a list object
     list_rawdata[[i]] <- rawdf
     # remove temporary objects from memory
@@ -327,7 +461,7 @@ Now, we will bring in the sensor ratings and associate them with each dataset. R
 rm(list = ls())
 '%ni%' = Negate('%in%')
 load(here::here("working","RTD_Trim2.RData"))
-load(here::here("working","SensorRatings230714.RData"))
+load(here::here("working","SensorRatings240725.RData"))
 load(here::here("working","DWRtranscribed_Ratings.RData"))
 load(here::here("working","CDFW_VarNamesConversion.RData"))
 rm(list_all_excess2)
@@ -388,19 +522,21 @@ names(list_all_qc) <- names(list_all_trim2)
 
 ### summarise the data for each variable based on Quality Score and then plot them to see proportion of data that is satisfactory
 library(plyr)
-summ_2022 <- ddply(allRatings[-which(allRatings$varX %in% c("DO_sat","sc_InAir")),], c("varX","Rating_final"), summarise,
-                   v = sum(nObs, na.rm = TRUE))
-tot_2022 <- ddply(allRatings[which(is.na(allRatings$nObs)==F),], c("sondeID","dateRecov"), summarise,
-                   v = sum(nObs, na.rm = TRUE),
-                   t = mean(nObs, na.rm = TRUE))
-allObs <- sum(tot_2022$t)
+allRatings$year <- lubridate::year(allRatings$dateRecov)
+summ_2023.2 <- ddply(allRatings[which(allRatings$varX %ni% c("DO_sat","sc_InAir") & allRatings$year == 2023),], c("varX","Rating_final"), summarise,
+                     v = sum(nObs, na.rm = TRUE))
+tot_2023 <- ddply(allRatings[which(is.na(allRatings$nObs)==F & allRatings$year == 2023),], c("varX"), summarise,
+                   tot = sum(nObs, na.rm = TRUE))#,
+                   #t = mean(nObs, na.rm = TRUE))
+#allObs <- sum(tot_2023$t)
 
-summ_2022$propX <- summ_2022$v/allObs
-summ_2022$Rating_finalF <- factor(summ_2022$Rating_final, levels = c("Excellent","Good","Fair","Poor","MaxLimit","NA"))
-summ_2022$varX_F <- factor(summ_2022$varX, levels = c("temp","sc","DO","turb","chl","pc","fdom","pH"))
+summ_2023 <- merge(summ_2023.2, tot_2023, by = "varX", all.x = TRUE)
+summ_2023$propX <- summ_2023$v/summ_2023$tot
+summ_2023$Rating_finalF <- factor(summ_2023$Rating_final, levels = c("Excellent","Good","Fair","Poor","MaxLimit","NA"))
+summ_2023$varX_F <- factor(summ_2023$varX, levels = c("temp","sc","DO","turb","chl","pc","fdom","pH"))
 
 library(ggplot2)
-plo_summ <- ggplot(summ_2022, aes(varX_F, propX)) + geom_bar(aes(fill = Rating_finalF), stat = "identity")
+plo_summ <- ggplot(summ_2023, aes(varX_F, propX)) + geom_bar(aes(fill = Rating_finalF), stat = "identity")
 plo_summ
 
 save(list_all_qc, file = here::here("working","QCd_Data_FRP.RData"))
@@ -432,3 +568,32 @@ DECK <- do.call(rbind.data.frame, list_all_2022[[2]])
 ```
 
 Call in list_all_2022 into the scripts "WaterVAR_QC.Rmd" (where VAR is the variable of interest) to perform further quality control measures.
+
+
+```{r Subset all 2023 data}
+rm(list = ls())
+load(here::here("working","QCd_Data_FRP.RData"))
+
+# create a new list of qc'd data frames to be filtered by year
+list_all_2023 <- list_all_qc
+
+for(i in 1:length(list_all_qc)){
+  #list_2022 <- list() # temporary list
+  for(j in 1:length(list_all_qc[[i]])){
+    rtd_sondeID <- strsplit(names(list_all_qc[[i]])[j], split = " ", fixed = TRUE)[[1]][1] # variable for sondeID
+    rtd_dateDeploy <- as.numeric(substr(strsplit(names(list_all_qc[[i]])[j], split = " ", fixed = TRUE)[[1]][2],0,4)) # variable for Deployment date
+    rtd_dateRecov <- as.numeric(substr(strsplit(names(list_all_qc[[i]])[j], split = " ", fixed = TRUE)[[1]][3],0,4)) # variable for Recovery date                              0)
+    if((rtd_dateDeploy <= 2022 & rtd_dateRecov <= 2022) | (rtd_dateDeploy >= 2024 & rtd_dateRecov >= 2024)){
+      list_all_2023[[i]][[j]] <- list(NULL)
+    }
+    rm(rtd_sondeID, rtd_dateDeploy, rtd_dateRecov)
+  }
+}
+
+save(list_all_2023, file = here::here("working","QCd_2023.RData"))
+FLYW <- do.call(rbind.data.frame, list_all_2023[[1]])
+DECK <- do.call(rbind.data.frame, list_all_2023[[2]])
+WINT <- do.call(rbind.data.frame, list_all_2023[[14]])
+```
+
+Call in list_all_2023 into the scripts "WaterVAR_QC.Rmd" (where VAR is the variable of interest) to perform further quality control measures.
