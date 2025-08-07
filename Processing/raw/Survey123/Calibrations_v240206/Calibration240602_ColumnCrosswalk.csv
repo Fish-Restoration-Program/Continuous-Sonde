@@ -1,0 +1,115 @@
+﻿Var_ExportLabel,Var_Name,Var_BuilderLabel
+ObjectID,ObjectID,ObjectID
+GlobalID,GlobalID,GlobalID
+Sonde ID,sonde_id,Sonde ID
+Other SondeID,sonde_other,Other SondeID
+Discrete or Continuous Deployment,discrete_or_continuous,Discrete or Continuous Deployment
+Pre- or Post-Deployment,pre_post,Pre- or Post-Deployment
+Deployment Start/Stop Time,deployment_startstop_time,Deployment Start/Stop Time
+Calibration Date and Time,calibration_date_and_time,Calibration Date and Time
+Verification Instruments,verification_instruments,Verification Instruments
+Which Turbidity standard?,turbidity_standard,Turbidity Standard
+Lot #,turb_124_lot,Lot #
+Expiration Date,turb_124_exp,Expiration Date
+Open Date,turb_124_open,Open Date
+Turbidity Standard concentration,turb_conc,Turbidity Standard concentration
+Lot #,turb_std_lot,Lot #
+Expiration Date,turb_std_exp,Expiration Date
+Open Date,turb_std_open,Open Date
+Which SPC standard?,spc_1412,1412 uS/cm
+Lot #,spc_1412_lot,Lot #
+Expiration Date,spc_1412_exp,Expiration Date
+Open Date,spc_1412_open,Open Date
+Lot #,spc_10k_lot,Lot #
+Expiration Date,spc_10k_exp,Expiration Date
+Open Date,spc_10k_open,Open Date
+Lot #,spc_20k_lot,Lot #
+Expiration Date,spc_20k_exp,Expiration Date
+Open Date,spc_20k_open,Open Date
+Lot #,spc_30k_lot,Lot #
+Expiration Date,spc_30k_exp,Expiration Date
+Open Date,spc_30k_open,Open Date
+SpC Standard concentration,spc_conc,SpC Standard concentration
+Lot #,spc_std_lot,Lot #
+Expiration Date,spc_std_exp,Expiration Date
+Open Date,spc_std_open,Open Date
+Which pH standard?,which_ph,Which pH standard?
+Lot #,ph7_lot_num,Lot #
+Expiration Date,ph7_std_exp,Expiration Date
+Open Date,ph7_std_open,Open Date
+Lot #,ph4_lot_num,Lot #
+Expiration Date,ph4_std_exp,Expiration Date
+Open Date,ph4_std_open,Open Date
+Lot #,ph10_lot_num,Lot #
+Expiration Date,ph10_std_exp,Expiration Date
+Open Date,ph10_std_open,Open Date
+Which Rhodamine standard?,which_rhod,Which Rhodamine standard?
+Lot #,rhod_lot_num,Lot #
+Expiration Date,rhod_std_exp,Expiration Date
+Open Date,rhod_std_open,Open Date
+Which fDOM standard?,fdom_standards,fDOM Standard
+Lot #,fdom_lot_num,Lot #
+Expiration Date,fdom_std_exp,Expiration Date
+Open Date,fdom_std_open,Open Date
+Specific Conductivity in Air,sc_InAir,Specific Conductivity in Air
+fDOM in DI (pre-cal RFU),fdom_zero_pre_rfu,fDOM in DI RFU (pre-cal)
+fDOM in DI (post-cal RFU),fdom_zero_post_rfu,fDOM in DI RFU (post-cal)
+fDOM in standard (pre-cal RFU),fdom_high_pre_rfu,fDOM in 300 RFU (pre-cal)
+fDOM in standard (post-cal RFU),fdom_high_post_rfu,fDOM in 300 RFU (post-cal)
+fDOM in DI (pre-cal QSU),fdom_zero_pre_qsu,fDOM in DI QSU (pre-cal)
+fDOM in DI (post-cal QSU),fdom_zero_post_qsu,fDOM in DI QSU (post-cal)
+fDOM in standard (pre-cal QSU),fdom_high_pre_qsu,fDOM in 300 QSU (pre-cal)
+fDOM in standard (post-cal QSU),fdom_high_post_qsu,fDOM in 300 QSU (post-cal)
+Chl in DI (pre-cal RFU),chl_zero_pre_rfu,Chl in DI RFU (pre-cal)
+Chl in DI (post-cal RFU),chl_zero_post_rfu,Chl in DI RFU (post-cal)
+Chl in rhodamine (pre-cal RFU),chl_high_pre_rfu,Chl in rhodamine RFU (pre-cal)
+Chl in rhodamine (post-cal RFU),chl_high_post_rfu,Chl in rhodamine RFU (post-cal)
+Chl in DI (pre-cal ug/L),chl_zero_pre_ugL,Chl in DI ug/L (pre-cal)
+Chl in DI (post-cal ug/L),chl_zero_post_ugL,Chl in DI ug/L (post-cal)
+Chl in rhodamine (pre-cal ug/L),chl_high_pre_ugL,Chl in rhodamine ug/L (pre-cal)
+Chl in rhodamine (post-cal ug/L),chl_high_post_ugL,Chl in rhodamine ug/L (post-cal)
+PC in DI (pre-cal RFU),pc_zero_pre_rfu,PC in DI RFU (pre-cal)
+PC in DI (post-cal RFU),pc_zero_post_rfu,PC in DI RFU (post-cal)
+PC in rhodamine (pre-cal RFU),pc_high_pre_rfu,PC in rhodamine RFU (pre-cal)
+PC in rhodamine (post-cal RFU),pc_high_post_rfu,PC in rhodamine RFU (post-cal)
+PC in DI (pre-cal ug/L),pc_zero_pre_ugL,PC in DI ug/L (pre-cal)
+PC in DI (post-cal ug/L),pc_zero_post_ugL,PC in DI ug/L (post-cal)
+PC in rhodamine (pre-cal ug/L),pc_high_pre_ugL,PC in rhodamine ug/L (pre-cal)
+PC in rhodamine (post-cal ug/L),pc_high_post_ugL,PC in rhodamine ug/L (post-cal)
+Turbidity in DI (pre-cal),turb_zero_pre,Turbidity in DI (pre-cal)
+Turbidity in DI (post-cal),turb_zero_post,Turbidity in DI (post-cal)
+Turbidity in standard (pre-cal),turb_high_pre,Turbidity in standard (pre-cal)
+Turbidity in standard (post-cal),turb_high_post,Turbidity in standard (post-cal)
+SpC in standard (pre-cal),sc_high_pre,SpC in standard (pre-cal)
+SpC in standard (post-cal),sc_high_post,SpC in standard (post-cal)
+SpC cell constant,sc_cellconstant,SpC cell constant
+pH in 7 (pre-cal),pH_7_pre,pH in 7 (pre-cal)
+pH in 7 (post-cal),pH_7_post,pH in 7 (post-cal)
+pH in 7 voltage,pH_7_mv,pH in 7 voltage
+pH in 10 (pre-cal),pH_10_pre,pH in 10 (pre-cal)
+pH in 10 (post-cal),pH_10_post,pH in 10 (post-cal)
+pH in 10 voltage,pH_10_mv,pH in 10 voltage
+pH in 4 (pre-cal),pH_4_pre,pH in 4 (pre-cal)
+pH in 4 (post-cal),pH_4_post,pH in 4 (post-cal)
+pH in 4 voltage,pH_4_mv,pH in 4 voltage
+Delta slope (4 to 7),pH_deltaslope_4_7,Delta slope (4 to 7)
+Delta slope (4 to 7),pH_decade_4_7,Delta slope (4 to 7)
+Delta slope (7 to 10),pH_deltaslope_7_10,Delta slope (7 to 10)
+Delta slope (7 to 10),pH_decade_7_10,Delta slope (7 to 10)
+Temperature (NIST),temp_NIST,Temperature (NIST)
+Temperature (sonde),temp_sonde,Temperature (sonde)
+Pressure from handheld,pressure_handheld,Pressure from handheld
+Pressure from barometer,pressure_barometer,Pressure from barometer
+DO concentration (pre-cal),DO_concentration_pre,DO (pre-cal)
+DO concentration (post-cal),DO_concentration_post,DO (post-cal)
+DO percent (pre-cal),DO_percent_pre,DO percent (pre-cal)
+DO percent (post-cal),DO_percent_post,DO percent (post-cal)
+DO gain,DO_gain,DO gain
+Temperature during DO calibration,temp_DOcalibration,Temperature during DO calibration
+Notes,Notes,Notes
+CreationDate,general_notes,Notes
+Creator,Creator,Creator
+EditDate,EditDate,EditDate
+Editor,Editor,Editor
+x,x,x
+y,y,y
