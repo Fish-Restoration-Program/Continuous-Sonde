@@ -314,7 +314,7 @@ varDrift <- list_drift[[3]][[1]]$varX[c(1,2,5,6,9,10,13:19,21)] # grabs the firs
 varFoul <- c("fdom","fdom","chl","chl","pc","pc","turb","turb","sc","pH","pH","pH","DO","temp") # write out matching variable names for fouling datasets
 df_Variables <- data.frame(varFoul, varDrift) # create the dataframe
 
-uniqVar <- list_foul[[3]][[1]]$varX # make an object with unique variable names in fouling dataset
+#uniqVar <- list_foul[[3]][[1]]$varX # make an object with unique variable names in fouling dataset
 #j <- 52L    for 2024 data
 #k <- 8L    for 2024 data
 
@@ -456,6 +456,14 @@ names(list_ratings) <- names(list_drift)#[1:22] # there are only 22 deployments 
 
 allRatings.2 <- do.call(rbind.data.frame, list_ratings)
 allRatings.2b <- allRatings.2[-which(is.na(allRatings.2$Rating_final)==TRUE),]
+
+allRatings.2c <- allRatings.2[which(is.na(allRatings.2$Rating_final)==TRUE),] # double check NAs
+library(tidyverse)
+check_na <- allRatings.2c %>% count(dateRecov,sondeID)   # includes 2025 discrete deployments (22)
+tst <- allRatings.2c %>% filter(year(dateRecov)%in%"2024",varX%in%c("pH","temp","DO","chl","pc","fdom","turb"))  # keep only 2024 records and remove sc_InAir & DO_sat variables
+check_na_2024 <- tst %>% count(dateRecov,sondeID)  
+check_na_2024$notes <- c("pH: no calibration","temp: not recorded","temp: not recorded","temp: not recorded, pH: no calibration","do: pre-cal do_mgL not recorded","pH: no calibration","calibration for sc only - no other parameters calibrated","pH & turb: two records exist","pH: no calibration","do: pre-cal do_mgL not recorded")
+
 allRatings <- allRatings.2b[with(allRatings.2b, order(varX, sondeID, dateRecov)),]
 rownames(allRatings) <- NULL
 allRatings$Rating_final2 <- factor(allRatings$Rating_final, levels = c("Excellent","Good","Fair","Poor","MaxLimit"))
