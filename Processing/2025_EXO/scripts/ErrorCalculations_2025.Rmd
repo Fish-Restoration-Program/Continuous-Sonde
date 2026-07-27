@@ -479,27 +479,28 @@ check_na_2025$notes <- c("pH: no sensor",
 
 allRatings <- allRatings.2b[with(allRatings.2b, order(varX, sondeID, dateRecov)),]
 rownames(allRatings) <- NULL
-allRatings$Rating_final2 <- factor(allRatings$Rating_final, levels = c("Excellent","Good","Fair","Poor","MaxLimit"))
-allRatings$varX2 <- factor(allRatings$varX, levels = c("temp","sc","DO","turb","pH","chl","pc","fdom"))
 
 # some ratings are inaccurate because of DO membrane changes or use of numeric instead of percentage drift for turbidity. MaxLimit for chl and pc on 12/4/25 was likely due to calibration of high point with rhodamine solution. ALM 7/24/26. There is no official rating system for chl, pc, or fdom so these should be rated as "Fair". 
 allRatings[which(allRatings$Rating_final== "MaxLimit"& year(allRatings$dateRecov)==2025),]
-allRatings[which(allRatings$Rating_final== "MaxLimit"& year(allRatings$dateRecov)==2025 & allRatings$varX2=="DO"),9] <- "Good" # accounts for DO membrane installations
-allRatings[which(allRatings$Rating_final== "MaxLimit"& year(allRatings$dateRecov)==2025 & allRatings$varX2=="turb"),9] <- "Excellent" # Uses total error percent instead of total number
+allRatings[which(allRatings$Rating_final== "MaxLimit"& year(allRatings$dateRecov)==2025 & allRatings$varX=="DO"),8] <- "Good" # accounts for DO membrane installations
+allRatings[which(allRatings$Rating_final== "MaxLimit"& year(allRatings$dateRecov)==2025 & allRatings$varX=="turb"),8] <- "Excellent" # Uses total error percent instead of total number
 # accounts for rhodamine two point calibration
-allRatings[which(allRatings$Rating_final== "MaxLimit"& year(allRatings$dateRecov)==2025  & allRatings$varX2=="pc"),9] <- "Fair" 
-allRatings[which(allRatings$Rating_final== "MaxLimit"& year(allRatings$dateRecov)==2025  & allRatings$varX2=="chl"),9] <- "Fair" # accounts for rhodamine two point calibration
+allRatings[which(allRatings$Rating_final== "MaxLimit"& year(allRatings$dateRecov)==2025  & allRatings$varX=="pc"),8] <- "Fair" 
+allRatings[which(allRatings$Rating_final== "MaxLimit"& year(allRatings$dateRecov)==2025  & allRatings$varX=="chl"),8] <- "Fair" # accounts for rhodamine two point calibration
 allRatings[which(allRatings$Rating_final== "MaxLimit"),] # check edits
 
-allRatings[which(allRatings$Rating_final== "Poor"& year(allRatings$dateRecov)==2025 ),9] <- "Excellent" # Uses total error percent instead of total number
+allRatings[which(allRatings$Rating_final== "Poor"& year(allRatings$dateRecov)==2025 ),8] <- "Excellent" # Uses total error percent instead of total number
 allRatings[which(allRatings$Rating_final== "Poor"),]
 
-allRatings[which(allRatings$Rating_final== "Fair"& year(allRatings$dateRecov)==2025 & allRatings$varX2=="turb"),9] <- "Excellent"
+allRatings[which(allRatings$Rating_final== "Fair"& year(allRatings$dateRecov)==2025 & allRatings$varX=="turb"),8] <- "Excellent"
 
+allRatings$Rating_final2 <- factor(allRatings$Rating_final, levels = c("Excellent","Good","Fair","Poor","MaxLimit"))
+allRatings$varX2 <- factor(allRatings$varX, levels = c("temp","sc","DO","turb","pH","chl","pc","fdom"))
 
 sampDB3[which(is.na(sampDB3$LatitudeStart)==F & is.na(sampDB3$LongitudeStart)==F),]
 
-plo_ratings <- ggplot(allRatings, aes(x = dateRecov, y = Rating_final2)) + 
+allRatings_p <- allRatings %>% filter(year(dateRecov)==2025)
+plo_ratings <- ggplot(allRatings_p, aes(x = dateRecov, y = Rating_final2)) + 
   geom_point() + 
   facet_grid(varX2~sondeID) +
   scale_y_discrete(limits=rev) +
