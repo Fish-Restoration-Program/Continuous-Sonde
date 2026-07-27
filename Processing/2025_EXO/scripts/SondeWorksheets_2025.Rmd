@@ -1,0 +1,66 @@
+---
+title: "FRP_ContinuousWQ_SondeWorksheets for rating 2025 data"
+author: "DMC"
+date: "6/23/2023"
+date updated: "7/23/2026"
+update author: "ALM"
+output: html_document
+---
+
+The goal of this file is to import worksheets from Survey123 and make RData files to use in the Processing script.
+
+Starting in 2025, removed all script used to process continuous data files. Remnants are found in 2024 and earlier versions. This removal streamlines and clarifies procedures.
+
+Import the Calibration Worksheets and their crosswalk (these were generated using the first version of the CDFW Survey123 e-forms)
+```{r}
+library(tidyverse)
+rm(list = ls())
+'%ni%' = Negate('%in%')
+cw_Calib <- data.frame(read.csv(here::here("raw","Survey123","Calibrations_v240206", "Calibration240602_ColumnCrosswalk.csv")))
+#df_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibrations_v230612", "Calibration230612_Export230706.csv"))) # this is for an older version now stored in the 'archive' folder
+#df_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibrations_v230612", "Calibration230612_Export240206.csv")))# this is for an older version now stored in the 'archive' folder
+df_Calib <- data.frame(read.csv(here::here("raw","Survey123", "Calibrations_v240206", "Calibration_240206_Export20260724.csv")))
+
+colnames(df_Calib) <- cw_Calib$Var_Name
+
+# fill missing deployment times by using values from the calibration time  - ALM
+df_Calib <- df_Calib %>% mutate(dts_startstop = ifelse(deployment_startstop_time %in% "", calibration_date_and_time, deployment_startstop_time))
+
+# make a datetime object for the deployment start/stop time and the calibration time   
+df_Calib$dts_startstop <- format(lubridate::mdy_hms(df_Calib$dts_startstop), tz = "America/Los_Angeles")
+
+# insert borrowed sonde ID into sonde_id column for 10/27 & 10/29
+df_Calib$sonde_id <- ifelse(df_Calib$sonde_id=="other", df_Calib$sonde_other, df_Calib$sonde_id)
+
+# Fill in missing standard values
+# add in zero standard for fluorescent parameters that were checked and not calibrated (due to reading within limits)
+df_Calib$fdom_zero_post_rfu <- ifelse(is.na(df_Calib$fdom_zero_post_rfu)& !is.na(df_Calib$fdom_zero_pre_rfu), 0, df_Calib$fdom_zero_post_rfu)
+df_Calib$chl_zero_post_rfu <- ifelse(is.na(df_Calib$chl_zero_post_rfu)& !is.na(df_Calib$chl_zero_pre_rfu), 0, df_Calib$chl_zero_post_rfu)
+df_Calib$pc_zero_post_rfu <- ifelse(is.na(df_Calib$pc_zero_post_rfu)& !is.na(df_Calib$pc_zero_pre_rfu), 0, df_Calib$pc_zero_post_rfu)
+
+# add in standard value for SpCnd that went through a postcal
+df_Calib[c('spc_std1','spc_std2')] <- str_split_fixed(df_Calib$spc_1412, '_', 2) #pull out standard concentrations
+df_Calib$spc_std2 <- as.numeric(df_Calib$spc_std2) #change format to numeric
+df_Calib$spc_conc <- ifelse(is.na(df_Calib$spc_conc), df_Calib$spc_std2, df_Calib$spc_conc) #fill spc_conc column with standard concentrations
+df_Calib$spc_conc <- ifelse(df_Calib$Notes%in%"Re-Cal SPC 10,000 to1412 standard", 1412, df_Calib$spc_conc) # fill remaining standard concentrations from Notes
+# Fill NAs in pre and post columns with the standard value for calculating difference (aka calibration drift)
+df_Calib$sc_high_post <- ifelse(is.na(df_Calib$sc_high_post)& !is.na(df_Calib$sc_high_pre), df_Calib$spc_conc, df_Calib$sc_high_post)
+df_Calib$sc_high_pre <- ifelse(is.na(df_Calib$sc_high_pre)& !is.na(df_Calib$sc_high_post), df_Calib$spc_conc, df_Calib$sc_high_pre)
+
+# add in pH standard values for pH that went through a postcal with no notes on poor readings
+df_Calib$pH_7_post <- ifelse(is.na(df_Calib$pH_7_post)& !is.na(df_Calib$pH_7_pre), 7, df_Calib$pH_7_post)
+df_Calib$pH_10_post <- ifelse(is.na(df_Calib$pH_10_post)& !is.na(df_Calib$pH_10_pre), 10, df_Calib$pH_10_post)
+df_Calib$pH_4_post <- ifelse(is.na(df_Calib$pH_4_post)& !is.na(df_Calib$pH_4_pre), 4, df_Calib$pH_4_post)
+
+#add in turb standard values for turb that went through a postcal with  no notes on poor readings
+df_Calib$turb_high_post <- ifelse(is.na(df_Calib$turb_high_post)& !is.na(df_Calib$turb_high_pre), 124, df_Calib$turb_high_post)
+df_Calib$turb_high_pre <- ifelse(!is.na(df_Calib$turb_high_post)& is.na(df_Calib$turb_high_pre), 124, df_Calib$turb_high_pre)
+df_Calib$turb_zero_post <- ifelse(is.na(df_Calib$turb_zero_post)& !is.na(df_Calib$turb_zero_pre), 0, df_Calib$turb_zero_post)
+df_Calib$turb_zero_pre <- ifelse(!is.na(df_Calib$turb_zero_post)& is.na(df_Calib$turb_zero_pre), 0, df_Calib$turb_zero_pre)
+
+# make 2 separate dataframes (1 with just the data we are interested and 1 with the metadata)
+df_CalibData <- df_Calib[,c("GlobalID","sonde_id","sonde_other","discrete_or_continuous","pre_post","dts_startstop",colnames(df_Calib)[53:107])]
+df_CalibMeta <- df_Calib[,c("GlobalID","sonde_id","sonde_other","discrete_or_continuous","pre_post","dts_startstop",colnames(df_Calib)[c(7:52,109:114)])]
+
+save(df_Calib, df_CalibData, df_CalibMeta, file = here::here("working","Processing_2025","CDFW_CalibrationWorksheet.RData"))
+```
